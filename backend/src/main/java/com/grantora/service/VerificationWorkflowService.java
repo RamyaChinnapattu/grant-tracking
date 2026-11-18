@@ -1,22 +1,33 @@
 package com.grantora.service;
 
-import com.grantora.dto.VerificationDecisionRequest;
-import com.grantora.entity.*;
-import com.grantora.repository.ApplicationVerificationRepository;
-import com.grantora.repository.ApplicationDocumentRepository;
-import com.grantora.repository.GrantApplicationRepository;
-import com.grantora.repository.UserRepository;
-import com.grantora.repository.VerificationRoutingRuleRepository;
-import com.grantora.repository.WorkflowDeadlineConfigRepository;
+import java.math.BigDecimal;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Objects;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.math.BigDecimal;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
+import com.grantora.dto.VerificationDecisionRequest;
+import com.grantora.entity.ApplicationVerification;
+import com.grantora.entity.Beneficiary;
+import com.grantora.entity.GrantApplication;
+import com.grantora.entity.GrantApplicationStatus;
+import com.grantora.entity.Role;
+import com.grantora.entity.RoutingPriority;
+import com.grantora.entity.User;
+import com.grantora.entity.VerificationDecision;
+import com.grantora.entity.VerificationRoutingRule;
+import com.grantora.entity.VerificationStage;
+import com.grantora.entity.WorkflowDeadlineConfig;
+import com.grantora.repository.ApplicationDocumentRepository;
+import com.grantora.repository.ApplicationVerificationRepository;
+import com.grantora.repository.GrantApplicationRepository;
+import com.grantora.repository.UserRepository;
+import com.grantora.repository.VerificationRoutingRuleRepository;
+import com.grantora.repository.WorkflowDeadlineConfigRepository;
 
 @Service
 @Transactional
@@ -92,6 +103,7 @@ public class VerificationWorkflowService {
                     rule == null || rule.isStateApprovalRequired());
             application.setEscalated(false);
             application.setStatus(GrantApplicationStatus.SUBMITTED);
+            startTask(application, application.getWorkflowStage());
             record(application, application.getWorkflowStage(), "RESUBMITTED", beneficiary,
                     application.getAssignedOfficer(), "Beneficiary submitted requested corrections.",
                     previousStatus, application.getStatus(), application.getWorkflowStage());

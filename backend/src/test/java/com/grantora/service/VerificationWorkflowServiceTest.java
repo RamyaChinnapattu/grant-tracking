@@ -13,11 +13,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.lang.reflect.Field;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
@@ -124,13 +126,18 @@ class VerificationWorkflowServiceTest {
         assertEquals(GrantApplicationStatus.SUBMITTED, application.getStatus());
         assertEquals(VerificationStage.FIELD, application.getWorkflowStage());
         assertEquals(fieldOfficer, application.getAssignedOfficer());
-
         application.setStatus(GrantApplicationStatus.NEEDS_CORRECTION);
+        application.setTaskDueAt(LocalDateTime.now().minusDays(1));
+        LocalDateTime resubmissionStartedAt = LocalDateTime.now();
         workflow.submit(application, "beneficiary@test.local");
 
         assertEquals(GrantApplicationStatus.SUBMITTED, application.getStatus());
         assertEquals(VerificationStage.FIELD, application.getWorkflowStage());
         assertEquals(fieldOfficer, application.getAssignedOfficer());
+        assertTrue(!application.getTaskAssignedAt().isBefore(resubmissionStartedAt));
+        assertTrue(application.getTaskDueAt().isAfter(resubmissionStartedAt));
+        assertTrue(!application.getTaskDueAt().isAfter(resubmissionStartedAt.plusDays(5).plusSeconds(1)));
+        assertEquals(false, application.isEscalated());
         verify(historyRepository, times(3)).save(any(ApplicationVerification.class));
     }
 
