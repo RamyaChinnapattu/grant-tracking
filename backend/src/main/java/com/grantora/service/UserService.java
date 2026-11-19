@@ -1,3 +1,4 @@
+
 package com.grantora.service;
 
 import com.grantora.entity.User;
@@ -41,12 +42,20 @@ public class UserService {
                     HttpStatus.BAD_REQUEST,
                     "Name, email, role, and a password of at least eight characters are required");
         }
+
         if (userRepository.existsByEmail(user.getEmail())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Email already registered");
         }
+
         validateOfficerJurisdiction(user);
+
         user.setPassword(passwordEncoder.encode(user.getPassword()));
-        if (user.getActive() == null) user.setActive(true);
+
+        if (user.getActive() == null) {
+            user.setActive(true);
+        }
+
         return userRepository.save(user);
     }
 
@@ -61,6 +70,7 @@ public class UserService {
         existingUser.setOfficerLevel(updatedUser.getOfficerLevel());
         existingUser.setJurisdictionState(updatedUser.getJurisdictionState());
         existingUser.setJurisdictionDistrict(updatedUser.getJurisdictionDistrict());
+
         validateOfficerJurisdiction(existingUser);
 
         return userRepository.save(existingUser);
@@ -77,22 +87,32 @@ public class UserService {
             user.setJurisdictionDistrict(null);
             return;
         }
+
         String level = user.getOfficerLevel();
-        if (level == null || !List.of("FIELD", "DISTRICT", "STATE").contains(level)) {
+
+        if (level == null
+                || !List.of("FIELD", "DISTRICT", "FINANCE").contains(level)) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Officer level must be FIELD, DISTRICT, or STATE");
+                    HttpStatus.BAD_REQUEST,
+                    "Officer level must be FIELD, DISTRICT, or FINANCE");
         }
-        if (user.getJurisdictionState() == null || user.getJurisdictionState().isBlank()) {
+
+        if (user.getJurisdictionState() == null
+                || user.getJurisdictionState().isBlank()) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Officer jurisdiction state is required");
+                    HttpStatus.BAD_REQUEST,
+                    "Officer jurisdiction state is required");
         }
-        if (!"STATE".equals(level)
+
+        if (!"FINANCE".equals(level)
                 && (user.getJurisdictionDistrict() == null
-                || user.getJurisdictionDistrict().isBlank())) {
+                        || user.getJurisdictionDistrict().isBlank())) {
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Field and district officers require a district");
+                    HttpStatus.BAD_REQUEST,
+                    "Field and district officers require a district");
         }
-        if ("STATE".equals(level)) {
+
+        if ("FINANCE".equals(level)) {
             user.setJurisdictionDistrict(null);
         }
     }

@@ -1,10 +1,14 @@
+
 package com.grantora.service;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,7 +42,7 @@ public class VerificationWorkflowService {
             GrantApplicationStatus.UNDER_VERIFICATION,
             GrantApplicationStatus.FIELD_VERIFICATION,
             GrantApplicationStatus.DISTRICT_REVIEW,
-            GrantApplicationStatus.STATE_REVIEW);
+            GrantApplicationStatus.FINANCE_REVIEW);
 
     private final GrantApplicationRepository applicationRepository;
     private final UserRepository userRepository;
@@ -53,6 +57,7 @@ public class VerificationWorkflowService {
             ApplicationVerificationRepository historyRepository,
             ApplicationDocumentRepository documentRepository,
             VerificationRoutingRuleRepository routingRuleRepository) {
+
         this.applicationRepository = applicationRepository;
         this.userRepository = userRepository;
         this.historyRepository = historyRepository;
@@ -60,71 +65,136 @@ public class VerificationWorkflowService {
         this.routingRuleRepository = routingRuleRepository;
     }
 
-    @org.springframework.beans.factory.annotation.Autowired
-    public VerificationWorkflowService(GrantApplicationRepository a, UserRepository u,
-            ApplicationVerificationRepository h, ApplicationDocumentRepository d,
-            VerificationRoutingRuleRepository r, WorkflowDeadlineConfigRepository c) {
+    @Autowired
+    public VerificationWorkflowService(
+            GrantApplicationRepository a,
+            UserRepository u,
+            ApplicationVerificationRepository h,
+            ApplicationDocumentRepository d,
+            VerificationRoutingRuleRepository r,
+            WorkflowDeadlineConfigRepository c) {
+
         this(a, u, h, d, r);
         this.deadlineConfigs = c;
     }
 
     public GrantApplication submit(GrantApplication application, String email) {
+
         User beneficiary = getUser(email);
+
         if (application.getStatus() == GrantApplicationStatus.DRAFT) {
+
             GrantApplicationStatus previousStatus = application.getStatus();
             VerificationRoutingRule rule = matchingRule(application);
+
+            User fieldOfficer = selectOfficer(
+                    application, VerificationStage.FIELD, null);
+
+            if (fieldOfficer == null) {
+                throw conflict(
+                        "No active Field Officer is configured for the beneficiary's state and district. Please configure a matching officer before submitting.");
+            }
+
             application.setWorkflowStage(VerificationStage.FIELD);
-            application.setAssignedOfficer(selectOfficer(application, VerificationStage.FIELD, null));
-            startTask(application, VerificationStage.FIELD);
+            application.setAssignedOfficer(fieldOfficer);
+
             application.setRoutingPriority(
                     rule == null ? RoutingPriority.NORMAL : rule.getPriority());
-            application.setStateApprovalRequired(
-                    rule == null || rule.isStateApprovalRequired());
+
             application.setEscalated(false);
             application.setStatus(GrantApplicationStatus.SUBMITTED);
-            record(application, VerificationStage.FIELD, "SUBMITTED", beneficiary,
-                    application.getAssignedOfficer(), "Application submitted for field verification.",
-                    previousStatus, application.getStatus(), VerificationStage.FIELD);
-            record(application, VerificationStage.FIELD, "ASSIGNED", null,
-                    application.getAssignedOfficer(), "Automatically assigned by beneficiary district.",
-                    application.getStatus(), application.getStatus(), VerificationStage.FIELD);
+
+            startTask(application, VerificationStage.FIELD);
+
+            record(
+                    application,
+                    VerificationStage.FIELD,
+                    "SUBMITTED",
+                    beneficiary,
+                    application.getAssignedOfficer(),
+                    "Application submitted for field verification.",
+                    previousStatus,
+                    application.getStatus(),
+                    VerificationStage.FIELD);
+
+            record(
+                    application,
+                    VerificationStage.FIELD,
+                    "ASSIGNED",
+                    null,
+                    application.getAssignedOfficer(),
+                    "Automatically assigned based on beneficiary jurisdiction.",
+                    application.getStatus(),
+                    application.getStatus(),
+                    VerificationStage.FIELD);
+
         } else if (application.getStatus() == GrantApplicationStatus.NEEDS_CORRECTION
                 && application.getWorkflowStage() != null) {
+
             GrantApplicationStatus previousStatus = application.getStatus();
-            if (!isEligibleOfficer(application.getAssignedOfficer(),
-                    application, application.getWorkflowStage())) {
-                application.setAssignedOfficer(
-                        selectOfficer(application, application.getWorkflowStage(), null));
+
+            if (!isEligibleOfficer(
+                    application.getAssignedOfficer(),
+                    application,
+                    application.getWorkflowStage())) {
+
+                User replacementOfficer = selectOfficer(
+                        application,
+                        application.getWorkflowStage(),
+                        null);
+
+                if (replacementOfficer == null) {
+                    throw conflict(
+                            "No active officer is configured for the current verification stage and beneficiary jurisdiction. Please configure a matching officer before resubmitting.");
+                }
+
+                application.setAssignedOfficer(replacementOfficer);
             }
+
             VerificationRoutingRule rule = matchingRule(application);
+
             application.setRoutingPriority(
                     rule == null ? RoutingPriority.NORMAL : rule.getPriority());
-            application.setStateApprovalRequired(
-                    rule == null || rule.isStateApprovalRequired());
+
             application.setEscalated(false);
             application.setStatus(GrantApplicationStatus.SUBMITTED);
+
             startTask(application, application.getWorkflowStage());
-            record(application, application.getWorkflowStage(), "RESUBMITTED", beneficiary,
-                    application.getAssignedOfficer(), "Beneficiary submitted requested corrections.",
-                    previousStatus, application.getStatus(), application.getWorkflowStage());
+
+            record(
+                    application,
+                    application.getWorkflowStage(),
+                    "RESUBMITTED",
+                    beneficiary,
+                    application.getAssignedOfficer(),
+                    "Beneficiary submitted requested corrections.",
+                    previousStatus,
+                    application.getStatus(),
+                    application.getWorkflowStage());
+
         } else {
             throw conflict("Only a draft or returned application can be submitted.");
         }
+
         return applicationRepository.save(application);
     }
 
     @Transactional(readOnly = true)
     public List<GrantApplication> getQueue(String email, boolean admin) {
+
         if (admin) {
             return applicationRepository.findAllByOrderByIdDesc().stream()
                     .filter(this::isAwaitingReview)
                     .sorted(queueOrder())
                     .toList();
         }
+
         User officer = requireOfficer(getUser(email));
+
         return applicationRepository
                 .findByAssignedOfficer_IdAndStatusInOrderByIdDesc(
-                        officer.getId(), PENDING_REVIEW_STATUSES).stream()
+                        officer.getId(), PENDING_REVIEW_STATUSES)
+                .stream()
                 .filter(this::isAwaitingReview)
                 .filter(application -> isEligibleOfficer(
                         officer, application, application.getWorkflowStage()))
@@ -134,6 +204,7 @@ public class VerificationWorkflowService {
 
     @Transactional(readOnly = true)
     public List<GrantApplication> getHistory(String email, boolean admin) {
+
         return applicationRepository.findAllByOrderByIdDesc().stream()
                 .filter(application -> application.getWorkflowStage() != null)
                 .filter(application -> canView(application, email, admin))
@@ -141,32 +212,56 @@ public class VerificationWorkflowService {
     }
 
     @Transactional(readOnly = true)
-    public boolean canView(GrantApplication application, String email, boolean admin) {
-        if (admin) return true;
+    public boolean canView(
+            GrantApplication application,
+            String email,
+            boolean admin) {
+
+        if (admin) {
+            return true;
+        }
+
         User user = getUser(email);
-        if (user.getRole() != Role.OFFICER || !Boolean.TRUE.equals(user.getActive())) {
+
+        if (user.getRole() != Role.OFFICER
+                || !Boolean.TRUE.equals(user.getActive())) {
             return false;
         }
+
         if (isAwaitingReview(application)) {
             return application.getAssignedOfficer() != null
-                    && Objects.equals(application.getAssignedOfficer().getId(), user.getId())
-                    && isEligibleOfficer(user, application, application.getWorkflowStage());
+                    && Objects.equals(
+                            application.getAssignedOfficer().getId(),
+                            user.getId())
+                    && isEligibleOfficer(
+                            user, application, application.getWorkflowStage());
         }
+
         if (application.getAssignedOfficer() != null
-                && Objects.equals(application.getAssignedOfficer().getId(), user.getId())
+                && Objects.equals(
+                        application.getAssignedOfficer().getId(), user.getId())
                 && application.getWorkflowStage() != null
-                && isWithinStageJurisdiction(user, application, application.getWorkflowStage())) {
+                && isWithinStageJurisdiction(
+                        user, application, application.getWorkflowStage())) {
             return true;
         }
-        if (user.getOfficerLevel() == null) return false;
+
+        if (user.getOfficerLevel() == null) {
+            return false;
+        }
+
         if (application.getWorkflowStage() != null
-                && isWithinStageJurisdiction(user, application, application.getWorkflowStage())) {
+                && isWithinStageJurisdiction(
+                        user, application, application.getWorkflowStage())) {
             return true;
         }
-        return historyRepository.findByApplication_IdOrderByCreatedAtAsc(application.getId())
+
+        return historyRepository
+                .findByApplication_IdOrderByCreatedAtAsc(application.getId())
                 .stream()
                 .anyMatch(item -> user.getOfficerLevel().equals(item.getStage().name())
-                        && isWithinStageJurisdiction(user, application, item.getStage()));
+                        && isWithinStageJurisdiction(
+                                user, application, item.getStage()));
     }
 
     public GrantApplication decide(
@@ -174,21 +269,30 @@ public class VerificationWorkflowService {
             String email,
             boolean admin,
             VerificationDecisionRequest request) {
+
         GrantApplication application = findApplication(applicationId);
         User actor = getUser(email);
+
         requireDecisionAccess(application, actor, admin);
+
         VerificationStage stage = application.getWorkflowStage();
         VerificationDecision decision = request.decision();
+
         validateDecision(stage, decision, request.remarks());
+
         if (stage == VerificationStage.FIELD
                 && decision == VerificationDecision.VERIFIED) {
-            if (!request.identityVerified() || !request.addressVerified()
+
+            if (!request.identityVerified()
+                    || !request.addressVerified()
                     || !request.documentsVerified()
                     || !request.applicationDetailsVerified()) {
+
                 throw new ResponseStatusException(
                         HttpStatus.BAD_REQUEST,
                         "Confirm identity, address, documents, and application details before verification.");
             }
+
             if (documentRepository.countByApplication_Id(applicationId) == 0) {
                 throw new ResponseStatusException(
                         HttpStatus.CONFLICT,
@@ -198,233 +302,397 @@ public class VerificationWorkflowService {
 
         GrantApplicationStatus previousStatus = application.getStatus();
         User currentAssignee = application.getAssignedOfficer();
+
         VerificationStage assignedStage = null;
         User nextOfficer = null;
+
         if (decision == VerificationDecision.NEEDS_CORRECTION) {
+
             application.setStatus(GrantApplicationStatus.NEEDS_CORRECTION);
+
         } else if (decision == VerificationDecision.REJECTED) {
+
             application.setStatus(GrantApplicationStatus.REJECTED);
             application.setAssignedOfficer(null);
-            application.setTaskCompletedAt(java.time.LocalDateTime.now());
+            application.setTaskCompletedAt(LocalDateTime.now());
+
         } else if (stage == VerificationStage.FIELD) {
-            application.setTaskCompletedAt(java.time.LocalDateTime.now());
+
+            application.setTaskCompletedAt(LocalDateTime.now());
+
             assignedStage = VerificationStage.DISTRICT;
             nextOfficer = advance(application, assignedStage);
+
         } else if (stage == VerificationStage.DISTRICT) {
-            application.setTaskCompletedAt(java.time.LocalDateTime.now());
-            if (application.requiresStateApproval()) {
-                assignedStage = VerificationStage.STATE;
-                nextOfficer = advance(application, assignedStage);
-            } else {
-                application.setStatus(GrantApplicationStatus.APPROVED);
-                application.setAssignedOfficer(null);
-            }
-        } else {
-            application.setTaskCompletedAt(java.time.LocalDateTime.now());
+
+            application.setTaskCompletedAt(LocalDateTime.now());
+
+            // Every application proceeds to Finance.
+            assignedStage = VerificationStage.FINANCE;
+            nextOfficer = advance(application, assignedStage);
+
+        } else if (stage == VerificationStage.FINANCE) {
+
+            application.setTaskCompletedAt(LocalDateTime.now());
             application.setStatus(GrantApplicationStatus.APPROVED);
             application.setAssignedOfficer(null);
         }
 
-        recordChecklist(application, stage, decision, actor, currentAssignee, request,
-                previousStatus, application.getStatus(),
-                isFinalStatus(application.getStatus()) ? null : application.getWorkflowStage());
+        recordChecklist(
+                application,
+                stage,
+                decision,
+                actor,
+                currentAssignee,
+                request,
+                previousStatus,
+                application.getStatus(),
+                isFinalStatus(application.getStatus())
+                        ? null
+                        : application.getWorkflowStage());
+
         if (assignedStage != null) {
-            record(application, assignedStage, "ASSIGNED", null, nextOfficer,
+            record(
+                    application,
+                    assignedStage,
+                    "ASSIGNED",
+                    null,
+                    nextOfficer,
                     "Automatically advanced to "
                             + assignedStage.name().toLowerCase() + " review.",
-                    application.getStatus(), application.getStatus(), assignedStage);
+                    application.getStatus(),
+                    application.getStatus(),
+                    assignedStage);
         }
+
         return applicationRepository.save(application);
     }
 
     public GrantApplication assign(
-            Long applicationId, Long officerId, String email, boolean admin) {
+            Long applicationId,
+            Long officerId,
+            String email,
+            boolean admin) {
+
         if (!admin) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin access required.");
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN, "Admin access required.");
         }
+
         GrantApplication application = findApplication(applicationId);
+
         if (!isAwaitingReview(application)) {
             throw conflict("Only an active verification application can be assigned.");
         }
+
         User actor = getUser(email);
+
         User officer = userRepository.findById(officerId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Officer not found."));
-        if (!isEligibleOfficer(officer, application, application.getWorkflowStage())) {
+
+        if (!isEligibleOfficer(
+                officer, application, application.getWorkflowStage())) {
+
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "The selected officer must be active and match the current stage and jurisdiction.");
         }
+
         GrantApplicationStatus status = application.getStatus();
+
         application.setAssignedOfficer(officer);
-        if (application.getTaskAssignedAt() == null) startTask(application, application.getWorkflowStage());
+
+        if (application.getTaskAssignedAt() == null) {
+            startTask(application, application.getWorkflowStage());
+        }
+
         application.setEscalated(false);
-        record(application, application.getWorkflowStage(), "ASSIGNED", actor, officer,
-                "Application assigned by Admin.", status, status, application.getWorkflowStage());
+
+        record(
+                application,
+                application.getWorkflowStage(),
+                "ASSIGNED",
+                actor,
+                officer,
+                "Application assigned by Admin.",
+                status,
+                status,
+                application.getWorkflowStage());
+
         return applicationRepository.save(application);
     }
 
-    public GrantApplication escalate(Long applicationId, String email, boolean admin) {
+    public GrantApplication escalate(
+            Long applicationId,
+            String email,
+            boolean admin) {
+
         GrantApplication application = findApplication(applicationId);
         User actor = getUser(email);
+
         if (!isAwaitingReview(application)) {
             throw conflict("Only an active verification application can be escalated.");
         }
+
         if (!admin) {
             requireDecisionAccess(application, actor, false);
         }
+
         GrantApplicationStatus status = application.getStatus();
         User previous = application.getAssignedOfficer();
-        User next = selectOfficer(application, application.getWorkflowStage(), previous);
+
+        User next = selectOfficer(
+                application, application.getWorkflowStage(), previous);
+
+        if (next == null) {
+            throw conflict(
+                    "No alternate active officer is configured for this stage and jurisdiction.");
+        }
+
         application.setAssignedOfficer(next);
         application.setEscalated(true);
-        record(application, application.getWorkflowStage(), "ESCALATED", actor, next,
+
+        record(
+                application,
+                application.getWorkflowStage(),
+                "ESCALATED",
+                actor,
+                next,
                 "Application escalated and reassigned within the current verification level.",
-                status, status, application.getWorkflowStage());
+                status,
+                status,
+                application.getWorkflowStage());
+
         return applicationRepository.save(application);
     }
 
-    private User advance(GrantApplication application, VerificationStage nextStage) {
+    private User advance(
+            GrantApplication application,
+            VerificationStage nextStage) {
+
         User nextOfficer = selectOfficer(application, nextStage, null);
+
+        if (nextOfficer == null) {
+            throw conflict(
+                    "No active "
+                            + nextStage.name()
+                            + " Officer is configured for the beneficiary's jurisdiction. The application cannot advance until a matching officer is configured.");
+        }
+
         application.setWorkflowStage(nextStage);
         application.setAssignedOfficer(nextOfficer);
         application.setEscalated(false);
         application.setStatus(GrantApplicationStatus.UNDER_VERIFICATION);
+
         startTask(application, nextStage);
+
         return nextOfficer;
     }
 
-    private void startTask(GrantApplication application, VerificationStage stage) {
+    private void startTask(
+            GrantApplication application,
+            VerificationStage stage) {
+
         int days = 5;
+
         if (deadlineConfigs != null) {
-            WorkflowDeadlineConfig c = deadlineConfigs.findById(1L)
+            WorkflowDeadlineConfig config = deadlineConfigs.findById(1L)
                     .orElseGet(() -> deadlineConfigs.save(new WorkflowDeadlineConfig()));
-            days = c.days(stage);
+
+            days = config.days(stage);
         }
-        java.time.LocalDateTime now = java.time.LocalDateTime.now();
+
+        LocalDateTime now = LocalDateTime.now();
+
         application.setTaskAssignedAt(now);
         application.setTaskDueAt(now.plusDays(days));
         application.setTaskCompletedAt(null);
     }
 
     private void requireDecisionAccess(
-            GrantApplication application, User actor, boolean admin) {
+            GrantApplication application,
+            User actor,
+            boolean admin) {
+
         if (!isAwaitingReview(application)) {
             throw conflict("This application is not awaiting verification.");
         }
+
         if (admin) {
-            if (application.getWorkflowStage() != VerificationStage.STATE) {
+            if (application.getWorkflowStage() != VerificationStage.FINANCE) {
                 throw new ResponseStatusException(
                         HttpStatus.FORBIDDEN,
-                        "Admin can make a final decision only at the state review stage.");
+                        "Admin can make a final decision only at the Finance review stage.");
             }
+
             return;
         }
+
         User officer = requireOfficer(actor);
+
         String expectedLevel = application.getWorkflowStage().name();
+
         if (!expectedLevel.equals(officer.getOfficerLevel())) {
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "This officer is not authorized for this review level.");
+                    HttpStatus.FORBIDDEN,
+                    "This officer is not authorized for this review level.");
         }
+
         if (application.getAssignedOfficer() == null
-                || !Objects.equals(application.getAssignedOfficer().getId(), officer.getId())) {
+                || !Objects.equals(
+                        application.getAssignedOfficer().getId(),
+                        officer.getId())) {
+
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "This application is assigned to another officer.");
+                    HttpStatus.FORBIDDEN,
+                    "This application is assigned to another officer.");
         }
-        if (!isWithinStageJurisdiction(officer, application, application.getWorkflowStage())) {
+
+        if (!isWithinStageJurisdiction(
+                officer, application, application.getWorkflowStage())) {
+
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "Application is outside the officer's jurisdiction.");
+                    HttpStatus.FORBIDDEN,
+                    "Application is outside the officer's jurisdiction.");
         }
     }
 
     private void validateDecision(
-            VerificationStage stage, VerificationDecision decision, String remarks) {
+            VerificationStage stage,
+            VerificationDecision decision,
+            String remarks) {
+
         boolean allowed = switch (stage) {
-            case FIELD -> decision == VerificationDecision.VERIFIED
-                    || decision == VerificationDecision.REJECTED
-                    || decision == VerificationDecision.NEEDS_CORRECTION;
-            case DISTRICT -> decision == VerificationDecision.APPROVED
-                    || decision == VerificationDecision.REJECTED
-                    || decision == VerificationDecision.NEEDS_CORRECTION;
-            case STATE -> decision == VerificationDecision.APPROVED
-                    || decision == VerificationDecision.REJECTED;
+
+            case FIELD ->
+                decision == VerificationDecision.VERIFIED
+                        || decision == VerificationDecision.REJECTED
+                        || decision == VerificationDecision.NEEDS_CORRECTION;
+
+            case DISTRICT ->
+                decision == VerificationDecision.APPROVED
+                        || decision == VerificationDecision.REJECTED
+                        || decision == VerificationDecision.NEEDS_CORRECTION;
+
+            case FINANCE ->
+                decision == VerificationDecision.APPROVED
+                        || decision == VerificationDecision.REJECTED;
         };
+
         if (!allowed) {
-            throw conflict("Decision is not valid for the current verification level.");
+            throw conflict(
+                    "Decision is not valid for the current verification level.");
         }
+
         if ((decision == VerificationDecision.REJECTED
                 || decision == VerificationDecision.NEEDS_CORRECTION)
                 && (remarks == null || remarks.isBlank())) {
+
             throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST, "Remarks are required for rejection or correction.");
+                    HttpStatus.BAD_REQUEST,
+                    "Remarks are required for rejection or correction.");
         }
     }
 
     private User selectOfficer(
-            GrantApplication application, VerificationStage stage, User exclude) {
+            GrantApplication application,
+            VerificationStage stage,
+            User exclude) {
+
         Beneficiary beneficiary = application.getBeneficiary();
-        List<User> eligible = userRepository.findAll().stream()
-                .filter(user -> user.getRole() == Role.OFFICER)
-                .filter(user -> Boolean.TRUE.equals(user.getActive()))
-                .filter(user -> stage.name().equals(user.getOfficerLevel()))
-                .filter(user -> same(user.getJurisdictionState(), beneficiary.getState()))
-                .filter(user -> stage == VerificationStage.STATE
-                        || same(user.getJurisdictionDistrict(), beneficiary.getDistrict()))
-                .filter(user -> exclude == null || !Objects.equals(user.getId(), exclude.getId()))
-                .sorted(Comparator.comparing(User::getId))
-                .toList();
-        if (eligible.isEmpty()) {
-            return null;
-        }
-        if (exclude == null) {
-            return eligible.get(Math.floorMod(application.getId().intValue(), eligible.size()));
-        }
+
         List<User> allEligible = userRepository.findAll().stream()
                 .filter(user -> user.getRole() == Role.OFFICER)
                 .filter(user -> Boolean.TRUE.equals(user.getActive()))
                 .filter(user -> stage.name().equals(user.getOfficerLevel()))
-                .filter(user -> same(user.getJurisdictionState(), beneficiary.getState()))
-                .filter(user -> stage == VerificationStage.STATE
-                        || same(user.getJurisdictionDistrict(), beneficiary.getDistrict()))
+                .filter(user -> same(
+                        user.getJurisdictionState(), beneficiary.getState()))
+                .filter(user -> stage == VerificationStage.FINANCE
+                        || same(
+                                user.getJurisdictionDistrict(),
+                                beneficiary.getDistrict()))
                 .sorted(Comparator.comparing(User::getId))
                 .toList();
-        if (allEligible.size() < 2) {
-            throw conflict("No alternate officer is configured for escalation at this level.");
+
+        if (exclude == null) {
+            if (allEligible.isEmpty()) {
+                return null;
+            }
+
+            return allEligible.get(
+                    Math.floorMod(
+                            application.getId().intValue(),
+                            allEligible.size()));
         }
-        int currentIndex = allEligible.indexOf(exclude);
-        return allEligible.get((currentIndex + 1 + allEligible.size()) % allEligible.size());
+
+        List<User> alternatives = allEligible.stream()
+                .filter(user -> !Objects.equals(
+                        user.getId(), exclude.getId()))
+                .toList();
+
+        if (alternatives.isEmpty()) {
+            return null;
+        }
+
+        return alternatives.get(
+                Math.floorMod(
+                        application.getId().intValue(),
+                        alternatives.size()));
     }
 
     private boolean isWithinStageJurisdiction(
-            User user, GrantApplication application, VerificationStage stage) {
+            User user,
+            GrantApplication application,
+            VerificationStage stage) {
+
         if (user.getOfficerLevel() == null
-                || !stage.name().equals(user.getOfficerLevel())) return false;
+                || !stage.name().equals(user.getOfficerLevel())) {
+            return false;
+        }
+
         Beneficiary beneficiary = application.getBeneficiary();
-        return same(user.getJurisdictionState(), beneficiary.getState())
-                && (stage == VerificationStage.STATE
-                || same(user.getJurisdictionDistrict(), beneficiary.getDistrict()));
+
+        return same(
+                user.getJurisdictionState(), beneficiary.getState())
+                && (stage == VerificationStage.FINANCE
+                        || same(
+                                user.getJurisdictionDistrict(),
+                                beneficiary.getDistrict()));
     }
 
     private boolean isEligibleOfficer(
-            User officer, GrantApplication application, VerificationStage stage) {
+            User officer,
+            GrantApplication application,
+            VerificationStage stage) {
+
         return officer != null
                 && officer.getRole() == Role.OFFICER
                 && Boolean.TRUE.equals(officer.getActive())
-                && isWithinStageJurisdiction(officer, application, stage);
+                && isWithinStageJurisdiction(
+                        officer, application, stage);
     }
 
-    private VerificationRoutingRule matchingRule(GrantApplication application) {
+    private VerificationRoutingRule matchingRule(
+            GrantApplication application) {
+
         BigDecimal configuredScore = application.getEligibilityEvaluation() == null
                 ? BigDecimal.ZERO
                 : application.getEligibilityEvaluation().scoreOutOf100();
-        final BigDecimal score = configuredScore == null ? BigDecimal.ZERO : configuredScore;
+
+        BigDecimal score = configuredScore == null
+                ? BigDecimal.ZERO
+                : configuredScore;
+
         BigDecimal amount = application.getRequestedAmount();
+
         return routingRuleRepository.findAllByOrderByIdAsc().stream()
                 .filter(rule -> score.compareTo(rule.getMinimumScore()) >= 0
                         && score.compareTo(rule.getMaximumScore()) <= 0)
                 .filter(rule -> amount.compareTo(rule.getMinimumAmount()) >= 0
                         && (rule.getMaximumAmount() == null
-                        || amount.compareTo(rule.getMaximumAmount()) <= 0))
+                                || amount.compareTo(
+                                        rule.getMaximumAmount()) <= 0))
                 .findFirst()
                 .orElse(null);
     }
@@ -439,7 +707,9 @@ public class VerificationWorkflowService {
             GrantApplicationStatus previousStatus,
             GrantApplicationStatus newStatus,
             VerificationStage nextStage) {
+
         ApplicationVerification entry = new ApplicationVerification();
+
         entry.setApplication(application);
         entry.setStage(stage);
         entry.setPreviousStatus(previousStatus);
@@ -448,7 +718,12 @@ public class VerificationWorkflowService {
         entry.setAction(action);
         entry.setActor(actor);
         entry.setAssignedOfficer(assignedOfficer);
-        entry.setRemarks(remarks == null || remarks.isBlank() ? null : remarks.trim());
+
+        entry.setRemarks(
+                remarks == null || remarks.isBlank()
+                        ? null
+                        : remarks.trim());
+
         historyRepository.save(entry);
     }
 
@@ -462,7 +737,9 @@ public class VerificationWorkflowService {
             GrantApplicationStatus previousStatus,
             GrantApplicationStatus newStatus,
             VerificationStage nextStage) {
+
         ApplicationVerification entry = new ApplicationVerification();
+
         entry.setApplication(application);
         entry.setStage(stage);
         entry.setPreviousStatus(previousStatus);
@@ -471,18 +748,28 @@ public class VerificationWorkflowService {
         entry.setAction(decision.name());
         entry.setActor(actor);
         entry.setAssignedOfficer(assignedOfficer);
-        entry.setRemarks(request.remarks() == null || request.remarks().isBlank()
-                ? null : request.remarks().trim());
+
+        entry.setRemarks(
+                request.remarks() == null || request.remarks().isBlank()
+                        ? null
+                        : request.remarks().trim());
+
         entry.setIdentityVerified(request.identityVerified());
         entry.setAddressVerified(request.addressVerified());
         entry.setDocumentsVerified(request.documentsVerified());
-        entry.setApplicationDetailsVerified(request.applicationDetailsVerified());
+        entry.setApplicationDetailsVerified(
+                request.applicationDetailsVerified());
+
         historyRepository.save(entry);
     }
 
     private boolean isAwaitingReview(GrantApplication application) {
+
         if (application.getWorkflowStage() == null
-                || !PENDING_REVIEW_STATUSES.contains(application.getStatus())) return false;
+                || !PENDING_REVIEW_STATUSES.contains(application.getStatus())) {
+            return false;
+        }
+
         return application.getStatus() == GrantApplicationStatus.SUBMITTED
                 || application.getStatus() == GrantApplicationStatus.UNDER_VERIFICATION
                 || application.getStatus() == statusFor(application.getWorkflowStage());
@@ -506,37 +793,60 @@ public class VerificationWorkflowService {
     }
 
     private User requireOfficer(User user) {
-        if (user.getRole() != Role.OFFICER || user.getOfficerLevel() == null
+        if (user.getRole() != Role.OFFICER
+                || user.getOfficerLevel() == null
                 || !Boolean.TRUE.equals(user.getActive())) {
+
             throw new ResponseStatusException(
-                    HttpStatus.FORBIDDEN, "An active verification officer is required.");
+                    HttpStatus.FORBIDDEN,
+                    "An active verification officer is required.");
         }
+
         return user;
     }
 
     private boolean same(String left, String right) {
-        return left != null && right != null && left.trim().equalsIgnoreCase(right.trim());
+
+        if (left == null || right == null) {
+            return false;
+        }
+
+        String normalizedLeft = left
+                .replaceAll("\\s+", "")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        String normalizedRight = right
+                .replaceAll("\\s+", "")
+                .trim()
+                .toLowerCase(Locale.ROOT);
+
+        return normalizedLeft.equals(normalizedRight);
     }
 
     private Comparator<GrantApplication> queueOrder() {
-        return Comparator.comparing(GrantApplication::isEscalated).reversed()
+        return Comparator.comparing(
+                GrantApplication::isEscalated).reversed()
                 .thenComparing(
                         application -> application.getRoutingPriority() == null
                                 ? RoutingPriority.NORMAL.ordinal()
                                 : application.getRoutingPriority().ordinal(),
                         Comparator.reverseOrder())
-                .thenComparing(GrantApplication::getId, Comparator.reverseOrder());
+                .thenComparing(
+                        GrantApplication::getId,
+                        Comparator.reverseOrder());
     }
 
     private GrantApplicationStatus statusFor(VerificationStage stage) {
         return switch (stage) {
             case FIELD -> GrantApplicationStatus.FIELD_VERIFICATION;
             case DISTRICT -> GrantApplicationStatus.DISTRICT_REVIEW;
-            case STATE -> GrantApplicationStatus.STATE_REVIEW;
+            case FINANCE -> GrantApplicationStatus.FINANCE_REVIEW;
         };
     }
 
     private ResponseStatusException conflict(String message) {
-        return new ResponseStatusException(HttpStatus.CONFLICT, message);
+        return new ResponseStatusException(
+                HttpStatus.CONFLICT, message);
     }
 }

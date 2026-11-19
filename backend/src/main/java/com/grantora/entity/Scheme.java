@@ -71,6 +71,10 @@ public class Scheme {
         return id;
     }
 
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public String getSchemeName() {
         return schemeName;
     }

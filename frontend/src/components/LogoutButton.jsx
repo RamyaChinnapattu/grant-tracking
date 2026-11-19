@@ -11,6 +11,9 @@ function LogoutButton({ className = "" }) {
     localStorage.removeItem("fullName");
     localStorage.removeItem("email");
     localStorage.removeItem("role");
+    localStorage.removeItem("officerLevel");
+    localStorage.removeItem("jurisdictionState");
+    localStorage.removeItem("jurisdictionDistrict");
 
     navigate("/login", { replace: true });
   };

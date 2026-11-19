@@ -382,6 +382,219 @@ select.grant-applications__status {
   grid-column: 1 / -1;
 }
 
+/* Lifecycle Stepper for Tracking */
+.grant-tracker-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 14px 0 20px;
+  padding: 16px;
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 10px;
+  overflow-x: auto;
+}
+
+.grant-tracker-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 100px;
+  text-align: center;
+  position: relative;
+}
+
+.grant-tracker-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 14px;
+  left: calc(50% + 18px);
+  right: calc(-50% + 18px);
+  height: 2px;
+  background: var(--color-outline-variant);
+  z-index: 1;
+}
+
+.grant-tracker-step__circle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--color-surface-high);
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  font-weight: 700;
+  z-index: 2;
+  transition: all 0.2s ease;
+}
+
+.grant-tracker-step__label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+.grant-tracker-step--completed .grant-tracker-step__circle {
+  background: #15803d;
+  color: #fff;
+}
+
+.grant-tracker-step--completed .grant-tracker-step__label {
+  color: #15803d;
+  font-weight: 700;
+}
+
+.grant-tracker-step--completed::after {
+  background: #15803d;
+}
+
+.grant-tracker-step--active .grant-tracker-step__circle {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 0 0 4px var(--color-primary-fixed);
+}
+
+.grant-tracker-step--active .grant-tracker-step__label {
+  color: var(--color-primary);
+  font-weight: 750;
+}
+
+.grant-tracker-step--correction .grant-tracker-step__circle {
+  background: #b45309;
+  color: #fff;
+  box-shadow: 0 0 0 4px #fef3c7;
+}
+
+.grant-tracker-step--correction .grant-tracker-step__label {
+  color: #b45309;
+  font-weight: 750;
+}
+
+.grant-tracker-step--rejected .grant-tracker-step__circle {
+  background: #dc2626;
+  color: #fff;
+}
+
+.grant-tracker-step--rejected .grant-tracker-step__label {
+  color: #dc2626;
+  font-weight: 750;
+}
+
+/* Action Required Banner for Corrections */
+.grant-applications__action-required {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 16px 20px;
+  border: 2px solid #f59e0b;
+  border-radius: 10px;
+  background: #fffbeb;
+  color: #92400e;
+}
+
+.grant-applications__action-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grant-applications__action-badge {
+  display: inline-flex;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #f59e0b;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.grant-applications__action-header h4 {
+  margin: 0;
+  color: #92400e;
+  font-size: 1.05rem;
+}
+
+.grant-applications__action-remarks {
+  margin: 0;
+  padding: 10px 14px;
+  border-left: 3px solid #f59e0b;
+  background: #fef3c7;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+  font-style: italic;
+  line-height: 1.5;
+  color: #78350f;
+}
+
+.grant-applications__action-required p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
+/* Pending Action Card */
+.grant-applications__pending-action {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 18px;
+  padding: 14px 18px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 8px;
+  background: var(--color-surface-low);
+}
+
+.grant-applications__pending-action h5 {
+  margin: 0;
+  color: var(--color-primary);
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.grant-applications__pending-action p {
+  margin: 0;
+  font-size: 0.88rem;
+  color: var(--color-on-surface);
+  line-height: 1.45;
+}
+
+/* Timeline */
+.grant-applications__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+  margin: 10px 0 0;
+  list-style: none;
+}
+
+.grant-applications__timeline li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-primary);
+  background: var(--color-surface-lowest);
+  border-radius: 0 8px 8px 0;
+}
+
+.grant-applications__timeline-remarks {
+  margin: 4px 0 0;
+  padding: 6px 10px;
+  background: var(--color-surface-low);
+  border-radius: 4px;
+  font-size: 0.84rem;
+  font-style: italic;
+  color: var(--color-on-surface);
+}
+
 @media (max-width: 700px) {
   .grant-applications {
     padding: 18px;

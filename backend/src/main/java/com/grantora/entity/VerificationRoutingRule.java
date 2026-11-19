@@ -1,3 +1,4 @@
+
 package com.grantora.entity;
 
 import jakarta.persistence.*;
@@ -27,24 +28,47 @@ public class VerificationRoutingRule {
     @Column(nullable = false, length = 20)
     private RoutingPriority priority;
 
-    @Column(name = "state_approval_required")
-    private Boolean stateApprovalRequired = true;
-
-    public Long getId() { return id; }
-    public BigDecimal getMinimumScore() { return minimumScore; }
-    public void setMinimumScore(BigDecimal minimumScore) { this.minimumScore = minimumScore; }
-    public BigDecimal getMaximumScore() { return maximumScore; }
-    public void setMaximumScore(BigDecimal maximumScore) { this.maximumScore = maximumScore; }
-    public BigDecimal getMinimumAmount() { return minimumAmount; }
-    public void setMinimumAmount(BigDecimal minimumAmount) { this.minimumAmount = minimumAmount; }
-    public BigDecimal getMaximumAmount() { return maximumAmount; }
-    public void setMaximumAmount(BigDecimal maximumAmount) { this.maximumAmount = maximumAmount; }
-    public RoutingPriority getPriority() { return priority; }
-    public void setPriority(RoutingPriority priority) { this.priority = priority; }
-    public boolean isStateApprovalRequired() {
-        return !Boolean.FALSE.equals(stateApprovalRequired);
+    public Long getId() {
+        return id;
     }
-    public void setStateApprovalRequired(Boolean stateApprovalRequired) {
-        this.stateApprovalRequired = stateApprovalRequired;
+
+    public BigDecimal getMinimumScore() {
+        return minimumScore;
+    }
+
+    public void setMinimumScore(BigDecimal minimumScore) {
+        this.minimumScore = minimumScore;
+    }
+
+    public BigDecimal getMaximumScore() {
+        return maximumScore;
+    }
+
+    public void setMaximumScore(BigDecimal maximumScore) {
+        this.maximumScore = maximumScore;
+    }
+
+    public BigDecimal getMinimumAmount() {
+        return minimumAmount;
+    }
+
+    public void setMinimumAmount(BigDecimal minimumAmount) {
+        this.minimumAmount = minimumAmount;
+    }
+
+    public BigDecimal getMaximumAmount() {
+        return maximumAmount;
+    }
+
+    public void setMaximumAmount(BigDecimal maximumAmount) {
+        this.maximumAmount = maximumAmount;
+    }
+
+    public RoutingPriority getPriority() {
+        return priority;
+    }
+
+    public void setPriority(RoutingPriority priority) {
+        this.priority = priority;
     }
 }

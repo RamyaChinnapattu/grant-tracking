@@ -334,9 +334,9 @@ All backend routes use the `/api` base path. JWT authentication is required exce
 ### Prerequisites
 
 - Git
-- Java 17
-- MySQL 8.0
-- Node.js LTS and npm
+- Java 17 or higher (tested with Java 21 LTS)
+- MySQL 8.0 or higher
+- Node.js LTS (version 18, 20, or 22) and npm (v9+)
 
 ### Clone the repository
 
@@ -345,42 +345,74 @@ git clone https://github.com/ApoorvaPoojary8/Grantora.git
 cd Grantora
 ```
 
+### Environment Variables
+
+The backend reads configuration from environment variables with safe development defaults defined in `backend/src/main/resources/application.properties`. Never commit actual secrets or production passwords.
+
+| Variable | Description | Development Default | Required in Production |
+|---|---|---|---|
+| `SPRING_DATASOURCE_URL` | MySQL JDBC connection string | `jdbc:mysql://localhost:3306/grantora_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC` | Yes |
+| `SPRING_DATASOURCE_USERNAME` | MySQL database username | `root` | Yes |
+| `SPRING_DATASOURCE_PASSWORD` | MySQL database password | *(empty)* | Yes |
+| `JWT_SECRET` | Base64-encoded HMAC-SHA256 signing secret (min 256-bit) | Development fallback (256-bit) | Yes (strictly required) |
+| `JWT_EXPIRATION` | JWT token lifespan in milliseconds | `86400000` (24 hours) | Optional |
+| `GRANTORA_WORKFLOW_SCAN_MS` | Auto-reassignment scheduler scan interval (ms) | `60000` (1 minute) | Optional |
+| `PORT` | Backend server port | `8080` | Optional |
+
+Example for setting environment variables in PowerShell:
+
+```powershell
+$env:SPRING_DATASOURCE_URL = "jdbc:mysql://localhost:3306/grantora_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+$env:SPRING_DATASOURCE_USERNAME = "root"
+$env:SPRING_DATASOURCE_PASSWORD = "your_mysql_password"
+$env:JWT_SECRET = "replace_with_a_secure_base64_encoded_256bit_secret"
+```
+
+Example for Linux / macOS (`bash` or `zsh`):
+
+```bash
+export SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/grantora_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
+export SPRING_DATASOURCE_USERNAME="root"
+export SPRING_DATASOURCE_PASSWORD="your_mysql_password"
+export JWT_SECRET="replace_with_a_secure_base64_encoded_256bit_secret"
+```
+
+> [!WARNING]
+> The development JWT fallback key is provided solely for convenient local offline testing. Never use fallback credentials or commit production keys.
+
 ### Prepare MySQL
 
-Create the local database before starting the backend:
+Create the local database before running integration tests or starting the backend:
 
 ```sql
 CREATE DATABASE grantora_db;
 ```
 
-The checked-in Spring configuration points to `127.0.0.1:3306/grantora_db`. It contains local datasource and JWT settings; never publish real credentials or signing secrets. For local development, override the configured values using environment variables supported by Spring Boot, or edit an uncommitted local configuration. Example for PowerShell:
-
-```powershell
-$env:SPRING_DATASOURCE_URL = "jdbc:mysql://127.0.0.1:3306/grantora_db"
-$env:SPRING_DATASOURCE_USERNAME = "your_mysql_user"
-$env:SPRING_DATASOURCE_PASSWORD = "your_local_password"
-$env:JWT_SECRET = "replace_with_a_secure_base64_encoded_secret"
-```
-
-Use a Base64-encoded signing key with at least 256 bits of key material, as required by the configured JJWT HMAC key handling. Do not commit secrets. Hibernate `update` may modify the schema at application startup, so review and back up an existing database first.
+Hibernate DDL auto is configured to `update` in development, creating or updating missing tables on startup. Review and back up any existing database before running.
 
 ## Running the Application
 
-Run the backend from the repository root:
+### 1. Run the Backend
+
+From the repository root:
 
 ```bash
 cd backend
 ./mvnw spring-boot:run
 ```
 
-On Windows Command Prompt or PowerShell, use:
+On Windows (Command Prompt or PowerShell):
 
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run
 ```
 
-The API listens on `http://localhost:8080` by default. In a second terminal, run the frontend:
+The Spring Boot backend will start and listen on `http://localhost:8080`.
+
+### 2. Run the Frontend
+
+In a separate terminal:
 
 ```bash
 cd frontend
@@ -388,19 +420,46 @@ npm install
 npm run dev
 ```
 
-Vite serves the frontend at `http://localhost:5173`. The frontend API client is configured to call `http://localhost:8080/api`; the backend CORS configuration allows the Vite development origin.
+Vite serves the single-page application at `http://localhost:5173`. The frontend development server proxies `/api` calls to `http://localhost:8080/api`, and backend CORS is configured to allow `http://localhost:5173`.
 
-## Testing
+## Testing and Building
 
-Run the existing backend automated tests from `backend/`:
+### Backend Tests
+
+To run all backend automated tests (unit and integration tests):
 
 ```bash
+cd backend
 ./mvnw test
 ```
 
-On Windows, use `.\mvnw.cmd test`. Existing tests cover eligibility scoring, beneficiary service behavior, application submission eligibility, verification workflow behavior, and application controller behavior under `backend/src/test/java`.
+On Windows:
 
-The frontend `package.json` defines `npm run build` as its production build check. There is no frontend test script configured. The README update does not claim new or independently rerun test results.
+```powershell
+cd backend
+.\mvnw.cmd test
+```
+
+*Note on integration tests:* Integration tests that load the full application context (such as `DemoApplicationTests.contextLoads`) connect to MySQL. Ensure MySQL is running and `$env:SPRING_DATASOURCE_PASSWORD` is set if your MySQL `root` account requires a password.
+
+To run only unit tests without requiring a live database connection:
+
+```powershell
+cd backend
+.\mvnw.cmd test -Dtest="com.grantora.**.*Test"
+```
+
+### Frontend Production Build
+
+To verify dependencies and compile the production build of the frontend:
+
+```bash
+cd frontend
+npm install
+npm run build
+```
+
+This compiles TypeScript/JSX and bundles assets into the `frontend/dist/` directory using Vite.
 
 ## Development Status
 

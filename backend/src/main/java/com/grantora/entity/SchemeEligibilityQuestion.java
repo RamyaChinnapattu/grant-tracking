@@ -52,6 +52,10 @@ public class SchemeEligibilityQuestion {
         return id;
     }
 
+    public void setId(Long id) {
+        this.id = id;
+    }
+
     public Scheme getScheme() {
         return scheme;
     }

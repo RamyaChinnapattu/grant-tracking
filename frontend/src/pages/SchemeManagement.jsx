@@ -1,4 +1,28 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  AlertCircle,
+  AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  Calendar,
+  Check,
+  CheckCircle2,
+  DollarSign,
+  Edit2,
+  Eye,
+  FileText,
+  Filter,
+  HelpCircle,
+  Layers,
+  Plus,
+  Power,
+  RefreshCw,
+  Search,
+  Sparkles,
+  Trash2,
+  Users,
+  X,
+} from "lucide-react";
 import {
   createScheme,
   deleteScheme,
@@ -8,25 +32,67 @@ import {
 } from "../services/schemeService";
 import "../styles/SchemeManagement.css";
 
-const emptyQuestion = () => ({
+const STANDARD_CATEGORIES = [
+  "GENERAL",
+  "OBC",
+  "SC",
+  "ST",
+  "EWS",
+  "MINORITY",
+  "OTHER",
+];
+
+const emptyQuestion = (type = "SINGLE_CHOICE", defaultWeight = 20) => ({
   questionText: "",
-  questionType: "SINGLE_CHOICE",
+  questionType: type,
   required: true,
-  maximumPoints: "",
-  answerOptions: [{ value: "", label: "", points: "", meetsEligibilityCondition: false }, { value: "", label: "", points: "", meetsEligibilityCondition: false }],
+  maximumPoints: String(defaultWeight),
+  answerOptions:
+    type === "YES_NO"
+      ? [
+          { value: "YES", label: "Yes", points: String(defaultWeight), meetsEligibilityCondition: true },
+          { value: "NO", label: "No", points: "0", meetsEligibilityCondition: false },
+        ]
+      : [
+          { value: "", label: "", points: String(defaultWeight), meetsEligibilityCondition: true },
+          { value: "", label: "", points: "0", meetsEligibilityCondition: false },
+        ],
 });
+
+const defaultInitialQuestions = [
+  {
+    questionText: "Are you a permanent resident of India?",
+    questionType: "YES_NO",
+    required: true,
+    maximumPoints: "50",
+    answerOptions: [
+      { value: "YES", label: "Yes", points: "50", meetsEligibilityCondition: true },
+      { value: "NO", label: "No", points: "0", meetsEligibilityCondition: false },
+    ],
+  },
+  {
+    questionText: "Do you own or legally lease agricultural land or relevant facility?",
+    questionType: "YES_NO",
+    required: true,
+    maximumPoints: "50",
+    answerOptions: [
+      { value: "YES", label: "Yes", points: "50", meetsEligibilityCondition: true },
+      { value: "NO", label: "No", points: "0", meetsEligibilityCondition: false },
+    ],
+  },
+];
 
 const emptyForm = {
   schemeName: "",
   description: "",
   department: "",
-  minimumAge: "",
-  maximumAge: "",
-  maximumAnnualIncome: "",
+  minimumAge: "18",
+  maximumAge: "65",
+  maximumAnnualIncome: "500000",
   maximumGrantAmount: "",
   eligibilityThreshold: "70",
-  eligibleCategories: "",
-  eligibilityQuestions: [],
+  eligibleCategories: ["GENERAL", "OBC", "SC", "ST", "EWS", "MINORITY", "OTHER"],
+  eligibilityQuestions: defaultInitialQuestions,
   applicationStartDate: "",
   applicationEndDate: "",
   status: "DRAFT",
@@ -44,111 +110,149 @@ function toFormValues(scheme) {
   const questions = scheme.eligibilityQuestions || [];
   return {
     ...emptyForm,
-    ...Object.fromEntries(
-      Object.keys(emptyForm)
-        .filter((field) => field !== "eligibilityQuestions")
-        .map((field) => [
-          field,
-          field === "eligibleCategories"
-            ? (scheme.eligibleCategories || []).join(", ")
-            : scheme[field] == null
-              ? ""
-              : String(scheme[field]),
-        ])
-    ),
+    schemeName: scheme.schemeName || "",
+    description: scheme.description || "",
+    department: scheme.department || "",
+    minimumAge: scheme.minimumAge != null ? String(scheme.minimumAge) : "",
+    maximumAge: scheme.maximumAge != null ? String(scheme.maximumAge) : "",
+    maximumAnnualIncome:
+      scheme.maximumAnnualIncome != null ? String(scheme.maximumAnnualIncome) : "",
+    maximumGrantAmount:
+      scheme.maximumGrantAmount != null ? String(scheme.maximumGrantAmount) : "",
+    eligibilityThreshold:
+      scheme.eligibilityThreshold != null ? String(scheme.eligibilityThreshold) : "70",
+    eligibleCategories: Array.isArray(scheme.eligibleCategories)
+      ? scheme.eligibleCategories
+      : [],
+    applicationStartDate: scheme.applicationStartDate || "",
+    applicationEndDate: scheme.applicationEndDate || "",
+    status: scheme.status || "DRAFT",
     eligibilityQuestions: questions.map((question) => ({
-            questionText: question.questionText || "",
-            questionType: question.questionType || "SINGLE_CHOICE",
-            required: question.required !== false,
-            maximumPoints: question.maximumPoints == null ? "" : String(question.maximumPoints),
-            answerOptions: (question.answerOptions || []).map((option) => ({
-              ...option,
-              points: option.points == null ? "" : String(option.points),
-            })),
-          })),
+      id: question.id, // Preserved for existing questions
+      questionText: question.questionText || "",
+      questionType: question.questionType || "SINGLE_CHOICE",
+      required: question.required !== false,
+      maximumPoints:
+        question.maximumPoints == null ? "" : String(question.maximumPoints),
+      answerOptions: (question.answerOptions || []).map((option) => ({
+        value: option.value || "",
+        label: option.label || "",
+        points: option.points == null ? "" : String(option.points),
+        meetsEligibilityCondition: Boolean(option.meetsEligibilityCondition),
+      })),
+    })),
   };
 }
 
 function toPayload(form) {
-  const payload = Object.fromEntries(
-    Object.entries(form)
-      .filter(([field]) => field !== "eligibilityQuestions")
-      .map(([field, value]) => {
-      if (!numericFields.includes(field)) {
-        if (field === "eligibleCategories") {
-          return [
-            field,
-            value
-              .split(",")
-              .map((category) => category.trim())
-              .filter(Boolean),
-          ];
-        }
-        return [field, value || null];
-      }
+  const payload = {
+    schemeName: form.schemeName.trim(),
+    description: form.description ? form.description.trim() : null,
+    department: form.department ? form.department.trim() : null,
+    minimumAge: form.minimumAge === "" ? null : Number(form.minimumAge),
+    maximumAge: form.maximumAge === "" ? null : Number(form.maximumAge),
+    maximumAnnualIncome:
+      form.maximumAnnualIncome === "" ? null : Number(form.maximumAnnualIncome),
+    maximumGrantAmount:
+      form.maximumGrantAmount === "" ? null : Number(form.maximumGrantAmount),
+    eligibilityThreshold:
+      form.eligibilityThreshold === "" ? 70 : Number(form.eligibilityThreshold),
+    eligibleCategories: (form.eligibleCategories || [])
+      .map((cat) => cat.trim())
+      .filter(Boolean),
+    applicationStartDate: form.applicationStartDate || null,
+    applicationEndDate: form.applicationEndDate || null,
+    status: form.status || "DRAFT",
+  };
 
-      return [field, value === "" ? null : Number(value)];
-      })
+  payload.eligibilityQuestions = (form.eligibilityQuestions || []).map(
+    (question) => {
+      const q = {
+        questionText: question.questionText.trim(),
+        questionType: question.questionType,
+        required: Boolean(question.required),
+        maximumPoints:
+          question.maximumPoints === "" ? null : Number(question.maximumPoints),
+        answerOptions: (question.answerOptions || []).map((option) => ({
+          value: option.value.trim(),
+          label: option.label.trim(),
+          points: option.points === "" ? null : Number(option.points),
+          meetsEligibilityCondition: Boolean(option.meetsEligibilityCondition),
+        })),
+      };
+      if (question.id != null) {
+        q.id = question.id;
+      }
+      return q;
+    }
   );
-  payload.eligibilityQuestions = form.eligibilityQuestions.map((question) => ({
-    questionText: question.questionText.trim(),
-    questionType: question.questionType,
-    required: question.required,
-    maximumPoints: question.maximumPoints === "" ? null : Number(question.maximumPoints),
-    answerOptions: question.answerOptions.map((option) => ({
-      value: option.value.trim(),
-      label: option.label.trim(),
-      points: option.points === "" ? null : Number(option.points),
-      meetsEligibilityCondition: option.meetsEligibilityCondition,
-    })),
-  }));
+
   return payload;
 }
 
-function displayValue(value) {
-  return value == null || value === "" ? "—" : value;
+function formatCurrency(amount) {
+  if (amount == null || amount === "" || isNaN(amount)) return "—";
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 0,
+  }).format(amount);
 }
 
-function statusTone(status) {
-  switch (status) {
-    case "ACTIVE":
-      return "success";
-    case "INACTIVE":
-      return "secondary";
-    default:
-      return "neutral";
+function formatDate(dateStr) {
+  if (!dateStr) return "—";
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime())) return dateStr;
+    return d.toLocaleDateString("en-IN", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  } catch {
+    return dateStr;
   }
 }
 
 function SchemeManagement() {
-  const role = localStorage.getItem("role");
-  const isAdmin = role === "ADMIN";
-  const isBeneficiary = role === "BENEFICIARY";
+  const formRef = useRef(null);
+  const customCatInputRef = useRef(null);
+
   const [schemes, setSchemes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // Form states
   const [form, setForm] = useState(emptyForm);
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [actionError, setActionError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+
+  // Search & Filtering
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
+
+  // Details drawer
   const [selectedScheme, setSelectedScheme] = useState(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [detailsError, setDetailsError] = useState("");
 
+  // Custom category text input
+  const [customCategory, setCustomCategory] = useState("");
+
   const loadSchemes = async () => {
     setLoading(true);
     setError("");
-
     try {
       const response = await getSchemes();
-      setSchemes(response.data);
+      setSchemes(Array.isArray(response.data) ? response.data : []);
     } catch (err) {
       setError(
         err.response?.data?.message ||
           err.response?.data?.error ||
-          "Unable to load schemes."
+          "Unable to load schemes. Please ensure the backend server is running."
       );
     } finally {
       setLoading(false);
@@ -159,121 +263,300 @@ function SchemeManagement() {
     loadSchemes();
   }, []);
 
-  const visibleSchemes = isBeneficiary
-    ? schemes.filter((scheme) => scheme.status === "ACTIVE")
-    : schemes;
+  // Filtered schemes for administrator table
+  const filteredSchemes = useMemo(() => {
+    return schemes.filter((scheme) => {
+      const matchesSearch =
+        searchQuery.trim() === "" ||
+        (scheme.schemeName &&
+          scheme.schemeName.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (scheme.department &&
+          scheme.department.toLowerCase().includes(searchQuery.toLowerCase()));
 
-  const handleChange = (event) => {
-    const { name, value } = event.target;
-    setForm((current) => ({ ...current, [name]: value }));
+      const matchesStatus =
+        statusFilter === "ALL" ||
+        (scheme.status && scheme.status.toUpperCase() === statusFilter);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [schemes, searchQuery, statusFilter]);
+
+  // Status counts
+  const counts = useMemo(() => {
+    const active = schemes.filter((s) => s.status === "ACTIVE").length;
+    const draft = schemes.filter((s) => s.status === "DRAFT").length;
+    const inactive = schemes.filter((s) => s.status === "INACTIVE").length;
+    return { all: schemes.length, active, draft, inactive };
+  }, [schemes]);
+
+  // Live total maximum weight across questions
+  const totalWeight = useMemo(() => {
+    return (form.eligibilityQuestions || []).reduce(
+      (sum, q) => sum + (Number(q.maximumPoints) || 0),
+      0
+    );
+  }, [form.eligibilityQuestions]);
+
+  const isWeightValid = Math.abs(totalWeight - 100) < 0.001;
+
+  // Live date validation
+  const dateError = useMemo(() => {
+    if (form.applicationStartDate && form.applicationEndDate) {
+      if (form.applicationEndDate < form.applicationStartDate) {
+        return "Application end date cannot be earlier than application start date.";
+      }
+    }
+    return "";
+  }, [form.applicationStartDate, form.applicationEndDate]);
+
+  // Live grant amount validation
+  const grantAmountError = useMemo(() => {
+    if (form.maximumGrantAmount !== "" && Number(form.maximumGrantAmount) < 0) {
+      return "Maximum grant amount must be zero or greater.";
+    }
+    return "";
+  }, [form.maximumGrantAmount]);
+
+  // Handle standard field changes
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setForm((curr) => ({ ...curr, [name]: value }));
   };
 
-  const updateQuestion = (questionIndex, update) => {
-    setForm((current) => ({
-      ...current,
-      eligibilityQuestions: current.eligibilityQuestions.map((question, index) =>
-        index === questionIndex ? { ...question, ...update } : question
+  // Toggle standardized category
+  const toggleCategory = (cat) => {
+    setForm((curr) => {
+      const currentCats = curr.eligibleCategories || [];
+      if (currentCats.includes(cat)) {
+        return {
+          ...curr,
+          eligibleCategories: currentCats.filter((c) => c !== cat),
+        };
+      } else {
+        return {
+          ...curr,
+          eligibleCategories: [...currentCats, cat],
+        };
+      }
+    });
+  };
+
+  const handleSelectAllCategories = () => {
+    setForm((curr) => ({
+      ...curr,
+      eligibleCategories: [...STANDARD_CATEGORIES],
+    }));
+  };
+
+  const handleClearCategories = () => {
+    setForm((curr) => ({
+      ...curr,
+      eligibleCategories: [],
+    }));
+  };
+
+  const handleAddCustomCategory = (e) => {
+    e.preventDefault();
+    const trimmed = customCategory.trim().toUpperCase();
+    if (trimmed && !form.eligibleCategories.includes(trimmed)) {
+      setForm((curr) => ({
+        ...curr,
+        eligibleCategories: [...curr.eligibleCategories, trimmed],
+      }));
+      setCustomCategory("");
+    }
+  };
+
+  // Question Management
+  const updateQuestion = (qIndex, updates) => {
+    setForm((curr) => ({
+      ...curr,
+      eligibilityQuestions: curr.eligibilityQuestions.map((q, idx) =>
+        idx === qIndex ? { ...q, ...updates } : q
       ),
     }));
   };
 
-  const handleQuestionTypeChange = (questionIndex, questionType) => {
-    const question = form.eligibilityQuestions[questionIndex];
-    updateQuestion(questionIndex, {
-      questionType,
+  const handleQuestionTypeChange = (qIndex, newType) => {
+    const targetQ = form.eligibilityQuestions[qIndex];
+    const weight = targetQ.maximumPoints || "20";
+    updateQuestion(qIndex, {
+      questionType: newType,
       answerOptions:
-        questionType === "YES_NO"
+        newType === "YES_NO"
           ? [
-              { value: "YES", label: "Yes", points: "", meetsEligibilityCondition: true },
-              { value: "NO", label: "No", points: "", meetsEligibilityCondition: false },
+              { value: "YES", label: "Yes", points: weight, meetsEligibilityCondition: true },
+              { value: "NO", label: "No", points: "0", meetsEligibilityCondition: false },
             ]
           : [
-              { value: "", label: "", points: "", meetsEligibilityCondition: false },
-              { value: "", label: "", points: "", meetsEligibilityCondition: false },
+              { value: "", label: "", points: weight, meetsEligibilityCondition: true },
+              { value: "", label: "", points: "0", meetsEligibilityCondition: false },
             ],
     });
   };
 
-  const updateAnswerOption = (questionIndex, optionIndex, field, value) => {
-    const question = form.eligibilityQuestions[questionIndex];
-    updateQuestion(questionIndex, {
-      answerOptions: question.answerOptions.map((option, index) =>
-        index === optionIndex ? { ...option, [field]: value } : option
-      ),
+  const updateAnswerOption = (qIndex, optIndex, field, val) => {
+    const targetQ = form.eligibilityQuestions[qIndex];
+    const newOptions = targetQ.answerOptions.map((opt, idx) => {
+      if (idx !== optIndex) return opt;
+      const updated = { ...opt, [field]: val };
+      // Auto-populate value from label if value was blank and editing label
+      if (
+        field === "label" &&
+        (!opt.value || opt.value === opt.label.toUpperCase().replace(/\s+/g, "_"))
+      ) {
+        updated.value = val.trim().toUpperCase().replace(/\s+/g, "_");
+      }
+      return updated;
     });
+    updateQuestion(qIndex, { answerOptions: newOptions });
   };
 
-  const addAnswerOption = (questionIndex) => {
-    const question = form.eligibilityQuestions[questionIndex];
-    updateQuestion(questionIndex, {
+  const addAnswerOption = (qIndex) => {
+    const targetQ = form.eligibilityQuestions[qIndex];
+    updateQuestion(qIndex, {
       answerOptions: [
-        ...question.answerOptions,
-        { value: "", label: "", points: "", meetsEligibilityCondition: false },
+        ...targetQ.answerOptions,
+        { value: "", label: "", points: "0", meetsEligibilityCondition: false },
       ],
     });
   };
 
-  const removeAnswerOption = (questionIndex, optionIndex) => {
-    const question = form.eligibilityQuestions[questionIndex];
-    if (question.answerOptions.length <= 2) {
-      return;
-    }
-    updateQuestion(questionIndex, {
-      answerOptions: question.answerOptions.filter(
-        (_, index) => index !== optionIndex
-      ),
+  const removeAnswerOption = (qIndex, optIndex) => {
+    const targetQ = form.eligibilityQuestions[qIndex];
+    if (targetQ.answerOptions.length <= 2) return;
+    updateQuestion(qIndex, {
+      answerOptions: targetQ.answerOptions.filter((_, idx) => idx !== optIndex),
     });
   };
 
-  const addQuestion = () => setForm((current) => ({
-    ...current,
-    eligibilityQuestions: [...current.eligibilityQuestions, emptyQuestion()],
-  }));
+  const addQuestion = () => {
+    // Determine remaining points to reach 100
+    const remaining = Math.max(0, 100 - totalWeight);
+    const weightToUse = remaining > 0 ? remaining : 20;
+    setForm((curr) => ({
+      ...curr,
+      eligibilityQuestions: [
+        ...curr.eligibilityQuestions,
+        emptyQuestion("SINGLE_CHOICE", weightToUse),
+      ],
+    }));
+  };
 
-  const removeQuestion = (questionIndex) => setForm((current) => ({
-    ...current,
-    eligibilityQuestions: current.eligibilityQuestions.filter((_, index) => index !== questionIndex),
-  }));
+  const removeQuestion = (qIndex) => {
+    setForm((curr) => {
+      if (curr.eligibilityQuestions.length <= 1) {
+        alert("A scheme must contain at least one eligibility question.");
+        return curr;
+      }
+      return {
+        ...curr,
+        eligibilityQuestions: curr.eligibilityQuestions.filter(
+          (_, idx) => idx !== qIndex
+        ),
+      };
+    });
+  };
 
-  const moveQuestion = (questionIndex, direction) => setForm((current) => {
-    const questions = [...current.eligibilityQuestions];
-    const target = questionIndex + direction;
-    if (target < 0 || target >= questions.length) return current;
-    [questions[questionIndex], questions[target]] = [questions[target], questions[questionIndex]];
-    return { ...current, eligibilityQuestions: questions };
-  });
+  const moveQuestion = (qIndex, direction) => {
+    setForm((curr) => {
+      const items = [...curr.eligibilityQuestions];
+      const targetIdx = qIndex + direction;
+      if (targetIdx < 0 || targetIdx >= items.length) return curr;
+      [items[qIndex], items[targetIdx]] = [items[targetIdx], items[qIndex]];
+      return { ...curr, eligibilityQuestions: items };
+    });
+  };
 
   const resetForm = () => {
     setForm(emptyForm);
     setEditingId(null);
+    setActionError("");
+    setSuccessMessage("");
   };
 
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setSaving(true);
+  // Form Submit (Create or Update)
+  const handleSubmit = async (e) => {
+    e.preventDefault();
     setActionError("");
     setSuccessMessage("");
 
-    try {
-      const response = editingId
-        ? await updateScheme(editingId, toPayload(form))
-        : await createScheme(toPayload(form));
-      const savedScheme = response.data;
+    // Client-side validations
+    if (!form.schemeName.trim()) {
+      setActionError("Please provide a Scheme Name.");
+      return;
+    }
 
-      setSchemes((current) =>
-        editingId
-          ? current.map((scheme) =>
-              scheme.id === editingId ? savedScheme : scheme
-            )
-          : [savedScheme, ...current]
+    if (dateError) {
+      setActionError(dateError);
+      return;
+    }
+
+    if (grantAmountError) {
+      setActionError(grantAmountError);
+      return;
+    }
+
+    if (!form.eligibleCategories || form.eligibleCategories.length === 0) {
+      setActionError("Please select at least one eligible beneficiary category.");
+      return;
+    }
+
+    if (!form.eligibilityQuestions || form.eligibilityQuestions.length === 0) {
+      setActionError("Please configure at least one eligibility question.");
+      return;
+    }
+
+    if (!isWeightValid) {
+      setActionError(
+        `Question maximum weights must total exactly 100 points (currently ${totalWeight} points).`
       );
-      if (selectedScheme?.id === savedScheme.id) {
-        setSelectedScheme(savedScheme);
+      return;
+    }
+
+    // Check individual option points
+    for (let i = 0; i < form.eligibilityQuestions.length; i++) {
+      const q = form.eligibilityQuestions[i];
+      const qMax = Number(q.maximumPoints) || 0;
+      if (!q.questionText.trim()) {
+        setActionError(`Question ${i + 1} text cannot be blank.`);
+        return;
+      }
+      for (let j = 0; j < q.answerOptions.length; j++) {
+        const opt = q.answerOptions[j];
+        if (!opt.value.trim() || !opt.label.trim()) {
+          setActionError(`Question ${i + 1}, Option ${j + 1} must have a value and label.`);
+          return;
+        }
+        if (Number(opt.points) > qMax) {
+          setActionError(
+            `Question ${i + 1}, Option "${opt.label}" has ${opt.points} points, which exceeds the question maximum of ${qMax} points.`
+          );
+          return;
+        }
+      }
+    }
+
+    setSaving(true);
+    try {
+      const payload = toPayload(form);
+      const response = editingId
+        ? await updateScheme(editingId, payload)
+        : await createScheme(payload);
+
+      const saved = response.data;
+      setSchemes((curr) =>
+        editingId
+          ? curr.map((s) => (s.id === editingId ? saved : s))
+          : [saved, ...curr]
+      );
+      if (selectedScheme?.id === saved.id) {
+        setSelectedScheme(saved);
       }
       setSuccessMessage(
         editingId
-          ? "Scheme updated successfully."
-          : "Scheme created successfully."
+          ? `Scheme "${saved.schemeName}" updated successfully.`
+          : `Scheme "${saved.schemeName}" created successfully.`
       );
       resetForm();
     } catch (err) {
@@ -287,11 +570,86 @@ function SchemeManagement() {
     }
   };
 
+  // Load scheme for editing
+  const handleEdit = (scheme) => {
+    setForm(toFormValues(scheme));
+    setEditingId(scheme.id);
+    setActionError("");
+    setSuccessMessage("");
+    if (formRef.current) {
+      formRef.current.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  // Quick 1-click status toggle (Activate / Deactivate)
+  const handleToggleStatus = async (scheme) => {
+    const nextStatus = scheme.status === "ACTIVE" ? "INACTIVE" : "ACTIVE";
+    setActionError("");
+    setSuccessMessage("");
+
+    try {
+      const updated = {
+        ...scheme,
+        status: nextStatus,
+      };
+      const response = await updateScheme(scheme.id, updated);
+      const saved = response.data;
+      setSchemes((curr) => curr.map((s) => (s.id === scheme.id ? saved : s)));
+      if (selectedScheme?.id === scheme.id) {
+        setSelectedScheme(saved);
+      }
+      setSuccessMessage(
+        `Scheme "${scheme.schemeName}" is now ${nextStatus.toLowerCase()}.`
+      );
+    } catch (err) {
+      setActionError(
+        err.response?.data?.message ||
+          err.response?.data?.error ||
+          "Unable to update scheme status."
+      );
+    }
+  };
+
+  // Delete scheme
+  const handleDelete = async (scheme) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete "${scheme.schemeName}"?\n\nThis action cannot be undone.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingId(scheme.id);
+    setActionError("");
+    setSuccessMessage("");
+
+    try {
+      await deleteScheme(scheme.id);
+      setSchemes((curr) => curr.filter((s) => s.id !== scheme.id));
+      if (selectedScheme?.id === scheme.id) {
+        setSelectedScheme(null);
+      }
+      if (editingId === scheme.id) {
+        resetForm();
+      }
+      setSuccessMessage("Scheme deleted successfully.");
+    } catch (err) {
+      const errorMsg =
+        err.response?.data?.message ||
+        err.response?.data?.error ||
+        "Unable to delete scheme.";
+      setActionError(errorMsg);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  // View Details
   const handleViewDetails = async (id) => {
     setSelectedScheme(null);
     setDetailsError("");
     setDetailsLoading(true);
-
     try {
       const response = await getSchemeById(id);
       setSelectedScheme(response.data);
@@ -306,58 +664,14 @@ function SchemeManagement() {
     }
   };
 
-  const handleEdit = (scheme) => {
-    setForm(toFormValues(scheme));
-    setEditingId(scheme.id);
-    setActionError("");
-    setSuccessMessage("");
-  };
-
-  const handleDelete = async (scheme) => {
-    if (
-      !window.confirm(
-        `Delete "${scheme.schemeName}"? This action cannot be undone.`
-      )
-    ) {
-      return;
-    }
-
-    setDeletingId(scheme.id);
-    setActionError("");
-    setSuccessMessage("");
-
-    try {
-      await deleteScheme(scheme.id);
-      setSchemes((current) =>
-        current.filter((item) => item.id !== scheme.id)
-      );
-      if (selectedScheme?.id === scheme.id) {
-        setSelectedScheme(null);
-      }
-      if (editingId === scheme.id) {
-        resetForm();
-      }
-      setSuccessMessage("Scheme deleted successfully.");
-    } catch (err) {
-      setActionError(
-        err.response?.data?.message ||
-          err.response?.data?.error ||
-          "Unable to delete scheme."
-      );
-    } finally {
-      setDeletingId(null);
-    }
-  };
-
   return (
-    <section className="scheme-management" aria-labelledby="schemes-heading">
-      <div className="scheme-management__heading">
+    <div className="scheme-management">
+      {/* Top Header */}
+      <header className="scheme-management__header">
         <div>
-          <h2 id="schemes-heading">Grant Schemes</h2>
+          <h2>Scheme Management</h2>
           <p>
-            {isBeneficiary
-              ? "Browse currently available grant schemes."
-              : "View and manage grant schemes."}
+            Configure, publish, and maintain government grant schemes and their eligibility questionnaires.
           </p>
         </div>
         <button
@@ -366,367 +680,713 @@ function SchemeManagement() {
           onClick={loadSchemes}
           disabled={loading}
         >
-          {loading ? "Loading..." : "Refresh"}
+          <RefreshCw size={15} className={loading ? "spin-icon" : ""} aria-hidden="true" />
+          {loading ? "Refreshing…" : "Refresh"}
         </button>
-      </div>
+      </header>
 
+      {/* Global Alerts */}
       {error && (
-        <div
-          className="scheme-management__notice scheme-management__notice--error"
-          role="alert"
-        >
+        <div className="scheme-notice scheme-notice--error" role="alert">
+          <AlertCircle size={18} aria-hidden="true" />
           <span>{error}</span>
           <button
-            className="scheme-management__button scheme-management__button--secondary"
             type="button"
+            className="scheme-management__button scheme-management__button--secondary scheme-management__button--sm"
             onClick={loadSchemes}
-            disabled={loading}
           >
-            Try again
+            Retry
           </button>
         </div>
       )}
+
       {actionError && (
-        <p
-          className="scheme-management__notice scheme-management__notice--error"
-          role="alert"
-        >
-          {actionError}
-        </p>
-      )}
-      {successMessage && (
-        <p
-          className="scheme-management__notice scheme-management__notice--success"
-          role="status"
-        >
-          {successMessage}
-        </p>
+        <div className="scheme-notice scheme-notice--error" role="alert">
+          <AlertCircle size={18} aria-hidden="true" />
+          <div className="scheme-notice__content">
+            <strong>Action Failed:</strong> {actionError}
+          </div>
+          <button
+            type="button"
+            className="scheme-notice__close"
+            onClick={() => setActionError("")}
+            aria-label="Dismiss error"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
       )}
 
-      {isAdmin && (
-        <form className="scheme-management__form" onSubmit={handleSubmit}>
-          <h3>{editingId ? "Edit scheme" : "Create scheme"}</h3>
-          <div className="scheme-management__form-grid">
-            <label>
-              Scheme name
+      {successMessage && (
+        <div className="scheme-notice scheme-notice--success" role="status">
+          <CheckCircle2 size={18} aria-hidden="true" />
+          <span>{successMessage}</span>
+          <button
+            type="button"
+            className="scheme-notice__close"
+            onClick={() => setSuccessMessage("")}
+            aria-label="Dismiss notification"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+      )}
+
+      {/* Modern Sectioned Form */}
+      <form
+        ref={formRef}
+        className="scheme-form-card"
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        <div className="scheme-form-card__header">
+          <div>
+            <h3>
+              {editingId ? (
+                <>
+                  <Edit2 size={18} aria-hidden="true" /> Edit Grant Scheme
+                </>
+              ) : (
+                <>
+                  <Plus size={18} aria-hidden="true" /> Create New Grant Scheme
+                </>
+              )}
+            </h3>
+            <p>
+              {editingId
+                ? `Modifying scheme ID #${editingId}. Changes will update live criteria.`
+                : "Define basic info, eligibility boundaries, and dynamic scoring questions."}
+            </p>
+          </div>
+          {editingId && (
+            <button
+              type="button"
+              className="scheme-management__button scheme-management__button--secondary scheme-management__button--sm"
+              onClick={resetForm}
+            >
+              Cancel Edit
+            </button>
+          )}
+        </div>
+
+        {/* Section 1: Basic Information */}
+        <section className="scheme-form-section">
+          <div className="scheme-form-section__header">
+            <span className="scheme-form-section__badge">1</span>
+            <div>
+              <h4>Basic Information</h4>
+              <p>Identify the grant scheme, nodal authority, and public description.</p>
+            </div>
+          </div>
+          <div className="scheme-form-grid">
+            <label className="scheme-field scheme-field--wide">
+              <span className="scheme-field__label">
+                Scheme Name <span className="scheme-field__required">*</span>
+              </span>
               <input
+                type="text"
                 name="schemeName"
                 value={form.schemeName}
                 onChange={handleChange}
+                placeholder="e.g. PM Surya Ghar Solar Subsidy Scheme 2026"
                 maxLength="200"
                 required
               />
             </label>
-            <label>
-              Department
+
+            <label className="scheme-field">
+              <span className="scheme-field__label">Nodal Department / Ministry</span>
               <input
+                type="text"
                 name="department"
                 value={form.department}
                 onChange={handleChange}
+                placeholder="e.g. Ministry of New and Renewable Energy"
                 maxLength="150"
               />
             </label>
-            <label className="scheme-management__form-wide">
-              Description
+
+            <label className="scheme-field scheme-field--wide">
+              <span className="scheme-field__label">Public Description</span>
               <textarea
                 name="description"
                 value={form.description}
                 onChange={handleChange}
                 rows="3"
+                placeholder="Brief summary explaining who this scheme benefits and its core objectives..."
               />
             </label>
-            <label>
-              Minimum age
+          </div>
+        </section>
+
+        {/* Section 2: Eligibility Criteria */}
+        <section className="scheme-form-section">
+          <div className="scheme-form-section__header">
+            <span className="scheme-form-section__badge">2</span>
+            <div>
+              <h4>Eligibility Criteria</h4>
+              <p>Age brackets, annual income ceilings, categories, and passing score threshold.</p>
+            </div>
+          </div>
+
+          <div className="scheme-form-grid">
+            <label className="scheme-field">
+              <span className="scheme-field__label">
+                Minimum Age (Years) <span className="scheme-field__required">*</span>
+              </span>
               <input
-                name="minimumAge"
                 type="number"
+                name="minimumAge"
                 min="0"
+                max="120"
                 value={form.minimumAge}
                 onChange={handleChange}
                 required
               />
             </label>
-            <label>
-              Maximum age
+
+            <label className="scheme-field">
+              <span className="scheme-field__label">
+                Maximum Age (Years) <span className="scheme-field__required">*</span>
+              </span>
               <input
-                name="maximumAge"
                 type="number"
+                name="maximumAge"
                 min="0"
+                max="120"
                 value={form.maximumAge}
                 onChange={handleChange}
                 required
               />
             </label>
-            <label>
-              Maximum annual income (₹)
+
+            <label className="scheme-field">
+              <span className="scheme-field__label">
+                Maximum Annual Income (₹) <span className="scheme-field__required">*</span>
+              </span>
               <input
-                name="maximumAnnualIncome"
                 type="number"
+                name="maximumAnnualIncome"
                 min="0"
-                step="0.01"
+                step="1000"
                 value={form.maximumAnnualIncome}
                 onChange={handleChange}
+                placeholder="e.g. 500000"
                 required
               />
+              <span className="scheme-field__hint">
+                {form.maximumAnnualIncome
+                  ? `Equivalent to ${formatCurrency(form.maximumAnnualIncome)} per year`
+                  : "Applicants earning above this limit are ineligible"}
+              </span>
             </label>
-            <label>
-              Maximum grant amount (₹)
+
+            <label className="scheme-field">
+              <span className="scheme-field__label">
+                Passing Eligibility Threshold (%) <span className="scheme-field__required">*</span>
+              </span>
               <input
-                name="maximumGrantAmount"
                 type="number"
-                min="0"
-                step="0.01"
-                value={form.maximumGrantAmount}
-                onChange={handleChange}
-              />
-            </label>
-            <label>
-              Eligibility threshold (%)
-              <input
                 name="eligibilityThreshold"
-                type="number"
                 min="0"
                 max="100"
-                step="0.01"
+                step="1"
                 value={form.eligibilityThreshold}
                 onChange={handleChange}
                 required
               />
+              <span className="scheme-field__hint">
+                Minimum percentage score required to qualify for grant approval
+              </span>
             </label>
-            <label className="scheme-management__form-wide">
-              Eligible beneficiary categories (comma-separated)
+
+            {/* Standardized Category Selector */}
+            <div className="scheme-field scheme-field--wide">
+              <div className="scheme-field__header-row">
+                <span className="scheme-field__label">
+                  Eligible Beneficiary Categories <span className="scheme-field__required">*</span>
+                </span>
+                <div className="scheme-category-actions">
+                  <button
+                    type="button"
+                    className="scheme-text-btn"
+                    onClick={handleSelectAllCategories}
+                  >
+                    Select All
+                  </button>
+                  <span className="scheme-text-sep">|</span>
+                  <button
+                    type="button"
+                    className="scheme-text-btn"
+                    onClick={handleClearCategories}
+                  >
+                    Clear All
+                  </button>
+                </div>
+              </div>
+              <div className="scheme-category-chips">
+                {STANDARD_CATEGORIES.map((cat) => {
+                  const isSelected = form.eligibleCategories.includes(cat);
+                  return (
+                    <button
+                      type="button"
+                      key={cat}
+                      className={`scheme-chip ${isSelected ? "scheme-chip--selected" : ""}`}
+                      onClick={() => toggleCategory(cat)}
+                      aria-pressed={isSelected}
+                    >
+                      {isSelected && <Check size={14} aria-hidden="true" />}
+                      {cat}
+                    </button>
+                  );
+                })}
+                {/* Additional non-standard categories if any were added */}
+                {form.eligibleCategories
+                  .filter((cat) => !STANDARD_CATEGORIES.includes(cat))
+                  .map((customCat) => (
+                    <button
+                      type="button"
+                      key={customCat}
+                      className="scheme-chip scheme-chip--selected scheme-chip--custom"
+                      onClick={() => toggleCategory(customCat)}
+                      title="Click to remove custom category"
+                    >
+                      <Check size={14} aria-hidden="true" />
+                      {customCat}
+                      <X size={12} aria-hidden="true" />
+                    </button>
+                  ))}
+              </div>
+
+              {/* Add custom category input */}
+              <div className="scheme-custom-category-row">
+                <input
+                  ref={customCatInputRef}
+                  type="text"
+                  placeholder="Add custom category (e.g. ARTISAN, EX_SERVICEMAN)"
+                  value={customCategory}
+                  onChange={(e) => setCustomCategory(e.target.value)}
+                  maxLength="50"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustomCategory(e);
+                    }
+                  }}
+                />
+                <button
+                  type="button"
+                  className="scheme-management__button scheme-management__button--secondary scheme-management__button--sm"
+                  onClick={handleAddCustomCategory}
+                  disabled={!customCategory.trim()}
+                >
+                  <Plus size={14} aria-hidden="true" /> Add Category
+                </button>
+              </div>
+
+              {form.eligibleCategories.length === 0 && (
+                <span className="scheme-field__error">
+                  At least one eligible category is required.
+                </span>
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* Section 3: Grant Details & Dates */}
+        <section className="scheme-form-section">
+          <div className="scheme-form-section__header">
+            <span className="scheme-form-section__badge">3</span>
+            <div>
+              <h4>Grant Details & Application Window</h4>
+              <p>Maximum disbursement cap and application acceptance period.</p>
+            </div>
+          </div>
+          <div className="scheme-form-grid">
+            <label className="scheme-field">
+              <span className="scheme-field__label">Maximum Grant Amount (₹)</span>
               <input
-                name="eligibleCategories"
-                value={form.eligibleCategories}
+                type="number"
+                name="maximumGrantAmount"
+                min="0"
+                step="500"
+                value={form.maximumGrantAmount}
                 onChange={handleChange}
-                placeholder="For example: category names"
-                required
+                placeholder="e.g. 78000"
               />
+              {grantAmountError && (
+                <span className="scheme-field__error">{grantAmountError}</span>
+              )}
+              {form.maximumGrantAmount && !grantAmountError && (
+                <span className="scheme-field__hint">
+                  {formatCurrency(form.maximumGrantAmount)} cap per approved beneficiary
+                </span>
+              )}
             </label>
-            <label>
-              Application start date
+
+            <label className="scheme-field">
+              <span className="scheme-field__label">Application Start Date</span>
               <input
-                name="applicationStartDate"
                 type="date"
+                name="applicationStartDate"
                 value={form.applicationStartDate}
                 onChange={handleChange}
               />
             </label>
-            <label>
-              Application end date
+
+            <label className="scheme-field">
+              <span className="scheme-field__label">Application End Date</span>
               <input
-                name="applicationEndDate"
                 type="date"
+                name="applicationEndDate"
                 value={form.applicationEndDate}
                 onChange={handleChange}
               />
+              {dateError && (
+                <span className="scheme-field__error">{dateError}</span>
+              )}
             </label>
-            <label>
-              Status
-              <select
-                name="status"
-                value={form.status}
-                onChange={handleChange}
-              >
-                <option value="DRAFT">Draft</option>
-                <option value="ACTIVE">Active</option>
-                <option value="INACTIVE">Inactive</option>
+          </div>
+        </section>
+
+        {/* Section 4: Eligibility Questionnaire Builder */}
+        <section className="scheme-form-section">
+          <div className="scheme-form-section__header scheme-form-section__header--between">
+            <div style={{ display: "flex", gap: "10px", alignItems: "flex-start" }}>
+              <span className="scheme-form-section__badge">4</span>
+              <div>
+                <h4>
+                  Dynamic Eligibility Questions ({form.eligibilityQuestions.length})
+                </h4>
+                <p>
+                  Configure dynamic evaluation questions. Total question weights must equal exactly 100 points.
+                </p>
+              </div>
+            </div>
+            {/* Weight Total Indicator Badge */}
+            <div
+              className={`scheme-weight-badge ${
+                isWeightValid ? "scheme-weight-badge--valid" : "scheme-weight-badge--invalid"
+              }`}
+            >
+              {isWeightValid ? (
+                <CheckCircle2 size={16} aria-hidden="true" />
+              ) : (
+                <AlertTriangle size={16} aria-hidden="true" />
+              )}
+              <span>Total Weight: {totalWeight} / 100 pts</span>
+            </div>
+          </div>
+
+          <div className="scheme-questions-list">
+            {form.eligibilityQuestions.map((question, qIdx) => {
+              const qMax = Number(question.maximumPoints) || 0;
+              const hasExceededOption = question.answerOptions.some(
+                (opt) => Number(opt.points) > qMax
+              );
+
+              return (
+                <article className="scheme-question-card" key={qIdx}>
+                  <div className="scheme-question-card__topbar">
+                    <div className="scheme-question-card__title">
+                      <span className="scheme-question-card__num">Q{qIdx + 1}</span>
+                      <strong>
+                        {question.questionText || "Untitled Question"}
+                      </strong>
+                      {question.id != null && (
+                        <span className="scheme-question-id-pill" title="Existing question ID preserved in database">
+                          ID: #{question.id}
+                        </span>
+                      )}
+                      <span className="scheme-question-card__weight-pill">
+                        Weight: {question.maximumPoints || 0} pts
+                      </span>
+                    </div>
+
+                    <div className="scheme-question-card__tools">
+                      <button
+                        type="button"
+                        className="scheme-tool-btn"
+                        onClick={() => moveQuestion(qIdx, -1)}
+                        disabled={qIdx === 0}
+                        title="Move Up"
+                        aria-label={`Move question ${qIdx + 1} up`}
+                      >
+                        <ArrowUp size={15} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="scheme-tool-btn"
+                        onClick={() => moveQuestion(qIdx, 1)}
+                        disabled={qIdx === form.eligibilityQuestions.length - 1}
+                        title="Move Down"
+                        aria-label={`Move question ${qIdx + 1} down`}
+                      >
+                        <ArrowDown size={15} aria-hidden="true" />
+                      </button>
+                      <button
+                        type="button"
+                        className="scheme-tool-btn scheme-tool-btn--danger"
+                        onClick={() => removeQuestion(qIdx)}
+                        disabled={form.eligibilityQuestions.length <= 1}
+                        title="Remove Question"
+                        aria-label={`Remove question ${qIdx + 1}`}
+                      >
+                        <Trash2 size={15} aria-hidden="true" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="scheme-question-card__fields">
+                    <label className="scheme-field scheme-field--wide">
+                      <span className="scheme-field__label">
+                        Question Text <span className="scheme-field__required">*</span>
+                      </span>
+                      <input
+                        type="text"
+                        value={question.questionText}
+                        onChange={(e) =>
+                          updateQuestion(qIdx, { questionText: e.target.value })
+                        }
+                        placeholder="e.g. Do you have an active rooftop solar installation?"
+                        maxLength="500"
+                        required
+                      />
+                    </label>
+
+                    <label className="scheme-field">
+                      <span className="scheme-field__label">Question Type</span>
+                      <select
+                        value={question.questionType}
+                        onChange={(e) => handleQuestionTypeChange(qIdx, e.target.value)}
+                      >
+                        <option value="YES_NO">Yes / No</option>
+                        <option value="SINGLE_CHOICE">Single Choice</option>
+                      </select>
+                    </label>
+
+                    <label className="scheme-field">
+                      <span className="scheme-field__label">
+                        Question Weight (Max Points) <span className="scheme-field__required">*</span>
+                      </span>
+                      <input
+                        type="number"
+                        min="0.01"
+                        max="100"
+                        step="0.01"
+                        value={question.maximumPoints}
+                        onChange={(e) =>
+                          updateQuestion(qIdx, { maximumPoints: e.target.value })
+                        }
+                        required
+                      />
+                    </label>
+
+                    <label className="scheme-checkbox-field">
+                      <input
+                        type="checkbox"
+                        checked={question.required}
+                        onChange={(e) =>
+                          updateQuestion(qIdx, { required: e.target.checked })
+                        }
+                      />
+                      <span>Required question (applicant must answer to submit)</span>
+                    </label>
+                  </div>
+
+                  {hasExceededOption && (
+                    <div className="scheme-field__error" style={{ marginBottom: "10px" }}>
+                      An option score cannot exceed the question's maximum weight of {qMax} points.
+                    </div>
+                  )}
+
+                  {/* Options List */}
+                  <div className="scheme-options-table-wrap">
+                    <table className="scheme-options-table">
+                      <thead>
+                        <tr>
+                          {question.questionType === "SINGLE_CHOICE" ? (
+                            <>
+                              <th scope="col" style={{ width: "25%" }}>Value Key</th>
+                              <th scope="col" style={{ width: "35%" }}>Display Label</th>
+                            </>
+                          ) : (
+                            <th scope="col" style={{ width: "60%" }}>Answer Choice</th>
+                          )}
+                          <th scope="col" style={{ width: "20%" }}>Score (Points)</th>
+                          <th scope="col" style={{ width: "20%" }}>Qualifies Condition</th>
+                          {question.questionType !== "YES_NO" && (
+                            <th scope="col" style={{ width: "40px" }} aria-label="Actions"></th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {question.answerOptions.map((opt, optIdx) => {
+                          const optPoints = Number(opt.points) || 0;
+                          const isOptExceeded = optPoints > qMax;
+                          return (
+                            <tr key={optIdx} className={isOptExceeded ? "is-exceeded" : ""}>
+                              {question.questionType === "YES_NO" ? (
+                                <td>
+                                  <strong>{opt.label}</strong>
+                                  <span className="scheme-text-muted" style={{ marginLeft: "8px", fontSize: "0.8rem" }}>
+                                    ({opt.value})
+                                  </span>
+                                </td>
+                              ) : (
+                                <>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={opt.value}
+                                      onChange={(e) =>
+                                        updateAnswerOption(qIdx, optIdx, "value", e.target.value)
+                                      }
+                                      placeholder="e.g. URBAN"
+                                      maxLength="100"
+                                      required
+                                    />
+                                  </td>
+                                  <td>
+                                    <input
+                                      type="text"
+                                      value={opt.label}
+                                      onChange={(e) =>
+                                        updateAnswerOption(qIdx, optIdx, "label", e.target.value)
+                                      }
+                                      placeholder="e.g. Urban Resident"
+                                      maxLength="200"
+                                      required
+                                    />
+                                  </td>
+                                </>
+                              )}
+                              <td>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  max={qMax}
+                                  step="0.01"
+                                  value={opt.points}
+                                  onChange={(e) =>
+                                    updateAnswerOption(qIdx, optIdx, "points", e.target.value)
+                                  }
+                                  required
+                                />
+                                {isOptExceeded && (
+                                  <span className="scheme-field__error" style={{ fontSize: "0.75rem" }}>
+                                    &gt; {qMax} max
+                                  </span>
+                                )}
+                              </td>
+                              <td>
+                                <label className="scheme-checkbox-inline">
+                                  <input
+                                    type="checkbox"
+                                    checked={opt.meetsEligibilityCondition}
+                                    onChange={(e) =>
+                                      updateAnswerOption(
+                                        qIdx,
+                                        optIdx,
+                                        "meetsEligibilityCondition",
+                                        e.target.checked
+                                      )
+                                    }
+                                  />
+                                  <span>Meets condition</span>
+                                </label>
+                              </td>
+                              {question.questionType !== "YES_NO" && (
+                                <td>
+                                  <button
+                                    type="button"
+                                    className="scheme-tool-btn scheme-tool-btn--danger"
+                                    onClick={() => removeAnswerOption(qIdx, optIdx)}
+                                    disabled={question.answerOptions.length <= 2}
+                                    title="Remove answer option"
+                                    aria-label="Remove answer option"
+                                  >
+                                    <X size={14} aria-hidden="true" />
+                                  </button>
+                                </td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {question.questionType !== "YES_NO" && (
+                    <button
+                      type="button"
+                      className="scheme-add-option-btn"
+                      onClick={() => addAnswerOption(qIdx)}
+                    >
+                      <Plus size={14} aria-hidden="true" /> Add Answer Option
+                    </button>
+                  )}
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="scheme-question-footer-bar">
+            <button
+              type="button"
+              className="scheme-management__button scheme-management__button--secondary"
+              onClick={addQuestion}
+            >
+              <Plus size={15} aria-hidden="true" /> Add Another Question
+            </button>
+            <span
+              className={`scheme-question-counter ${
+                isWeightValid ? "text-success" : "text-danger"
+              }`}
+            >
+              Total Weight: {totalWeight} / 100 Points {isWeightValid ? "✓ Ready" : "(Must equal 100)"}
+            </span>
+          </div>
+        </section>
+
+        {/* Section 5: Publication Status & Submission */}
+        <section className="scheme-form-section">
+          <div className="scheme-form-section__header">
+            <span className="scheme-form-section__badge">5</span>
+            <div>
+              <h4>Publication Status & Save</h4>
+              <p>Publishing as ACTIVE makes the scheme available to beneficiaries immediately.</p>
+            </div>
+          </div>
+
+          <div className="scheme-form-grid">
+            <label className="scheme-field">
+              <span className="scheme-field__label">Scheme Status</span>
+              <select name="status" value={form.status} onChange={handleChange}>
+                <option value="DRAFT">DRAFT (Internal only, not visible to applicants)</option>
+                <option value="ACTIVE">ACTIVE (Published, visible in catalog & accepts applications)</option>
+                <option value="INACTIVE">INACTIVE (Archived, closes applications)</option>
               </select>
             </label>
           </div>
-          <section
-            className="scheme-management__questions"
-            aria-labelledby="scheme-questions-heading"
-          >
-            <h4 id="scheme-questions-heading">
-              Eligibility questions ({form.eligibilityQuestions.length})
-            </h4>
-            <p>
-              Configure dynamic, single answer questions. Question weights must add up to 100 points.
-            </p>
-            {form.eligibilityQuestions.map((question, questionIndex) => (
-              <fieldset
-                className="scheme-management__question"
-                key={questionIndex}
-              >
-                <legend>Question {questionIndex + 1} · maximum {question.maximumPoints || 0} points</legend>
-                <div className="scheme-management__question-header">
-                  <label>
-                    Question text
-                    <input
-                      value={question.questionText}
-                      onChange={(event) =>
-                        updateQuestion(questionIndex, {
-                          questionText: event.target.value,
-                        })
-                      }
-                      maxLength="500"
-                      required
-                    />
-                  </label>
-                  <label>
-                    Question type
-                    <select
-                      value={question.questionType}
-                      onChange={(event) =>
-                        handleQuestionTypeChange(
-                          questionIndex,
-                          event.target.value
-                        )
-                      }
-                    >
-                      <option value="YES_NO">Yes / No</option>
-                      <option value="SINGLE_CHOICE">Single choice</option>
-                    </select>
-                  </label>
-                  <label>
-                    Maximum weight (points)
-                    <input type="number" min="0.01" max="100" step="0.01" value={question.maximumPoints}
-                      onChange={(event) => updateQuestion(questionIndex, { maximumPoints: event.target.value })} required />
-                  </label>
-                  <label className="scheme-management__checkbox">
-                    <input
-                      type="checkbox"
-                      checked={question.required}
-                      onChange={(event) =>
-                        updateQuestion(questionIndex, {
-                          required: event.target.checked,
-                        })
-                      }
-                    />
-                    Required for eligibility
-                  </label>
-                </div>
-                <div className="scheme-management__options">
-                  {question.answerOptions.map((option, optionIndex) => (
-                    <div
-                      className="scheme-management__option"
-                      key={`${questionIndex}-${optionIndex}`}
-                    >
-                      {question.questionType === "YES_NO" ? (
-                        <label>
-                          Answer
-                          <input value={option.label} readOnly />
-                        </label>
-                      ) : (
-                        <>
-                          <label>
-                            Answer value
-                            <input
-                              value={option.value}
-                              onChange={(event) =>
-                                updateAnswerOption(
-                                  questionIndex,
-                                  optionIndex,
-                                  "value",
-                                  event.target.value
-                                )
-                              }
-                              maxLength="100"
-                              required
-                            />
-                          </label>
-                          <label>
-                            Answer label
-                            <input
-                              value={option.label}
-                              onChange={(event) =>
-                                updateAnswerOption(
-                                  questionIndex,
-                                  optionIndex,
-                                  "label",
-                                  event.target.value
-                                )
-                              }
-                              maxLength="200"
-                              required
-                            />
-                          </label>
-                        </>
-                      )}
-                      <label>
-                        Points
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={option.points}
-                          onChange={(event) =>
-                            updateAnswerOption(
-                              questionIndex,
-                              optionIndex,
-                              "points",
-                              event.target.value
-                            )
-                          }
-                          required
-                        />
-                      </label>
-                      <label className="scheme-management__checkbox">
-                        <input
-                          type="checkbox"
-                          checked={option.meetsEligibilityCondition}
-                          onChange={(event) =>
-                            updateAnswerOption(
-                              questionIndex,
-                              optionIndex,
-                              "meetsEligibilityCondition",
-                              event.target.checked
-                            )
-                          }
-                        />
-                        Meets eligibility condition
-                      </label>
-                      {question.questionType !== "YES_NO" && (
-                        <button
-                          className="scheme-management__button scheme-management__button--danger"
-                          type="button"
-                          onClick={() =>
-                            removeAnswerOption(questionIndex, optionIndex)
-                          }
-                          disabled={question.answerOptions.length <= 2}
-                        >
-                          Remove option
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {question.questionType !== "YES_NO" && (
-                  <button
-                    className="scheme-management__button scheme-management__button--secondary"
-                    type="button"
-                    onClick={() => addAnswerOption(questionIndex)}
-                  >
-                    Add answer option
-                  </button>
-                )}
-                <div className="scheme-management__form-actions">
-                  <button className="scheme-management__button scheme-management__button--secondary" type="button" onClick={() => moveQuestion(questionIndex, -1)} disabled={questionIndex === 0}>Move up</button>
-                  <button className="scheme-management__button scheme-management__button--secondary" type="button" onClick={() => moveQuestion(questionIndex, 1)} disabled={questionIndex === form.eligibilityQuestions.length - 1}>Move down</button>
-                  <button className="scheme-management__button scheme-management__button--danger" type="button" onClick={() => removeQuestion(questionIndex)}>Remove question</button>
-                </div>
-              </fieldset>
-            ))}
-            <button className="scheme-management__button scheme-management__button--secondary" type="button" onClick={addQuestion}>Add eligibility question</button>
-            <p>Configured maximum weight total: {form.eligibilityQuestions.reduce((sum, question) => sum + (Number(question.maximumPoints) || 0), 0)} / 100</p>
-          </section>
-          <div className="scheme-management__form-actions">
+
+          <div className="scheme-form-actions-bar">
             <button
-              className="scheme-management__button scheme-management__button--primary"
               type="submit"
-              disabled={saving}
+              className="scheme-management__button scheme-management__button--primary"
+              disabled={saving || !isWeightValid || Boolean(dateError) || Boolean(grantAmountError)}
             >
+              <Check size={16} aria-hidden="true" />
               {saving
-                ? "Saving..."
+                ? "Saving…"
                 : editingId
-                  ? "Save changes"
-                  : "Create scheme"}
+                ? "Save Changes"
+                : "Create & Save Scheme"}
             </button>
             {editingId && (
               <button
-                className="scheme-management__button scheme-management__button--secondary"
                 type="button"
+                className="scheme-management__button scheme-management__button--secondary"
                 onClick={resetForm}
                 disabled={saving}
               >
@@ -734,214 +1394,364 @@ function SchemeManagement() {
               </button>
             )}
           </div>
-        </form>
-      )}
+        </section>
+      </form>
 
-      <div className="scheme-management__table-wrap">
-        <table className="scheme-management__table">
-          <thead>
-            <tr>
-              <th scope="col">Scheme</th>
-              <th scope="col">Department</th>
-              <th scope="col">Maximum grant</th>
-              <th scope="col">Application period</th>
-              <th scope="col">Status</th>
-              <th scope="col">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
+      {/* Scheme Listing & Management Section */}
+      <section className="scheme-list-section" aria-labelledby="schemes-list-heading">
+        <div className="scheme-list-header">
+          <div>
+            <h3 id="schemes-list-heading">Configured Grant Schemes</h3>
+            <p>
+              Showing {filteredSchemes.length} of {schemes.length} total schemes
+            </p>
+          </div>
+
+          {/* Search Bar */}
+          <div className="scheme-search-box">
+            <Search size={16} aria-hidden="true" />
+            <input
+              type="search"
+              placeholder="Search by scheme or department…"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              aria-label="Search schemes"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                className="scheme-search-clear"
+                onClick={() => setSearchQuery("")}
+                aria-label="Clear search"
+              >
+                <X size={14} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Status Filter Tabs */}
+        <div className="scheme-filter-tabs" role="tablist" aria-label="Filter schemes by status">
+          <button
+            type="button"
+            className={`scheme-filter-tab ${statusFilter === "ALL" ? "is-active" : ""}`}
+            onClick={() => setStatusFilter("ALL")}
+            role="tab"
+            aria-selected={statusFilter === "ALL"}
+          >
+            All <span className="scheme-filter-count">{counts.all}</span>
+          </button>
+          <button
+            type="button"
+            className={`scheme-filter-tab ${statusFilter === "ACTIVE" ? "is-active" : ""}`}
+            onClick={() => setStatusFilter("ACTIVE")}
+            role="tab"
+            aria-selected={statusFilter === "ACTIVE"}
+          >
+            Active <span className="scheme-filter-count">{counts.active}</span>
+          </button>
+          <button
+            type="button"
+            className={`scheme-filter-tab ${statusFilter === "DRAFT" ? "is-active" : ""}`}
+            onClick={() => setStatusFilter("DRAFT")}
+            role="tab"
+            aria-selected={statusFilter === "DRAFT"}
+          >
+            Draft <span className="scheme-filter-count">{counts.draft}</span>
+          </button>
+          <button
+            type="button"
+            className={`scheme-filter-tab ${statusFilter === "INACTIVE" ? "is-active" : ""}`}
+            onClick={() => setStatusFilter("INACTIVE")}
+            role="tab"
+            aria-selected={statusFilter === "INACTIVE"}
+          >
+            Inactive <span className="scheme-filter-count">{counts.inactive}</span>
+          </button>
+        </div>
+
+        {/* Schemes Table */}
+        <div className="scheme-table-container">
+          <table className="scheme-table">
+            <thead>
               <tr>
-                <td className="scheme-management__table-message" colSpan="6">
-                  Loading schemes...
-                </td>
+                <th scope="col">Scheme & Department</th>
+                <th scope="col">Max Grant</th>
+                <th scope="col">Age / Income Cap</th>
+                <th scope="col">Application Period</th>
+                <th scope="col">Status</th>
+                <th scope="col" style={{ textAlign: "right" }}>Actions</th>
               </tr>
-            ) : error ? (
-              <tr>
-                <td className="scheme-management__table-message" colSpan="6">
-                  Schemes could not be loaded.
-                </td>
-              </tr>
-            ) : visibleSchemes.length === 0 ? (
-              <tr>
-                <td className="scheme-management__table-message" colSpan="6">
-                  {isBeneficiary
-                    ? "No available schemes found."
-                    : "No schemes found."}
-                </td>
-              </tr>
-            ) : (
-              visibleSchemes.map((scheme) => (
-                <tr key={scheme.id}>
-                  <td>{displayValue(scheme.schemeName)}</td>
-                  <td>{displayValue(scheme.department)}</td>
-                  <td>
-                    {scheme.maximumGrantAmount == null
-                      ? "—"
-                      : `₹${scheme.maximumGrantAmount}`}
-                  </td>
-                  <td>
-                    {displayValue(scheme.applicationStartDate)} –{" "}
-                    {displayValue(scheme.applicationEndDate)}
-                  </td>
-                  <td>
-                    <span
-                      className={`scheme-management__status scheme-management__status--${statusTone(
-                        scheme.status
-                      )}`}
-                    >
-                      {displayValue(scheme.status)}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="scheme-management__actions">
-                      <button
-                        className="scheme-management__button scheme-management__button--secondary"
-                        type="button"
-                        onClick={() => handleViewDetails(scheme.id)}
-                      >
-                        Details
-                      </button>
-                      {isAdmin && (
-                        <>
-                          <button
-                            className="scheme-management__button scheme-management__button--secondary"
-                            type="button"
-                            onClick={() => handleEdit(scheme)}
-                          >
-                            Edit
-                          </button>
-                          <button
-                            className="scheme-management__button scheme-management__button--danger"
-                            type="button"
-                            onClick={() => handleDelete(scheme)}
-                            disabled={deletingId === scheme.id}
-                          >
-                            {deletingId === scheme.id
-                              ? "Deleting..."
-                              : "Delete"}
-                          </button>
-                        </>
-                      )}
-                    </div>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan="6" className="scheme-table__state">
+                    <RefreshCw size={20} className="spin-icon" aria-hidden="true" />
+                    <span>Loading schemes…</span>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ) : filteredSchemes.length === 0 ? (
+                <tr>
+                  <td colSpan="6" className="scheme-table__state">
+                    <Filter size={24} aria-hidden="true" />
+                    <p>No schemes matched your search or status filter.</p>
+                    {searchQuery || statusFilter !== "ALL" ? (
+                      <button
+                        type="button"
+                        className="scheme-management__button scheme-management__button--secondary scheme-management__button--sm"
+                        onClick={() => {
+                          setSearchQuery("");
+                          setStatusFilter("ALL");
+                        }}
+                      >
+                        Reset Filters
+                      </button>
+                    ) : null}
+                  </td>
+                </tr>
+              ) : (
+                filteredSchemes.map((scheme) => {
+                  const isActive = scheme.status === "ACTIVE";
+                  return (
+                    <tr key={scheme.id}>
+                      <td>
+                        <div className="scheme-cell-name">
+                          <strong>{scheme.schemeName}</strong>
+                          <span className="scheme-cell-dept">
+                            {scheme.department || "General Department"}
+                          </span>
+                        </div>
+                      </td>
+                      <td>
+                        <strong>{formatCurrency(scheme.maximumGrantAmount)}</strong>
+                      </td>
+                      <td>
+                        <div className="scheme-cell-criteria">
+                          <span>Age: {scheme.minimumAge ?? "—"}–{scheme.maximumAge ?? "—"}</span>
+                          <span>Max: {formatCurrency(scheme.maximumAnnualIncome)}</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="scheme-cell-dates">
+                          {scheme.applicationStartDate || scheme.applicationEndDate ? (
+                            <>
+                              <span>{formatDate(scheme.applicationStartDate)}</span>
+                              <span className="scheme-text-muted">to</span>
+                              <span>{formatDate(scheme.applicationEndDate)}</span>
+                            </>
+                          ) : (
+                            <span className="scheme-text-muted">Open / Unset</span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`scheme-status-pill scheme-status-pill--${(scheme.status || "DRAFT").toLowerCase()}`}>
+                          {scheme.status}
+                        </span>
+                      </td>
+                      <td>
+                        <div className="scheme-row-actions">
+                          <button
+                            type="button"
+                            className="scheme-action-btn"
+                            onClick={() => handleViewDetails(scheme.id)}
+                            title="View Scheme Details"
+                          >
+                            <Eye size={15} aria-hidden="true" />
+                            <span>Details</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="scheme-action-btn"
+                            onClick={() => handleEdit(scheme)}
+                            title="Edit Scheme"
+                          >
+                            <Edit2 size={15} aria-hidden="true" />
+                            <span>Edit</span>
+                          </button>
+                          <button
+                            type="button"
+                            className={`scheme-action-btn ${isActive ? "scheme-action-btn--warn" : "scheme-action-btn--success"}`}
+                            onClick={() => handleToggleStatus(scheme)}
+                            title={isActive ? "Deactivate Scheme" : "Activate Scheme"}
+                          >
+                            <Power size={14} aria-hidden="true" />
+                            <span>{isActive ? "Deactivate" : "Activate"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="scheme-action-btn scheme-action-btn--danger"
+                            onClick={() => handleDelete(scheme)}
+                            disabled={deletingId === scheme.id}
+                            title="Delete Scheme"
+                          >
+                            <Trash2 size={15} aria-hidden="true" />
+                            <span>{deletingId === scheme.id ? "…" : "Delete"}</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
 
+      {/* Scheme Details Drawer / Modal */}
       {(detailsLoading || detailsError || selectedScheme) && (
-        <section
-          className="scheme-management__details"
-          aria-labelledby="scheme-details-heading"
-          aria-live="polite"
+        <aside
+          className="scheme-details-drawer"
+          aria-labelledby="scheme-details-title"
+          aria-modal="true"
         >
-          <h3 id="scheme-details-heading">Scheme details</h3>
-          {detailsLoading && <p>Loading scheme details...</p>}
-          {detailsError && (
-            <p
-              className="scheme-management__notice scheme-management__notice--error"
-              role="alert"
-            >
-              {detailsError}
-            </p>
-          )}
-          {selectedScheme && (
-            <dl className="scheme-management__details-grid">
+          <div className="scheme-details-card">
+            <div className="scheme-details-card__header">
               <div>
-                <dt>Scheme name</dt>
-                <dd>{displayValue(selectedScheme.schemeName)}</dd>
+                <span className={`scheme-status-pill scheme-status-pill--${(selectedScheme?.status || "draft").toLowerCase()}`}>
+                  {selectedScheme?.status}
+                </span>
+                <h3 id="scheme-details-title">
+                  {selectedScheme ? selectedScheme.schemeName : "Scheme Details"}
+                </h3>
+                {selectedScheme?.department && (
+                  <p className="scheme-text-muted">{selectedScheme.department}</p>
+                )}
               </div>
-              <div>
-                <dt>Department</dt>
-                <dd>{displayValue(selectedScheme.department)}</dd>
+              <button
+                type="button"
+                className="scheme-tool-btn"
+                onClick={() => setSelectedScheme(null)}
+                aria-label="Close scheme details"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            </div>
+
+            {detailsLoading && (
+              <div className="scheme-details-loading">
+                <RefreshCw size={24} className="spin-icon" aria-hidden="true" />
+                <span>Loading full details…</span>
               </div>
-              <div>
-                <dt>Status</dt>
-                <dd>{displayValue(selectedScheme.status)}</dd>
+            )}
+
+            {detailsError && (
+              <div className="scheme-notice scheme-notice--error">
+                <AlertCircle size={18} aria-hidden="true" />
+                <span>{detailsError}</span>
               </div>
-              <div className="scheme-management__detail-wide">
-                <dt>Description</dt>
-                <dd>{displayValue(selectedScheme.description)}</dd>
-              </div>
-              <div>
-                <dt>Minimum age</dt>
-                <dd>{displayValue(selectedScheme.minimumAge)}</dd>
-              </div>
-              <div>
-                <dt>Maximum age</dt>
-                <dd>{displayValue(selectedScheme.maximumAge)}</dd>
-              </div>
-              <div>
-                <dt>Maximum annual income</dt>
-                <dd>
-                  {selectedScheme.maximumAnnualIncome == null
-                    ? "—"
-                    : `₹${selectedScheme.maximumAnnualIncome}`}
-                </dd>
-              </div>
-              <div>
-                <dt>Maximum grant amount</dt>
-                <dd>
-                  {selectedScheme.maximumGrantAmount == null
-                    ? "—"
-                    : `₹${selectedScheme.maximumGrantAmount}`}
-                </dd>
-              </div>
-              <div>
-                <dt>Eligibility threshold</dt>
-                <dd>
-                  {selectedScheme.eligibilityThreshold == null
-                    ? "—"
-                    : `${selectedScheme.eligibilityThreshold}%`}
-                </dd>
-              </div>
-              <div>
-                <dt>Eligible beneficiary categories</dt>
-                <dd>
-                    {(selectedScheme.eligibleCategories || []).join(", ") || "—"}
-                </dd>
-              </div>
-              <div>
-                <dt>Application start date</dt>
-                <dd>{displayValue(selectedScheme.applicationStartDate)}</dd>
-              </div>
-              <div>
-                <dt>Application end date</dt>
-                <dd>{displayValue(selectedScheme.applicationEndDate)}</dd>
-              </div>
-              <div className="scheme-management__detail-wide">
-                <dt>Custom eligibility questions</dt>
-                <dd>
-                  <ol className="scheme-management__criteria-list">
-                    {(selectedScheme.eligibilityQuestions || []).map(
-                      (question) => (
-                        <li key={question.id}>
-                          <strong>{question.questionText}</strong>{" "}
-                          ({question.required ? "required" : "optional"})
-                          <ul>
-                            {(question.answerOptions || []).map((option) => (
-                              <li key={option.value}>
-                                {option.label}: {option.points} points
-                                {option.meetsEligibilityCondition
-                                  ? " — meets eligibility condition"
-                                  : ""}
-                              </li>
-                            ))}
-                          </ul>
-                        </li>
-                      )
-                    )}
+            )}
+
+            {selectedScheme && (
+              <div className="scheme-details-content">
+                <div className="scheme-details-grid">
+                  <div>
+                    <span className="scheme-detail-label">Description</span>
+                    <p className="scheme-detail-val">
+                      {selectedScheme.description || "No public description provided."}
+                    </p>
+                  </div>
+
+                  <div className="scheme-details-subgrid">
+                    <div>
+                      <span className="scheme-detail-label">Age Range</span>
+                      <span className="scheme-detail-val">
+                        {selectedScheme.minimumAge ?? "—"} to {selectedScheme.maximumAge ?? "—"} years
+                      </span>
+                    </div>
+                    <div>
+                      <span className="scheme-detail-label">Max Annual Income</span>
+                      <span className="scheme-detail-val">
+                        {formatCurrency(selectedScheme.maximumAnnualIncome)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="scheme-detail-label">Max Grant Amount</span>
+                      <span className="scheme-detail-val">
+                        {formatCurrency(selectedScheme.maximumGrantAmount)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="scheme-detail-label">Eligibility Threshold</span>
+                      <span className="scheme-detail-val">
+                        {selectedScheme.eligibilityThreshold ?? "70"}%
+                      </span>
+                    </div>
+                    <div>
+                      <span className="scheme-detail-label">Application Period</span>
+                      <span className="scheme-detail-val">
+                        {formatDate(selectedScheme.applicationStartDate)} – {formatDate(selectedScheme.applicationEndDate)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="scheme-detail-label">Eligible Categories</span>
+                      <div className="scheme-category-chips" style={{ marginTop: "4px" }}>
+                        {(selectedScheme.eligibleCategories || []).map((c) => (
+                          <span key={c} className="scheme-chip scheme-chip--selected" style={{ cursor: "default" }}>
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Questionnaire Breakdown */}
+                <div className="scheme-details-questions">
+                  <h4>Configured Dynamic Questions ({(selectedScheme.eligibilityQuestions || []).length})</h4>
+                  <ol className="scheme-details-q-list">
+                    {(selectedScheme.eligibilityQuestions || []).map((q, idx) => (
+                      <li key={q.id || idx} className="scheme-details-q-item">
+                        <div className="scheme-details-q-header">
+                          <strong>{q.questionText}</strong>
+                          <span className="scheme-question-card__weight-pill">
+                            Max {q.maximumPoints} pts {q.required ? "• Required" : ""}
+                          </span>
+                        </div>
+                        <ul className="scheme-details-opt-list">
+                          {(q.answerOptions || []).map((opt, oIdx) => (
+                            <li key={oIdx} className="scheme-details-opt-item">
+                              <span>
+                                {opt.label} ({opt.value}) — <strong>{opt.points} pts</strong>
+                              </span>
+                              {opt.meetsEligibilityCondition && (
+                                <span className="scheme-qualifies-badge">✓ Meets Condition</span>
+                              )}
+                            </li>
+                          ))}
+                        </ul>
+                      </li>
+                    ))}
                   </ol>
-                </dd>
+                </div>
+
+                <div className="scheme-details-footer">
+                  <button
+                    type="button"
+                    className="scheme-management__button scheme-management__button--primary scheme-management__button--sm"
+                    onClick={() => {
+                      handleEdit(selectedScheme);
+                      setSelectedScheme(null);
+                    }}
+                  >
+                    <Edit2 size={14} aria-hidden="true" /> Edit Scheme
+                  </button>
+                  <button
+                    type="button"
+                    className="scheme-management__button scheme-management__button--secondary scheme-management__button--sm"
+                    onClick={() => setSelectedScheme(null)}
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
-            </dl>
-          )}
-        </section>
+            )}
+          </div>
+        </aside>
       )}
-    </section>
+    </div>
   );
 }
 

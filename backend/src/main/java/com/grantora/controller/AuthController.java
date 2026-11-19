@@ -5,6 +5,7 @@ import com.grantora.dto.RegisterRequest;
 import com.grantora.dto.LoginRequest;
 import com.grantora.entity.User;
 import com.grantora.service.AuthService;
+import jakarta.validation.Valid;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -25,7 +26,7 @@ public class AuthController {
     // REGISTER
     @PostMapping("/register")
     public ResponseEntity<?> register(
-            @RequestBody RegisterRequest request) {
+            @Valid @RequestBody RegisterRequest request) {
 
         User user = authService.register(request);
 
@@ -42,7 +43,7 @@ public class AuthController {
     // LOGIN
     @PostMapping("/login")
     public ResponseEntity<?> login(
-            @RequestBody LoginRequest request) {
+            @Valid @RequestBody LoginRequest request) {
 
         return ResponseEntity.ok(authService.login(request));
     }

@@ -1,3 +1,4 @@
+
 package com.grantora.entity;
 
 import com.grantora.dto.EligibilityAnswer;
@@ -10,11 +11,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Entity
-@Table(
-        name = "grant_applications",
-        uniqueConstraints = @UniqueConstraint(
-                name = "uk_application_beneficiary_scheme",
-                columnNames = {"beneficiary_id", "scheme_id"}))
+@Table(name = "grant_applications", uniqueConstraints = @UniqueConstraint(name = "uk_application_beneficiary_scheme", columnNames = {
+        "beneficiary_id", "scheme_id" }))
 public class GrantApplication {
 
     @Id
@@ -62,14 +60,16 @@ public class GrantApplication {
     @Column(name = "routing_priority", length = 20)
     private RoutingPriority routingPriority = RoutingPriority.NORMAL;
 
-    @Column(name = "state_approval_required")
-    private Boolean stateApprovalRequired = true;
-
     private Boolean escalated = false;
 
-    @Column(name = "task_assigned_at") private java.time.LocalDateTime taskAssignedAt;
-    @Column(name = "task_due_at") private java.time.LocalDateTime taskDueAt;
-    @Column(name = "task_completed_at") private java.time.LocalDateTime taskCompletedAt;
+    @Column(name = "task_assigned_at")
+    private LocalDateTime taskAssignedAt;
+
+    @Column(name = "task_due_at")
+    private LocalDateTime taskDueAt;
+
+    @Column(name = "task_completed_at")
+    private LocalDateTime taskCompletedAt;
 
     public Long getId() {
         return id;
@@ -166,14 +166,6 @@ public class GrantApplication {
         this.routingPriority = routingPriority;
     }
 
-    public boolean requiresStateApproval() {
-        return !Boolean.FALSE.equals(stateApprovalRequired);
-    }
-
-    public void setStateApprovalRequired(Boolean stateApprovalRequired) {
-        this.stateApprovalRequired = stateApprovalRequired;
-    }
-
     public boolean isEscalated() {
         return Boolean.TRUE.equals(escalated);
     }
@@ -181,10 +173,28 @@ public class GrantApplication {
     public void setEscalated(boolean escalated) {
         this.escalated = escalated;
     }
-    public java.time.LocalDateTime getTaskAssignedAt() { return taskAssignedAt; }
-    public void setTaskAssignedAt(java.time.LocalDateTime value) { taskAssignedAt = value; }
-    public java.time.LocalDateTime getTaskDueAt() { return taskDueAt; }
-    public void setTaskDueAt(java.time.LocalDateTime value) { taskDueAt = value; }
-    public java.time.LocalDateTime getTaskCompletedAt() { return taskCompletedAt; }
-    public void setTaskCompletedAt(java.time.LocalDateTime value) { taskCompletedAt = value; }
+
+    public LocalDateTime getTaskAssignedAt() {
+        return taskAssignedAt;
+    }
+
+    public void setTaskAssignedAt(LocalDateTime value) {
+        taskAssignedAt = value;
+    }
+
+    public LocalDateTime getTaskDueAt() {
+        return taskDueAt;
+    }
+
+    public void setTaskDueAt(LocalDateTime value) {
+        taskDueAt = value;
+    }
+
+    public LocalDateTime getTaskCompletedAt() {
+        return taskCompletedAt;
+    }
+
+    public void setTaskCompletedAt(LocalDateTime value) {
+        taskCompletedAt = value;
+    }
 }

@@ -1,3 +1,4 @@
+
 import api from "./api";
 
 const API_URL = "/applications";
@@ -34,8 +35,18 @@ export const getVerificationQueue = () =>
 export const getVerificationHistory = () =>
   api.get(`${API_URL}/verification/history`);
 
-export const submitVerificationDecision = (id, data) =>
-  api.post(`${API_URL}/${id}/decision`, data);
+export const submitVerificationDecision = (id, data) => {
+  const payload = {
+    ...data,
+    identityVerified: data?.identityVerified === true,
+    addressVerified: data?.addressVerified === true,
+    documentsVerified: data?.documentsVerified === true,
+    applicationDetailsVerified:
+      data?.applicationDetailsVerified === true,
+  };
+
+  return api.post(`${API_URL}/${id}/decision`, payload);
+};
 
 export const escalateApplication = (id) =>
   api.post(`${API_URL}/${id}/escalate`);
@@ -49,6 +60,7 @@ export const getDisbursementEligibleApplications = (params) =>
 export const uploadApplicationDocument = (id, file) => {
   const body = new FormData();
   body.append("file", file);
+
   return api.post(`${API_URL}/${id}/documents`, body, {
     headers: { "Content-Type": "multipart/form-data" },
   });

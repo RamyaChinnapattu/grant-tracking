@@ -1,7 +1,6 @@
 import {
   BarChart3,
   Bell,
-  CheckCircle2,
   CircleDollarSign,
   ClipboardCheck,
   ClipboardList,
@@ -28,11 +27,6 @@ export const dashboardNavigation = {
       label: "Application Management",
       path: "/admin/applications",
       icon: ClipboardList,
-    },
-    {
-      label: "Eligibility Configuration",
-      path: "/admin/eligibility",
-      icon: Settings2,
     },
     {
       label: "Verification & Approvals",
@@ -68,11 +62,6 @@ export const dashboardNavigation = {
       label: "Apply for Grant",
       path: "/beneficiary/apply",
       icon: FilePlus2,
-    },
-    {
-      label: "Eligibility Results",
-      path: "/beneficiary/eligibility",
-      icon: CheckCircle2,
     },
     { label: "My Profile", path: "/beneficiary/profile", icon: UserRound },
     {

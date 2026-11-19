@@ -1,45 +1,113 @@
 package com.grantora.service;
 
+import com.grantora.dto.EligibilityAnswer;
+import com.grantora.dto.EligibilityEvaluationResult;
+import com.grantora.entity.Beneficiary;
+import com.grantora.entity.GrantApplication;
 import com.grantora.entity.Scheme;
 import com.grantora.entity.SchemeEligibilityQuestion;
+import com.grantora.repository.BeneficiaryRepository;
+import com.grantora.repository.GrantApplicationRepository;
 import com.grantora.repository.SchemeRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class SchemeService {
 
     private final SchemeRepository schemeRepository;
+    private final BeneficiaryRepository beneficiaryRepository;
+    private final EligibilityScoringService eligibilityScoringService;
+    private final GrantApplicationRepository grantApplicationRepository;
 
     public SchemeService(SchemeRepository schemeRepository) {
+        this(schemeRepository, null, null, null);
+    }
+
+    public SchemeService(
+            SchemeRepository schemeRepository,
+            BeneficiaryRepository beneficiaryRepository,
+            EligibilityScoringService eligibilityScoringService) {
+        this(schemeRepository, beneficiaryRepository, eligibilityScoringService, null);
+    }
+
+    @Autowired
+    public SchemeService(
+            SchemeRepository schemeRepository,
+            BeneficiaryRepository beneficiaryRepository,
+            EligibilityScoringService eligibilityScoringService,
+            GrantApplicationRepository grantApplicationRepository) {
         this.schemeRepository = schemeRepository;
+        this.beneficiaryRepository = beneficiaryRepository;
+        this.eligibilityScoringService = eligibilityScoringService;
+        this.grantApplicationRepository = grantApplicationRepository;
     }
 
     public List<Scheme> getAllSchemes() {
         return schemeRepository.findAll();
     }
 
-    public Scheme getSchemeById(Long id) {
-        return schemeRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException(
-                        "Scheme not found with ID: " + id));
+    public List<Scheme> getPublicSchemes() {
+        return schemeRepository.findByStatusIgnoreCase("ACTIVE");
     }
 
+    public Scheme getSchemeById(Long id) {
+        return schemeRepository.findById(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Scheme not found with ID: " + id));
+    }
+
+    public Scheme getPublicSchemeById(Long id) {
+        Scheme scheme = getSchemeById(id);
+        if (!"ACTIVE".equalsIgnoreCase(scheme.getStatus())) {
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND, "Scheme not found or is not published: " + id);
+        }
+        return scheme;
+    }
+
+    @Transactional
     public Scheme createScheme(Scheme scheme) {
         validateEligibilityConfiguration(scheme);
-        replaceQuestions(scheme, scheme.getEligibilityQuestions());
+        if (scheme.getEligibilityQuestions() != null) {
+            for (SchemeEligibilityQuestion question : scheme.getEligibilityQuestions()) {
+                if (question != null && question.getId() != null) {
+                    invalidConfiguration("New questions cannot specify an existing ID");
+                }
+            }
+        }
+        List<SchemeEligibilityQuestion> questions = new ArrayList<>();
+        if (scheme.getEligibilityQuestions() != null) {
+            for (int index = 0; index < scheme.getEligibilityQuestions().size(); index++) {
+                SchemeEligibilityQuestion incoming = scheme.getEligibilityQuestions().get(index);
+                SchemeEligibilityQuestion question = new SchemeEligibilityQuestion();
+                question.setScheme(scheme);
+                question.setDisplayOrder(index);
+                copyQuestionData(incoming, question);
+                questions.add(question);
+            }
+        }
+        scheme.setEligibilityQuestions(questions);
         return schemeRepository.save(scheme);
     }
 
+    @Transactional
     public Scheme updateScheme(Long id, Scheme updatedScheme) {
         validateEligibilityConfiguration(updatedScheme);
         Scheme existing = getSchemeById(id);
@@ -53,7 +121,7 @@ public class SchemeService {
         existing.setMaximumGrantAmount(updatedScheme.getMaximumGrantAmount());
         existing.setEligibilityThreshold(updatedScheme.getEligibilityThreshold());
         existing.setEligibleCategories(updatedScheme.getEligibleCategories());
-        replaceQuestions(existing, updatedScheme.getEligibilityQuestions());
+        reconcileQuestions(existing, updatedScheme.getEligibilityQuestions());
         existing.setApplicationStartDate(updatedScheme.getApplicationStartDate());
         existing.setApplicationEndDate(updatedScheme.getApplicationEndDate());
         existing.setStatus(updatedScheme.getStatus());
@@ -61,39 +129,125 @@ public class SchemeService {
         return schemeRepository.save(existing);
     }
 
-    private void replaceQuestions(
-            Scheme scheme,
+    private void reconcileQuestions(
+            Scheme existingScheme,
             List<SchemeEligibilityQuestion> incomingQuestions) {
-        List<SchemeEligibilityQuestion> replacements = new ArrayList<>();
+        List<SchemeEligibilityQuestion> currentQuestions = existingScheme.getEligibilityQuestions();
+        if (currentQuestions == null) {
+            currentQuestions = new ArrayList<>();
+            existingScheme.setEligibilityQuestions(currentQuestions);
+        }
+
+        Map<Long, SchemeEligibilityQuestion> existingById = currentQuestions.stream()
+                .filter(q -> q.getId() != null)
+                .collect(Collectors.toMap(SchemeEligibilityQuestion::getId, Function.identity()));
+
+        Set<Long> seenIncomingIds = new HashSet<>();
+        for (SchemeEligibilityQuestion incoming : incomingQuestions) {
+            if (incoming != null && incoming.getId() != null) {
+                if (!existingById.containsKey(incoming.getId())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Question ID " + incoming.getId() + " does not belong to scheme " + existingScheme.getId());
+                }
+                if (!seenIncomingIds.add(incoming.getId())) {
+                    throw new ResponseStatusException(
+                            HttpStatus.BAD_REQUEST,
+                            "Duplicate question ID " + incoming.getId() + " in update request");
+                }
+            }
+        }
+
+        // Identify existing questions being removed
+        List<SchemeEligibilityQuestion> removedQuestions = currentQuestions.stream()
+                .filter(q -> q.getId() != null && !seenIncomingIds.contains(q.getId()))
+                .toList();
+
+        if (!removedQuestions.isEmpty() && grantApplicationRepository != null) {
+            List<GrantApplication> applications = grantApplicationRepository.findByScheme_Id(existingScheme.getId());
+            if (applications != null && !applications.isEmpty()) {
+                Set<Long> answeredQuestionIds = applications.stream()
+                        .filter(app -> app != null && app.getEligibilityAnswers() != null)
+                        .flatMap(app -> app.getEligibilityAnswers().stream())
+                        .filter(Objects::nonNull)
+                        .map(EligibilityAnswer::questionId)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toSet());
+
+                for (SchemeEligibilityQuestion removed : removedQuestions) {
+                    if (answeredQuestionIds.contains(removed.getId())) {
+                        throw new ResponseStatusException(
+                                HttpStatus.CONFLICT,
+                                "Cannot remove question \"" + removed.getQuestionText()
+                                        + "\" (ID: " + removed.getId()
+                                        + ") because existing grant applications reference it. Deactivate the scheme or keep the question.");
+                    }
+                }
+            }
+        }
+
+        // Remove unreferenced questions from existing collection
+        currentQuestions.removeIf(q -> q.getId() != null && !seenIncomingIds.contains(q.getId()));
+
+        // Update existing questions in-place and add new questions
         for (int index = 0; index < incomingQuestions.size(); index++) {
             SchemeEligibilityQuestion incoming = incomingQuestions.get(index);
-            SchemeEligibilityQuestion question = new SchemeEligibilityQuestion();
-            question.setScheme(scheme);
-            question.setDisplayOrder(index);
-            question.setQuestionText(incoming.getQuestionText().trim());
-            question.setQuestionType(
-                    incoming.getQuestionType().trim().toUpperCase(Locale.ROOT));
-            BigDecimal legacyMaximum = incoming.getAnswerOptions() == null ? null
-                    : incoming.getAnswerOptions().stream()
-                            .map(SchemeEligibilityQuestion.AnswerOption::points)
-                            .filter(java.util.Objects::nonNull)
-                            .max(BigDecimal::compareTo).orElse(null);
-            question.setMaximumPoints(incoming.getMaximumPoints() == null
-                    ? legacyMaximum : incoming.getMaximumPoints());
-            question.setRequired(incoming.isRequired());
-            question.setAnswerOptions(incoming.getAnswerOptions().stream()
-                    .map(option -> new SchemeEligibilityQuestion.AnswerOption(
-                            option.value().trim(),
-                            option.label().trim(),
-                            option.points(),
-                            option.meetsEligibilityCondition()))
-                    .toList());
-            replacements.add(question);
+            if (incoming.getId() != null) {
+                SchemeEligibilityQuestion existing = existingById.get(incoming.getId());
+                existing.setDisplayOrder(index);
+                copyQuestionData(incoming, existing);
+                existing.setScheme(existingScheme);
+            } else {
+                SchemeEligibilityQuestion newQuestion = new SchemeEligibilityQuestion();
+                newQuestion.setScheme(existingScheme);
+                newQuestion.setDisplayOrder(index);
+                copyQuestionData(incoming, newQuestion);
+                currentQuestions.add(newQuestion);
+            }
         }
-        scheme.setEligibilityQuestions(replacements);
+
+        currentQuestions.sort(Comparator.comparingInt(SchemeEligibilityQuestion::getDisplayOrder));
+    }
+
+    private void copyQuestionData(
+            SchemeEligibilityQuestion source,
+            SchemeEligibilityQuestion target) {
+        target.setQuestionText(source.getQuestionText().trim());
+        target.setQuestionType(
+                source.getQuestionType().trim().toUpperCase(Locale.ROOT));
+        BigDecimal legacyMaximum = source.getAnswerOptions() == null ? null
+                : source.getAnswerOptions().stream()
+                        .map(SchemeEligibilityQuestion.AnswerOption::points)
+                        .filter(Objects::nonNull)
+                        .max(BigDecimal::compareTo).orElse(null);
+        target.setMaximumPoints(source.getMaximumPoints() == null
+                ? legacyMaximum
+                : source.getMaximumPoints());
+        target.setRequired(source.isRequired());
+        target.setAnswerOptions(source.getAnswerOptions().stream()
+                .map(option -> new SchemeEligibilityQuestion.AnswerOption(
+                        option.value().trim(),
+                        option.label().trim(),
+                        option.points(),
+                        option.meetsEligibilityCondition()))
+                .toList());
     }
 
     private void validateEligibilityConfiguration(Scheme scheme) {
+        if (scheme.getSchemeName() == null
+                || scheme.getSchemeName().isBlank()
+                || scheme.getSchemeName().trim().length() > 200) {
+            invalidConfiguration("Scheme name is required and must not exceed 200 characters");
+        }
+
+        if (scheme.getStatus() == null
+                || !Set.of("DRAFT", "ACTIVE", "INACTIVE")
+                        .contains(scheme.getStatus().trim().toUpperCase(Locale.ROOT))) {
+            invalidConfiguration("Scheme status must be DRAFT, ACTIVE, or INACTIVE");
+        }
+
+        scheme.setSchemeName(scheme.getSchemeName().trim());
+        scheme.setStatus(scheme.getStatus().trim().toUpperCase(Locale.ROOT));
         if (scheme.getMinimumAge() == null || scheme.getMinimumAge() < 0
                 || scheme.getMaximumAge() == null || scheme.getMaximumAge() < 0
                 || scheme.getMaximumAge() < scheme.getMinimumAge()) {
@@ -102,6 +256,14 @@ public class SchemeService {
         if (scheme.getMaximumAnnualIncome() == null
                 || scheme.getMaximumAnnualIncome().signum() < 0) {
             invalidConfiguration("Maximum annual income must be zero or greater");
+        }
+        if (scheme.getMaximumGrantAmount() != null
+                && scheme.getMaximumGrantAmount().signum() < 0) {
+            invalidConfiguration("Maximum grant amount must be zero or greater");
+        }
+        if (scheme.getApplicationStartDate() != null && scheme.getApplicationEndDate() != null
+                && scheme.getApplicationEndDate().isBefore(scheme.getApplicationStartDate())) {
+            invalidConfiguration("Application end date must not be earlier than application start date");
         }
         if (scheme.getEligibleCategories() == null
                 || scheme.getEligibleCategories().isEmpty()) {
@@ -128,8 +290,8 @@ public class SchemeService {
         }
         if (scheme.getMaximumAnnualIncome() != null
                 && (scheme.getMaximumAnnualIncome().stripTrailingZeros().scale() > 2
-                || scheme.getMaximumAnnualIncome().precision()
-                        - scheme.getMaximumAnnualIncome().scale() > 10)) {
+                        || scheme.getMaximumAnnualIncome().precision()
+                                - scheme.getMaximumAnnualIncome().scale() > 10)) {
             invalidConfiguration("Maximum annual income supports up to two decimal places");
         }
         if (scheme.getEligibilityQuestions() == null
@@ -147,8 +309,7 @@ public class SchemeService {
             String type = question.getQuestionType() == null
                     ? ""
                     : question.getQuestionType().trim().toUpperCase(Locale.ROOT);
-            List<SchemeEligibilityQuestion.AnswerOption> options =
-                    question.getAnswerOptions();
+            List<SchemeEligibilityQuestion.AnswerOption> options = question.getAnswerOptions();
             if (!type.equals("YES_NO") && !type.equals("SINGLE_CHOICE")
                     && !type.equals("MULTIPLE_CHOICE")) {
                 invalidConfiguration("Question type must be YES_NO or SINGLE_CHOICE");
@@ -180,17 +341,19 @@ public class SchemeService {
             }
             if (type.equals("YES_NO")
                     && (options.size() != 2
-                    || !optionValues.contains("yes")
-                    || !optionValues.contains("no"))) {
+                            || !optionValues.contains("yes")
+                            || !optionValues.contains("no"))) {
                 invalidConfiguration("YES_NO questions must have YES and NO answer values");
             }
             BigDecimal configuredMaximum = question.getMaximumPoints() == null
-                    ? questionMaximum : question.getMaximumPoints();
+                    ? questionMaximum
+                    : question.getMaximumPoints();
             if (configuredMaximum == null || configuredMaximum.signum() <= 0
                     || configuredMaximum.stripTrailingZeros().scale() > 2
                     || configuredMaximum.precision() - configuredMaximum.scale() > 3
                     || questionMaximum.compareTo(configuredMaximum) > 0) {
-                invalidConfiguration("Each question needs a valid maximum weight at least as large as its highest option score");
+                invalidConfiguration(
+                        "Each question needs a valid maximum weight at least as large as its highest option score");
             }
             maximumPoints = maximumPoints.add(configuredMaximum);
         }
@@ -203,8 +366,33 @@ public class SchemeService {
         throw new ResponseStatusException(HttpStatus.BAD_REQUEST, message);
     }
 
+    @Transactional
     public void deleteScheme(Long id) {
         Scheme scheme = getSchemeById(id);
+        if (grantApplicationRepository != null && grantApplicationRepository.existsByScheme_Id(id)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "Cannot delete scheme \"" + scheme.getSchemeName()
+                            + "\" because grant applications are associated with it. Deactivate the scheme instead.");
+        }
         schemeRepository.delete(scheme);
+    }
+
+    public EligibilityEvaluationResult evaluateEligibility(
+            Long schemeId,
+            Long beneficiaryId,
+            String userEmail,
+            List<EligibilityAnswer> answers) {
+        Scheme scheme = getSchemeById(schemeId);
+        Beneficiary beneficiary = null;
+        if (beneficiaryId != null && beneficiaryRepository != null) {
+            beneficiary = beneficiaryRepository.findById(beneficiaryId).orElse(null);
+        } else if (userEmail != null && !userEmail.isBlank() && beneficiaryRepository != null) {
+            beneficiary = beneficiaryRepository.findByUser_Email(userEmail).orElse(null);
+        }
+        if (eligibilityScoringService == null) {
+            throw new IllegalStateException("Eligibility scoring engine is not configured.");
+        }
+        return eligibilityScoringService.evaluate(null, scheme, beneficiary, answers);
     }
 }

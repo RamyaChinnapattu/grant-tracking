@@ -34,81 +34,76 @@ public class SecurityConfig {
             throws Exception {
 
         http
-            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
 
-            .csrf(csrf -> csrf.disable())
-            .formLogin(form -> form.disable())
-            .httpBasic(basic -> basic.disable())
+                .csrf(csrf -> csrf.disable())
+                .formLogin(form -> form.disable())
+                .httpBasic(basic -> basic.disable())
 
-            .exceptionHandling(exception -> exception
-                .authenticationEntryPoint((request, response, authException) ->
-                    response.setStatus(HttpServletResponse.SC_UNAUTHORIZED)
-                )
-            )
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> response.setStatus(
+                                HttpServletResponse.SC_UNAUTHORIZED)))
 
-            .sessionManagement(session ->
-                session.sessionCreationPolicy(
-                    SessionCreationPolicy.STATELESS
-                )
-            )
+                .sessionManagement(session -> session.sessionCreationPolicy(
+                        SessionCreationPolicy.STATELESS))
 
-            .authorizeHttpRequests(auth -> auth
-                .requestMatchers(
-                    "/api/auth/**",
-                    "/error"
-                ).permitAll()
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.GET, "/").permitAll()
+                        .requestMatchers(
+                                "/api/auth/**",
+                                "/error")
+                        .permitAll()
 
-                .requestMatchers("/api/users/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/schemes", "/api/schemes/*").permitAll()
 
-                .requestMatchers("/api/applications/me").hasRole("BENEFICIARY")
-                .requestMatchers("/api/applications/admin").hasRole("ADMIN")
-                .requestMatchers("/api/applications/disbursement/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/applications/*/submit")
-                    .hasRole("BENEFICIARY")
-                .requestMatchers(HttpMethod.POST, "/api/applications/*/withdraw")
-                    .hasRole("BENEFICIARY")
-                .requestMatchers(HttpMethod.DELETE, "/api/applications/*")
-                    .hasRole("BENEFICIARY")
-                .requestMatchers(HttpMethod.POST, "/api/applications/*/decision")
-                    .hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers(HttpMethod.POST, "/api/applications/*/escalate")
-                    .hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers(HttpMethod.POST, "/api/applications/*/assignment")
-                    .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/applications/*/documents")
-                    .hasRole("BENEFICIARY")
-                .requestMatchers(HttpMethod.PATCH, "/api/applications/**")
-                    .hasRole("ADMIN")
-                .requestMatchers(HttpMethod.POST, "/api/applications/**")
-                    .hasRole("BENEFICIARY")
-                .requestMatchers(HttpMethod.PUT, "/api/applications/**")
-                    .hasRole("BENEFICIARY")
-                .requestMatchers(HttpMethod.GET, "/api/applications")
-                    .hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers(HttpMethod.GET, "/api/applications/**")
-                    .hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
-                .requestMatchers("/api/applications/**").hasRole("ADMIN")
+                        .requestMatchers("/api/users/**").hasRole("ADMIN")
 
-                .requestMatchers(HttpMethod.GET, "/api/schemes/**")
-                    .authenticated()
+                        .requestMatchers("/api/applications/me").hasRole("BENEFICIARY")
+                        .requestMatchers("/api/applications/admin").hasRole("ADMIN")
+                        .requestMatchers("/api/applications/disbursement/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/*/submit")
+                        .hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/*/withdraw")
+                        .hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.DELETE, "/api/applications/*")
+                        .hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/*/decision")
+                        .hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/*/escalate")
+                        .hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/*/assignment")
+                        .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/*/documents")
+                        .hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.PATCH, "/api/applications/**")
+                        .hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/applications/**")
+                        .hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.PUT, "/api/applications/**")
+                        .hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.GET, "/api/applications")
+                        .hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.GET, "/api/applications/**")
+                        .hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
+                        .requestMatchers("/api/applications/**").hasRole("ADMIN")
 
-                .requestMatchers("/api/schemes/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/schemes/*/check-eligibility", "/api/schemes/*/evaluate-eligibility")
+                        .hasAnyRole("BENEFICIARY", "ADMIN", "OFFICER")
+                        .requestMatchers("/api/schemes/**").hasRole("ADMIN")
 
-                .requestMatchers("/api/beneficiaries/**").authenticated()
+                        .requestMatchers("/api/beneficiaries/**").authenticated()
 
-                .requestMatchers("/api/verification/**").hasRole("ADMIN")
-                .requestMatchers(HttpMethod.GET, "/api/workflow/deadlines").hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers(HttpMethod.PUT, "/api/workflow/deadlines").hasRole("ADMIN")
-                .requestMatchers("/api/workflow/escalations/**").hasAnyRole("ADMIN", "OFFICER")
-                .requestMatchers("/api/workflow/notifications/**").authenticated()
+                        .requestMatchers("/api/verification/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/workflow/deadlines").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.PUT, "/api/workflow/deadlines").hasRole("ADMIN")
+                        .requestMatchers("/api/workflow/escalations/**").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers("/api/workflow/notifications/**").authenticated()
 
-                .anyRequest().authenticated()
-            )
+                        .anyRequest().authenticated())
 
-            .addFilterBefore(
-                jwtAuthenticationFilter,
-                UsernamePasswordAuthenticationFilter.class
-            );
+                .addFilterBefore(
+                        jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
@@ -119,21 +114,17 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
 
         configuration.setAllowedOrigins(
-            List.of("http://localhost:5173")
-        );
+                List.of("http://localhost:5173"));
 
         configuration.setAllowedMethods(
-            List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS")
-        );
+                List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
 
         configuration.setAllowedHeaders(
-            List.of("Authorization", "Content-Type")
-        );
+                List.of("Authorization", "Content-Type"));
 
         configuration.setAllowCredentials(true);
 
-        UrlBasedCorsConfigurationSource source =
-            new UrlBasedCorsConfigurationSource();
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
         source.registerCorsConfiguration("/**", configuration);
 
@@ -146,11 +137,9 @@ public class SecurityConfig {
     }
 
     @Bean
-    public FilterRegistrationBean<JwtAuthenticationFilter>
-            jwtFilterRegistration(JwtAuthenticationFilter filter) {
+    public FilterRegistrationBean<JwtAuthenticationFilter> jwtFilterRegistration(JwtAuthenticationFilter filter) {
 
-        FilterRegistrationBean<JwtAuthenticationFilter> registration =
-            new FilterRegistrationBean<>(filter);
+        FilterRegistrationBean<JwtAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
 
         registration.setEnabled(false);
 

@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { dashboardHomePaths } from "./components/dashboardNavigation";
 import BeneficiaryManagement from "./pages/BeneficiaryManagement";
+import BeneficiaryEligibility from "./pages/BeneficiaryEligibility";
 import DashboardHome from "./pages/DashboardHome";
 import DashboardLayout from "./components/DashboardLayout";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -12,6 +13,7 @@ import PublicInfoPage from "./pages/PublicInfoPage";
 import PublicSchemesPage from "./pages/PublicSchemesPage";
 import PublicSiteLayout from "./components/PublicSiteLayout";
 import SchemeManagement from "./pages/SchemeManagement";
+import BeneficiarySchemes from "./pages/BeneficiarySchemes";
 import DashboardPlaceholder from "./pages/DashboardPlaceholder";
 import ProtectedRoute from "./components/ProtectedRoute";
 import VerificationWorkflow from "./pages/VerificationWorkflow";
@@ -84,8 +86,7 @@ function App() {
             />
             <Route
               path="/admin/eligibility"
-              element={<SchemeManagement />}
-              handle={{ pageTitle: "Eligibility Configuration" }}
+              element={<Navigate to="/admin/schemes" replace />}
             />
             <Route
               path="/admin/verification"
@@ -120,7 +121,7 @@ function App() {
             />
             <Route
               path="/beneficiary/schemes"
-              element={<SchemeManagement />}
+              element={<BeneficiarySchemes />}
               handle={{ pageTitle: "Browse Schemes" }}
             />
             <Route
@@ -135,8 +136,8 @@ function App() {
             />
             <Route
               path="/beneficiary/eligibility"
-              element={<GrantApplicationManagement />}
-              handle={{ pageTitle: "Eligibility Results" }}
+              element={<BeneficiaryEligibility />}
+              handle={{ pageTitle: "Eligibility Checker" }}
             />
             <Route
               path="/beneficiary/profile"

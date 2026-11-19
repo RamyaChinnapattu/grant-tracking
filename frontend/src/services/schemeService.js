@@ -12,3 +12,6 @@ export const updateScheme = (id, data) =>
   api.put(`${API_URL}/${id}`, data);
 
 export const deleteScheme = (id) => api.delete(`${API_URL}/${id}`);
+
+export const checkSchemeEligibility = (schemeId, answers) =>
+  api.post(`${API_URL}/${schemeId}/check-eligibility`, answers);

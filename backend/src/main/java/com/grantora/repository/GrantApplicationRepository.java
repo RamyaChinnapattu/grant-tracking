@@ -18,6 +18,10 @@ public interface GrantApplicationRepository
 
     boolean existsByBeneficiary_IdAndScheme_Id(Long beneficiaryId, Long schemeId);
 
+    boolean existsByScheme_Id(Long schemeId);
+
+    List<GrantApplication> findByScheme_Id(Long schemeId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select application from GrantApplication application where application.id = :id")
     Optional<GrantApplication> findByIdForUpdate(@Param("id") Long id);

@@ -78,6 +78,7 @@ class GrantApplicationSubmissionEligibilityTest {
         application.setEligibilityAnswers(List.of());
         when(applicationRepository.findByIdForUpdate(42L))
                 .thenReturn(Optional.of(application));
+        when(documentRepository.countByApplication_Id(42L)).thenReturn(1L);
     }
 
     @Test

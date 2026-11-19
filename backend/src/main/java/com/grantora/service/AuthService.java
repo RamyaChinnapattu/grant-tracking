@@ -6,8 +6,10 @@ import com.grantora.entity.Role;
 import com.grantora.entity.User;
 import com.grantora.repository.UserRepository;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -31,15 +33,15 @@ public class AuthService {
     // Registration
     public User register(RegisterRequest request) {
 
-        if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException("Email already registered");
+        if (userRepository.existsByEmail(request.getEmail().trim().toLowerCase())) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }
 
         User user = new User();
 
-        user.setFullName(request.getFullName());
-        user.setEmail(request.getEmail());
-        user.setPhone(request.getPhone());
+        user.setFullName(request.getFullName().trim());
+        user.setEmail(request.getEmail().trim().toLowerCase());
+        user.setPhone(request.getPhone() != null ? request.getPhone().trim() : null);
 
         user.setPassword(
                 passwordEncoder.encode(request.getPassword()));
@@ -53,30 +55,42 @@ public class AuthService {
     // Login
     public Map<String, Object> login(LoginRequest request) {
 
-        User user = userRepository.findByEmail(request.getEmail())
+        String email = request.getEmail().trim().toLowerCase();
+
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() ->
-                        new RuntimeException("Invalid email or password"));
+                        new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
 
         if (!passwordEncoder.matches(
                 request.getPassword(),
                 user.getPassword())) {
 
-            throw new RuntimeException("Invalid email or password");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password");
         }
 
         if (!Boolean.TRUE.equals(user.getActive())) {
-            throw new RuntimeException("Account is inactive");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is inactive");
         }
 
         String token = jwtService.generateToken(user);
 
-        return Map.of(
-                "message", "Login successful",
-                "token", token,
-                "userId", user.getId(),
-                "fullName", user.getFullName(),
-                "email", user.getEmail(),
-                "role", user.getRole().name()
-        );
+        java.util.Map<String, Object> response = new java.util.HashMap<>();
+        response.put("message", "Login successful");
+        response.put("token", token);
+        response.put("userId", user.getId());
+        response.put("fullName", user.getFullName());
+        response.put("email", user.getEmail());
+        response.put("role", user.getRole().name());
+        if (user.getOfficerLevel() != null) {
+            response.put("officerLevel", user.getOfficerLevel());
+        }
+        if (user.getJurisdictionState() != null) {
+            response.put("jurisdictionState", user.getJurisdictionState());
+        }
+        if (user.getJurisdictionDistrict() != null) {
+            response.put("jurisdictionDistrict", user.getJurisdictionDistrict());
+        }
+
+        return response;
     }
 }

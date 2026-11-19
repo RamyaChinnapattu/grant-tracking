@@ -35,6 +35,21 @@ function Login() {
       localStorage.setItem("fullName", user.fullName);
       localStorage.setItem("email", user.email);
       localStorage.setItem("role", user.role);
+      if (user.officerLevel) {
+        localStorage.setItem("officerLevel", user.officerLevel);
+      } else {
+        localStorage.removeItem("officerLevel");
+      }
+      if (user.jurisdictionState) {
+        localStorage.setItem("jurisdictionState", user.jurisdictionState);
+      } else {
+        localStorage.removeItem("jurisdictionState");
+      }
+      if (user.jurisdictionDistrict) {
+        localStorage.setItem("jurisdictionDistrict", user.jurisdictionDistrict);
+      } else {
+        localStorage.removeItem("jurisdictionDistrict");
+      }
 
       switch (user.role) {
         case "ADMIN":
