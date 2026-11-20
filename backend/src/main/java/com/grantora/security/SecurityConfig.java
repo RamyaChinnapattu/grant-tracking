@@ -99,6 +99,17 @@ public class SecurityConfig {
                         .requestMatchers("/api/workflow/escalations/**").hasAnyRole("ADMIN", "OFFICER")
                         .requestMatchers("/api/workflow/notifications/**").authenticated()
 
+                        .requestMatchers(HttpMethod.POST, "/api/disbursements/plans").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.POST, "/api/disbursements/installments/*/disburse").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PUT, "/api/disbursements/reminders/config").hasRole("ADMIN")
+                        .requestMatchers("/api/disbursements/eligible-applications").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/fund-utilization").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/regional-analytics").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/disbursements/milestones/*/progress").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.POST, "/api/disbursements/compliance/*/verify").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/**").hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
+                        .requestMatchers("/api/disbursements/**").authenticated()
+
                         .anyRequest().authenticated())
 
                 .addFilterBefore(

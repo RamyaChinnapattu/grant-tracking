@@ -188,4 +188,19 @@ public class WorkflowAutomationService {
 
         n.markRead();
     }
+
+    @Transactional
+    public void markAllRead(String email) {
+
+        User u = users.findByEmail(email).orElseThrow();
+
+        List<InAppNotification> userNotifications = notifications
+                .findByUser_IdOrderByCreatedAtDesc(u.getId());
+
+        for (InAppNotification n : userNotifications) {
+            if (n.getReadAt() == null) {
+                n.markRead();
+            }
+        }
+    }
 }

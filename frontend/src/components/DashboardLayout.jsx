@@ -54,15 +54,16 @@ function DashboardLayout({ role }) {
       )}
 
       <aside
-        className={`dashboard-sidebar${mobileSidebarOpen ? " dashboard-sidebar--open" : ""}`}
+        className={`dashboard-sidebar${sidebarCollapsed ? " dashboard-sidebar--collapsed" : ""}${mobileSidebarOpen ? " dashboard-sidebar--open" : ""}`}
         aria-label={`${roleLabels[role]} navigation`}
       >
         <div className="dashboard-sidebar__brand-row">
           <Link
             className="dashboard-sidebar__brand"
-            to={dashboardNavigation[role][0].path}
+            to={dashboardNavigation[role]?.[0]?.path || "/"}
             onClick={closeMobileSidebar}
             aria-label="Grantora dashboard"
+            title={sidebarCollapsed ? "Grantora" : undefined}
           >
             <span className="dashboard-sidebar__brand-mark">G</span>
             <span className="dashboard-sidebar__brand-name">Grantora</span>
@@ -78,7 +79,7 @@ function DashboardLayout({ role }) {
         </div>
 
         <div className="dashboard-sidebar__section-label">WORKSPACE</div>
-        <nav className="dashboard-sidebar__nav">
+        <nav className="dashboard-sidebar__nav" aria-label="Main Navigation">
           {navigation.map(({ label, path, icon: Icon }) => (
             <NavLink
               key={path}
@@ -90,14 +91,22 @@ function DashboardLayout({ role }) {
               }
               onClick={closeMobileSidebar}
             >
-              <Icon size={19} strokeWidth={1.8} aria-hidden="true" />
+              <span className="dashboard-sidebar__link-icon" aria-hidden="true">
+                {Icon ? <Icon size={20} strokeWidth={1.8} /> : null}
+              </span>
               <span className="dashboard-sidebar__link-label">{label}</span>
+              <span className="dashboard-sidebar__tooltip" role="tooltip">
+                {label}
+              </span>
             </NavLink>
           ))}
         </nav>
 
         <div className="dashboard-sidebar__footer">
-          <div className="dashboard-sidebar__user">
+          <div
+            className="dashboard-sidebar__user"
+            title={sidebarCollapsed ? `${fullName} (${roleLabels[role]})` : undefined}
+          >
             <span className="dashboard-sidebar__avatar" aria-hidden="true">
               {initials || "G"}
             </span>
@@ -106,7 +115,10 @@ function DashboardLayout({ role }) {
               <span>{roleLabels[role]}</span>
             </span>
           </div>
-          <LogoutButton className="dashboard-sidebar__logout" />
+          <LogoutButton
+            className="dashboard-sidebar__logout"
+            isCollapsed={sidebarCollapsed}
+          />
         </div>
       </aside>
 
@@ -185,7 +197,12 @@ function DashboardLayout({ role }) {
               )}
             </div>
 
-            <div className="dashboard-topbar__profile">
+            <Link
+              to={`/${role.toLowerCase()}/profile`}
+              className="dashboard-topbar__profile"
+              style={{ textDecoration: "none", color: "inherit", cursor: "pointer" }}
+              title="View account profile"
+            >
               <span
                 className="dashboard-topbar__avatar"
                 aria-hidden="true"
@@ -196,7 +213,7 @@ function DashboardLayout({ role }) {
                 <strong>{fullName}</strong>
                 <span>{email || roleLabels[role]}</span>
               </span>
-            </div>
+            </Link>
           </div>
         </header>
 

@@ -93,6 +93,7 @@ function VerificationWorkflow({ historyOnly = false }) {
   const officerLevel = localStorage.getItem("officerLevel") || (isAdmin ? "ADMIN" : "OFFICER");
 
   const [activeTab, setActiveTab] = useState(historyOnly ? "history" : "queue");
+  const [officerTab, setOfficerTab] = useState("ALL_ASSIGNED");
   const [queueApplications, setQueueApplications] = useState([]);
   const [historyApplications, setHistoryApplications] = useState([]);
   const [officers, setOfficers] = useState([]);
@@ -182,9 +183,102 @@ function VerificationWorkflow({ historyOnly = false }) {
     [documentPreview?.url]
   );
 
-  // Active list based on tab
-  const currentApplications =
-    activeTab === "history" ? historyApplications : queueApplications;
+  // Officer-specific filtered queue: strictly only applications assigned to this officer
+  const officerQueue = useMemo(() => {
+    if (isAdmin) return queueApplications;
+    return queueApplications.filter((app) => app.assignedOfficerId === userId);
+  }, [queueApplications, isAdmin, userId]);
+
+  // Officer-specific completed list: applications with completed decisions by this officer or approved/rejected
+  const officerCompleted = useMemo(() => {
+    return historyApplications.filter((app) => {
+      if (isAdmin) {
+        return (
+          app.status === "APPROVED" ||
+          app.status === "REJECTED" ||
+          (app.verificationHistory && app.verificationHistory.length > 0)
+        );
+      }
+      const wasActor = app.verificationHistory?.some((h) => h.actorId === userId);
+      const wasAssigned = app.assignedOfficerId === userId;
+      const isCompleted =
+        app.status === "APPROVED" ||
+        app.status === "REJECTED" ||
+        (wasActor && app.status !== "DRAFT");
+      return (wasActor || wasAssigned) && isCompleted;
+    });
+  }, [historyApplications, isAdmin, userId]);
+
+  // Officer-specific history list: only records relevant to this officer
+  const officerHistory = useMemo(() => {
+    if (isAdmin) return historyApplications;
+    return historyApplications.filter((app) => {
+      const wasActor = app.verificationHistory?.some((h) => h.actorId === userId);
+      const wasAssigned = app.assignedOfficerId === userId;
+      return wasActor || wasAssigned;
+    });
+  }, [historyApplications, isAdmin, userId]);
+
+  // Pending verification applications (Field stage / initial submitted)
+  const pendingApplications = useMemo(() => {
+    return officerQueue.filter(
+      (app) =>
+        app.workflowStage === "FIELD" ||
+        app.status === "SUBMITTED" ||
+        app.status === "FIELD_VERIFICATION" ||
+        (app.status === "UNDER_VERIFICATION" && app.workflowStage === "FIELD")
+    );
+  }, [officerQueue]);
+
+  // Under review applications (District / Finance reviews)
+  const reviewApplications = useMemo(() => {
+    return officerQueue.filter(
+      (app) =>
+        app.workflowStage === "DISTRICT" ||
+        app.workflowStage === "FINANCE" ||
+        app.status === "DISTRICT_REVIEW" ||
+        app.status === "FINANCE_REVIEW" ||
+        app.status === "UNDER_REVIEW" ||
+        (app.status === "UNDER_VERIFICATION" && app.workflowStage !== "FIELD")
+    );
+  }, [officerQueue]);
+
+  // Stats for Officer My Applications
+  const officerStats = useMemo(() => {
+    return {
+      allAssigned: officerQueue.length,
+      pendingVerification: pendingApplications.length,
+      underReview: reviewApplications.length,
+      completed: officerCompleted.length,
+      escalated: officerQueue.filter((a) => a.escalated).length,
+    };
+  }, [officerQueue, pendingApplications, reviewApplications, officerCompleted]);
+
+  // Active list based on role, page mode, and tab
+  const currentApplications = useMemo(() => {
+    if (historyOnly) {
+      return officerHistory;
+    }
+    if (!isAdmin) {
+      if (officerTab === "PENDING_VERIFICATION") return pendingApplications;
+      if (officerTab === "UNDER_REVIEW") return reviewApplications;
+      if (officerTab === "COMPLETED") return officerCompleted;
+      return officerQueue; // "ALL_ASSIGNED"
+    }
+    return activeTab === "history" ? historyApplications : queueApplications;
+  }, [
+    historyOnly,
+    isAdmin,
+    officerTab,
+    pendingApplications,
+    reviewApplications,
+    officerCompleted,
+    officerQueue,
+    officerHistory,
+    activeTab,
+    historyApplications,
+    queueApplications,
+  ]);
 
   // Filtered applications
   const filteredApplications = useMemo(() => {
@@ -243,14 +337,16 @@ function VerificationWorkflow({ historyOnly = false }) {
   const selectedStage = selected?.workflowStage;
 
   const canDecide = useMemo(() => {
-    if (!selected || activeTab === "history") return false;
+    if (!selected || historyOnly) return false;
+    if (!isAdmin && officerTab === "COMPLETED") return false;
+    if (activeTab === "history") return false;
 
     if (isAdmin) {
       return selectedStage === "FINANCE";
     }
 
     return selected.assignedOfficerId === userId;
-  }, [selected, activeTab, isAdmin, selectedStage, userId]);
+  }, [selected, historyOnly, activeTab, isAdmin, selectedStage, userId, officerTab]);
 
   const assignableOfficers = useMemo(() => {
     if (!selected || !isAdmin) return [];
@@ -597,8 +693,17 @@ function VerificationWorkflow({ historyOnly = false }) {
     }
   };
 
-  // Header content based on level
+  // Header content based on level and page mode
   const portalHeading = useMemo(() => {
+    if (historyOnly) {
+      return {
+        eyebrow: "VERIFICATION AUDIT & HISTORY",
+        title: "Verification History",
+        subtitle:
+          "View previously processed applications and official decision history records for your jurisdiction.",
+      };
+    }
+
     if (isAdmin) {
       return {
         eyebrow: "ADMINISTRATIVE WORKFLOW MANAGEMENT",
@@ -608,40 +713,13 @@ function VerificationWorkflow({ historyOnly = false }) {
       };
     }
 
-    if (officerLevel === "FIELD") {
-      return {
-        eyebrow: "FIELD VERIFICATION OFFICER PORTAL",
-        title: "Field Verification Queue",
-        subtitle:
-          "Conduct in-person identity, address, and document verification. Verify eligibility information, record checklist confirmations, and recommend actions.",
-      };
-    }
-
-    if (officerLevel === "DISTRICT") {
-      return {
-        eyebrow: "DISTRICT VERIFICATION OFFICER PORTAL",
-        title: "District Verification & Review",
-        subtitle:
-          "Review field officer verification reports and recommendations. Approve valid applications, return for correction, or reject with reasons.",
-      };
-    }
-
-    if (officerLevel === "FINANCE") {
-      return {
-        eyebrow: "FINANCE APPROVAL OFFICER PORTAL",
-        title: "Finance Review & Final Approval",
-        subtitle:
-          "Review previous verification history and grant criteria. Record the final finance decision for each application.",
-      };
-    }
-
     return {
-      eyebrow: "VERIFICATION WORKFLOW",
-      title: "Verifications and Approvals",
+      eyebrow: `${officerLevel || "OFFICER"} WORKSPACE`,
+      title: "My Applications",
       subtitle:
-        "Review assigned applications, verify supporting documents, and record official stage decisions.",
+        "Manage, verify, and review grant applications assigned to you across verification and review stages.",
     };
-  }, [isAdmin, officerLevel]);
+  }, [isAdmin, officerLevel, historyOnly]);
 
   return (
     <div className="verification-workflow">
@@ -673,123 +751,316 @@ function VerificationWorkflow({ historyOnly = false }) {
 
       {/* Metric Cards Row */}
       <div className="verification-stats">
-        <div className="verification-stat-card">
-          <span className="verification-stat-card__icon verification-stat-card__icon--primary">
-            <Clock size={20} />
-          </span>
-          <div className="verification-stat-card__content">
-            <span className="verification-stat-card__value">
-              {stats.totalQueue}
-            </span>
-            <span className="verification-stat-card__label">Active Queue</span>
-          </div>
-        </div>
+        {historyOnly ? (
+          <>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--primary">
+                <FileClock size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerHistory.length}
+                </span>
+                <span className="verification-stat-card__label">Total Processed</span>
+              </div>
+            </div>
 
-        <div className="verification-stat-card">
-          <span className="verification-stat-card__icon verification-stat-card__icon--field">
-            <UserCheck size={20} />
-          </span>
-          <div className="verification-stat-card__content">
-            <span className="verification-stat-card__value">
-              {stats.fieldStage}
-            </span>
-            <span className="verification-stat-card__label">Field Stage</span>
-          </div>
-        </div>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--field">
+                <CheckCircle2 size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerHistory.filter((a) => a.status === "APPROVED").length}
+                </span>
+                <span className="verification-stat-card__label">Approved</span>
+              </div>
+            </div>
 
-        <div className="verification-stat-card">
-          <span className="verification-stat-card__icon verification-stat-card__icon--district">
-            <FileCheck2 size={20} />
-          </span>
-          <div className="verification-stat-card__content">
-            <span className="verification-stat-card__value">
-              {stats.districtStage}
-            </span>
-            <span className="verification-stat-card__label">District Review</span>
-          </div>
-        </div>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--district">
+                <AlertCircle size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerHistory.filter((a) => a.status === "REJECTED").length}
+                </span>
+                <span className="verification-stat-card__label">Rejected</span>
+              </div>
+            </div>
 
-        <div className="verification-stat-card">
-          <span className="verification-stat-card__icon verification-stat-card__icon--finance">
-            <ShieldCheck size={20} />
-          </span>
-          <div className="verification-stat-card__content">
-            <span className="verification-stat-card__value">
-              {stats.financeStage}
-            </span>
-            <span className="verification-stat-card__label">Finance Review</span>
-          </div>
-        </div>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--finance">
+                <Clock size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {
+                    officerHistory.filter(
+                      (a) => a.status !== "APPROVED" && a.status !== "REJECTED"
+                    ).length
+                  }
+                </span>
+                <span className="verification-stat-card__label">In Progress</span>
+              </div>
+            </div>
+          </>
+        ) : !isAdmin ? (
+          <>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--primary">
+                <Clock size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerStats.allAssigned}
+                </span>
+                <span className="verification-stat-card__label">All Assigned</span>
+              </div>
+            </div>
 
-        <div className="verification-stat-card">
-          <span className="verification-stat-card__icon verification-stat-card__icon--escalated">
-            <AlertTriangle size={20} />
-          </span>
-          <div className="verification-stat-card__content">
-            <span className="verification-stat-card__value">
-              {stats.escalated}
-            </span>
-            <span className="verification-stat-card__label">Escalated</span>
-          </div>
-        </div>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--field">
+                <UserCheck size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerStats.pendingVerification}
+                </span>
+                <span className="verification-stat-card__label">Pending Verification</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--district">
+                <FileCheck2 size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerStats.underReview}
+                </span>
+                <span className="verification-stat-card__label">Under Review</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--finance">
+                <CheckCircle2 size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerStats.completed}
+                </span>
+                <span className="verification-stat-card__label">Completed</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--escalated">
+                <AlertTriangle size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {officerStats.escalated}
+                </span>
+                <span className="verification-stat-card__label">Escalated</span>
+              </div>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--primary">
+                <Clock size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {stats.totalQueue}
+                </span>
+                <span className="verification-stat-card__label">Active Queue</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--field">
+                <UserCheck size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {stats.fieldStage}
+                </span>
+                <span className="verification-stat-card__label">Field Stage</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--district">
+                <FileCheck2 size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {stats.districtStage}
+                </span>
+                <span className="verification-stat-card__label">District Review</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--finance">
+                <ShieldCheck size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {stats.financeStage}
+                </span>
+                <span className="verification-stat-card__label">Finance Review</span>
+              </div>
+            </div>
+
+            <div className="verification-stat-card">
+              <span className="verification-stat-card__icon verification-stat-card__icon--escalated">
+                <AlertTriangle size={20} />
+              </span>
+              <div className="verification-stat-card__content">
+                <span className="verification-stat-card__value">
+                  {stats.escalated}
+                </span>
+                <span className="verification-stat-card__label">Escalated</span>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Navigation Tabs */}
-      <nav className="verification-tabs" aria-label="Workflow Sections">
-        <button
-          type="button"
-          className={`verification-tab ${activeTab === "queue" ? "verification-tab--active" : ""}`}
-          onClick={() => {
-            setActiveTab("queue");
-            setSelected(null);
-          }}
-        >
-          <Clock size={16} aria-hidden="true" />
-          <span>Pending Verification Queue</span>
-          <span className="verification-tab__badge">{stats.totalQueue}</span>
-        </button>
+      {historyOnly ? (
+        <nav className="verification-tabs" aria-label="Verification History Sections">
+          <div
+            className="verification-tab verification-tab--active"
+            style={{ cursor: "default" }}
+          >
+            <FileClock size={16} aria-hidden="true" />
+            <span>Processed Verification History</span>
+            <span className="verification-tab__badge">
+              {officerHistory.length}
+            </span>
+          </div>
+        </nav>
+      ) : !isAdmin ? (
+        <nav className="verification-tabs" aria-label="My Applications Filter Tabs">
+          <button
+            type="button"
+            className={`verification-tab ${officerTab === "ALL_ASSIGNED" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setOfficerTab("ALL_ASSIGNED");
+              setSelected(null);
+            }}
+          >
+            <Clock size={16} aria-hidden="true" />
+            <span>All Assigned</span>
+            <span className="verification-tab__badge">
+              {officerStats.allAssigned}
+            </span>
+          </button>
 
-        <button
-          type="button"
-          className={`verification-tab ${activeTab === "history" ? "verification-tab--active" : ""}`}
-          onClick={() => {
-            setActiveTab("history");
-            setSelected(null);
-          }}
-        >
-          <FileClock size={16} aria-hidden="true" />
-          <span>Verification History</span>
-          <span className="verification-tab__badge">{stats.totalHistory}</span>
-        </button>
+          <button
+            type="button"
+            className={`verification-tab ${officerTab === "PENDING_VERIFICATION" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setOfficerTab("PENDING_VERIFICATION");
+              setSelected(null);
+            }}
+          >
+            <UserCheck size={16} aria-hidden="true" />
+            <span>Pending Verification</span>
+            <span className="verification-tab__badge">
+              {officerStats.pendingVerification}
+            </span>
+          </button>
 
-        {isAdmin && (
-          <>
-            <button
-              type="button"
-              className={`verification-tab ${activeTab === "officers" ? "verification-tab--active" : ""}`}
-              onClick={() => {
-                setActiveTab("officers");
-                setSelected(null);
-              }}
-            >
-              <Users size={16} aria-hidden="true" />
-              <span>Officer Management</span>
-            </button>
+          <button
+            type="button"
+            className={`verification-tab ${officerTab === "UNDER_REVIEW" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setOfficerTab("UNDER_REVIEW");
+              setSelected(null);
+            }}
+          >
+            <FileCheck2 size={16} aria-hidden="true" />
+            <span>Under Review</span>
+            <span className="verification-tab__badge">
+              {officerStats.underReview}
+            </span>
+          </button>
 
-            <button
-              type="button"
-              className={`verification-tab ${activeTab === "rules" ? "verification-tab--active" : ""}`}
-              onClick={() => {
-                setActiveTab("rules");
-                setSelected(null);
-              }}
-            >
-              <Layers size={16} aria-hidden="true" />
-              <span>Workflow Routing Rules</span>
-            </button>
-          </>
-        )}
-      </nav>
+          <button
+            type="button"
+            className={`verification-tab ${officerTab === "COMPLETED" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setOfficerTab("COMPLETED");
+              setSelected(null);
+            }}
+          >
+            <CheckCircle2 size={16} aria-hidden="true" />
+            <span>Completed</span>
+            <span className="verification-tab__badge">
+              {officerStats.completed}
+            </span>
+          </button>
+        </nav>
+      ) : (
+        <nav className="verification-tabs" aria-label="Workflow Sections">
+          <button
+            type="button"
+            className={`verification-tab ${activeTab === "queue" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setActiveTab("queue");
+              setSelected(null);
+            }}
+          >
+            <Clock size={16} aria-hidden="true" />
+            <span>Pending Verification Queue</span>
+            <span className="verification-tab__badge">{stats.totalQueue}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`verification-tab ${activeTab === "history" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setActiveTab("history");
+              setSelected(null);
+            }}
+          >
+            <FileClock size={16} aria-hidden="true" />
+            <span>Verification History</span>
+            <span className="verification-tab__badge">{stats.totalHistory}</span>
+          </button>
+
+          <button
+            type="button"
+            className={`verification-tab ${activeTab === "officers" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setActiveTab("officers");
+              setSelected(null);
+            }}
+          >
+            <Users size={16} aria-hidden="true" />
+            <span>Officer Management</span>
+          </button>
+
+          <button
+            type="button"
+            className={`verification-tab ${activeTab === "rules" ? "verification-tab--active" : ""}`}
+            onClick={() => {
+              setActiveTab("rules");
+              setSelected(null);
+            }}
+          >
+            <Layers size={16} aria-hidden="true" />
+            <span>Workflow Routing Rules</span>
+          </button>
+        </nav>
+      )}
 
       {/* Global Alerts */}
       {error && (
@@ -807,7 +1078,7 @@ function VerificationWorkflow({ historyOnly = false }) {
       )}
 
       {/* MAIN QUEUE OR HISTORY VIEW */}
-      {(activeTab === "queue" || activeTab === "history") && (
+      {(historyOnly || !isAdmin || activeTab === "queue" || activeTab === "history") && (
         <>
           <div className="verification-controls">
             <div className="verification-search">
@@ -882,7 +1153,17 @@ function VerificationWorkflow({ historyOnly = false }) {
                 <FileText size={32} />
                 <h4>No applications found</h4>
                 <p>
-                  {activeTab === "history"
+                  {historyOnly
+                    ? "No completed verification history matches your criteria."
+                    : !isAdmin
+                    ? officerTab === "PENDING_VERIFICATION"
+                      ? "No applications are currently awaiting field verification."
+                      : officerTab === "UNDER_REVIEW"
+                      ? "No applications are currently under district or finance review."
+                      : officerTab === "COMPLETED"
+                      ? "No completed applications recorded yet."
+                      : "No applications are currently assigned to your queue."
+                    : activeTab === "history"
                     ? "No completed verification history matches your criteria."
                     : "No applications are currently awaiting your verification in this queue."}
                 </p>
@@ -1561,7 +1842,7 @@ function VerificationWorkflow({ historyOnly = false }) {
                     the designated stage officer. You may reassign or escalate below.
                   </p>
                 </div>
-              ) : activeTab === "history" ? (
+              ) : (!canDecide && (historyOnly || officerTab === "COMPLETED" || activeTab === "history")) ? (
                 <p>
                   This application is in the verification history and its stage
                   decision has already been recorded.

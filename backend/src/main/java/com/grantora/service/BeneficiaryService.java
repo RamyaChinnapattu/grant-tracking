@@ -142,6 +142,9 @@ public class BeneficiaryService {
         if (request.phone() != null) {
             beneficiary.getUser().setPhone(request.phone().trim());
         }
+        if (request.fullName() != null && !request.fullName().isBlank()) {
+            beneficiary.getUser().setFullName(request.fullName().trim());
+        }
     }
 
     public BeneficiaryResponse getBeneficiaryById(Long id) {

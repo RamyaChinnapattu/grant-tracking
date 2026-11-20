@@ -4,7 +4,7 @@ import { getDisbursementEligibleApplications } from "../services/grantApplicatio
 import "../styles/DashboardHome.css";
 
 function DashboardPlaceholder({ title }) {
-  const isDisbursement = title === "Grant Disbursement";
+  const isDisbursement = title === "Grant Disbursement" || title === "Grant Disbursement & Compliance";
   const [applications, setApplications] = useState([]);
   const [page, setPage] = useState(0);
   const [pageInfo, setPageInfo] = useState({ totalPages: 0 });
@@ -40,8 +40,8 @@ function DashboardPlaceholder({ title }) {
     return (
       <section className="dashboard-placeholder" aria-labelledby="disbursement-heading">
         <div>
-          <h2 id="disbursement-heading">Grant Disbursement</h2>
-          <p>Applications are listed here after final workflow approval.</p>
+          <h2 id="disbursement-heading">{title}</h2>
+          <p>Approved grant applications eligible for disbursement and compliance auditing.</p>
         </div>
         <button type="button" onClick={loadEligibleApplications} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}

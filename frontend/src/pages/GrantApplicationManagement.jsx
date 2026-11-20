@@ -1,6 +1,6 @@
 
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   createApplication,
   getApplicationById,
@@ -23,7 +23,7 @@ const APPLICATION_STATUSES = [
   "UNDER_VERIFICATION",
   "FIELD_VERIFICATION",
   "DISTRICT_REVIEW",
-  "STATE_REVIEW",
+  "FINANCE_REVIEW",
   "NEEDS_CORRECTION",
   "UNDER_REVIEW",
   "APPROVED",
@@ -94,8 +94,84 @@ function getLatestCorrectionRemarks(app) {
   return correctionEntry?.remarks || "";
 }
 
+function formatStatus(status) {
+  if (!status) return "—";
+  return status.replaceAll("_", " ");
+}
+
+function getStepState(app, step) {
+  if (!app) return "";
+  const { status, workflowStage } = app;
+
+  if (status === "REJECTED") {
+    if (step === 2 && (workflowStage === "FIELD" || status === "FIELD_VERIFICATION")) return "grant-stepper__step--rejected";
+    if (step === 3 && (workflowStage === "DISTRICT" || status === "DISTRICT_REVIEW")) return "grant-stepper__step--rejected";
+    if (step === 4 && (workflowStage === "FINANCE" || status === "FINANCE_REVIEW")) return "grant-stepper__step--rejected";
+  }
+
+  if (status === "NEEDS_CORRECTION") {
+    if (step === 2 && (workflowStage === "FIELD" || !workflowStage)) return "grant-stepper__step--warning";
+    if (step === 3 && workflowStage === "DISTRICT") return "grant-stepper__step--warning";
+    if (step === 4 && workflowStage === "FINANCE") return "grant-stepper__step--warning";
+  }
+
+  if (step === 1) {
+    return status === "DRAFT" ? "grant-stepper__step--active" : "grant-stepper__step--completed";
+  }
+
+  if (step === 2) {
+    if (["DISTRICT", "FINANCE"].includes(workflowStage) || ["DISTRICT_REVIEW", "FINANCE_REVIEW", "APPROVED"].includes(status)) {
+      return "grant-stepper__step--completed";
+    }
+    if (workflowStage === "FIELD" || ["SUBMITTED", "UNDER_VERIFICATION", "FIELD_VERIFICATION"].includes(status)) {
+      return "grant-stepper__step--active";
+    }
+    return "";
+  }
+
+  if (status === "APPROVED") {
+    if (step <= 4) return "grant-stepper__step--completed";
+    return ""; // Step 5 is future disbursement stage
+  }
+
+  if (step === 3) {
+    if (workflowStage === "FINANCE" || status === "FINANCE_REVIEW") {
+      return "grant-stepper__step--completed";
+    }
+    if (workflowStage === "DISTRICT" || status === "DISTRICT_REVIEW") {
+      return "grant-stepper__step--active";
+    }
+    return "";
+  }
+
+  if (step === 4) {
+    if (workflowStage === "FINANCE" || status === "FINANCE_REVIEW") {
+      return "grant-stepper__step--active";
+    }
+    return "";
+  }
+
+  if (step === 5) {
+    return "";
+  }
+
+  return "";
+}
+
 function getPendingActionText(app) {
   if (!app) return "";
+
+  if (app.status === "APPROVED") {
+    return "Congratulations! Your application has received all required verifications and final Finance approval. It is now eligible for the future grant disbursement workflow.";
+  }
+
+  if (app.status === "REJECTED") {
+    return "Your application was not approved. Please see the official rejection remarks below for details.";
+  }
+
+  if (app.status === "WITHDRAWN") {
+    return "This application was withdrawn by you.";
+  }
 
   if (app.status === "DRAFT") {
     return "Your application is saved as a draft. Review your answers, upload any required supporting documents, and click Submit when ready.";
@@ -106,31 +182,23 @@ function getPendingActionText(app) {
   }
 
   if (
-    app.status === "SUBMITTED" ||
-    app.status === "UNDER_VERIFICATION" ||
-    app.status === "FIELD_VERIFICATION"
+    app.status === "FINANCE_REVIEW" ||
+    app.workflowStage === "FINANCE"
   ) {
-    return "Your application has been received and is undergoing Stage 1: Field Officer Verification. No action is required from you at this time.";
+    return "District review was successfully completed. Your application is currently under Stage 3: Finance Officer Approval. No action is required from you at this time.";
   }
 
-  if (app.status === "DISTRICT_REVIEW") {
+  if (app.status === "DISTRICT_REVIEW" || app.workflowStage === "DISTRICT") {
     return "Field verification was successfully completed. Your application is currently under Stage 2: District Officer Review. No action is required from you at this time.";
   }
 
-  if (app.status === "STATE_REVIEW") {
-    return "District review was successfully completed. Your application is now awaiting Stage 3: Final State / Finance Approval. No action is required from you at this time.";
-  }
-
-  if (app.status === "APPROVED") {
-    return "Congratulations! Your application has received all required verifications and approvals. It is now queued for grant disbursement.";
-  }
-
-  if (app.status === "REJECTED") {
-    return "Your application was not approved. Please see the official rejection remarks below for details.";
-  }
-
-  if (app.status === "WITHDRAWN") {
-    return "This application was withdrawn by you.";
+  if (
+    app.status === "SUBMITTED" ||
+    app.status === "UNDER_VERIFICATION" ||
+    app.status === "FIELD_VERIFICATION" ||
+    app.workflowStage === "FIELD"
+  ) {
+    return "Your application has been received and is undergoing Stage 1: Field Officer Verification. No action is required from you at this time.";
   }
 
   return "Your application is currently being processed by the administration.";
@@ -183,6 +251,7 @@ function GrantApplicationManagement() {
 
   const [documents, setDocuments] = useState([]);
   const [documentPreview, setDocumentPreview] = useState(null);
+  const [beneficiaryStatusFilter, setBeneficiaryStatusFilter] = useState("");
 
   useEffect(() => {
     if (location.state?.schemeId) {
@@ -197,6 +266,10 @@ function GrantApplicationManagement() {
       if (location.state.prefilledNotice) {
         setSuccessMessage(location.state.prefilledNotice);
       }
+    }
+
+    if (location.state?.selectedApplicationId) {
+      handleViewDetails(location.state.selectedApplicationId);
     }
   }, [location.state]);
 
@@ -286,6 +359,49 @@ function GrantApplicationManagement() {
         ? { eligibilityAnswers: {} }
         : {}),
     }));
+  };
+
+  const handleFilesSelected = (event) => {
+    const selectedFiles = Array.from(event.target.files || []);
+    const validFiles = [];
+    const invalidTypes = [];
+    const oversizedFiles = [];
+
+    const allowedExtensions = [".pdf", ".png", ".jpg", ".jpeg"];
+    const allowedTypes = [
+      "application/pdf",
+      "image/png",
+      "image/jpeg",
+      "image/jpg",
+    ];
+
+    for (const file of selectedFiles) {
+      const ext = file.name.slice(file.name.lastIndexOf(".")).toLowerCase();
+      const isValid = allowedExtensions.includes(ext) || allowedTypes.includes(file.type);
+
+      if (!isValid) {
+        invalidTypes.push(file.name);
+      } else if (file.size > 10 * 1024 * 1024) {
+        oversizedFiles.push(`${file.name} (${(file.size / (1024 * 1024)).toFixed(1)} MB)`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (invalidTypes.length > 0) {
+      setActionError(
+        `Invalid file format: ${invalidTypes.join(", ")}. Only PDF, PNG, and JPEG documents are permitted.`
+      );
+    } else if (oversizedFiles.length > 0) {
+      setActionError(
+        `File exceeds maximum 10 MB limit: ${oversizedFiles.join(", ")}.`
+      );
+    } else {
+      setActionError("");
+    }
+
+    setDocuments((current) => [...current, ...validFiles]);
+    event.target.value = "";
   };
 
   const resetForm = () => {
@@ -419,6 +535,17 @@ function GrantApplicationManagement() {
 
       setSaving(false);
       return;
+    }
+
+    if (selectedScheme && selectedScheme.maximumGrantAmount != null) {
+      if (Number(form.requestedAmount) > Number(selectedScheme.maximumGrantAmount)) {
+        setActionError(
+          `Requested amount (₹${Number(form.requestedAmount).toLocaleString("en-IN")}) exceeds maximum allowable grant of ₹${Number(selectedScheme.maximumGrantAmount).toLocaleString("en-IN")} for this scheme.`
+        );
+
+        setSaving(false);
+        return;
+      }
     }
 
     try {
@@ -693,6 +820,23 @@ function GrantApplicationManagement() {
     }
   };
 
+  const displayedApplications = isBeneficiary
+    ? applications.filter((app) => {
+        if (!beneficiaryStatusFilter) return true;
+        if (beneficiaryStatusFilter === "UNDER_REVIEW") {
+          return [
+            "SUBMITTED",
+            "UNDER_VERIFICATION",
+            "FIELD_VERIFICATION",
+            "DISTRICT_REVIEW",
+            "FINANCE_REVIEW",
+            "UNDER_REVIEW",
+          ].includes(app.status);
+        }
+        return app.status === beneficiaryStatusFilter;
+      })
+    : applications;
+
   return (
     <section
       className="grant-applications"
@@ -709,7 +853,7 @@ function GrantApplicationManagement() {
                 : "Apply for a Grant"
               : isTrackingPage
                 ? "My Applications"
-                : "Grant applications"}
+                : "Applications & Verification"}
           </h2>
 
           <p>
@@ -717,18 +861,29 @@ function GrantApplicationManagement() {
               ? "Complete the form and submit your application for review."
               : isTrackingPage
                 ? "Track application status, review decisions, and respond to correction requests."
-                : "Review grant applications and their current status."}
+                : "Review grant applications, inspect details, and track verification decisions."}
           </p>
         </div>
 
-        <button
-          className="grant-applications__button grant-applications__button--secondary"
-          type="button"
-          onClick={handleRefresh}
-          disabled={loading}
-        >
-          {loading ? "Loading..." : "Refresh"}
-        </button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          {!isBeneficiary && (
+            <Link
+              to="/admin/verification"
+              className="grant-applications__button grant-applications__button--secondary"
+              style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+            >
+              Verification Queue
+            </Link>
+          )}
+          <button
+            className="grant-applications__button grant-applications__button--secondary"
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading}
+          >
+            {loading ? "Loading..." : "Refresh"}
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -793,6 +948,33 @@ function GrantApplicationManagement() {
           <span>
             {pageInfo.totalElements} application
             {pageInfo.totalElements === 1 ? "" : "s"}
+          </span>
+        </div>
+      )}
+
+      {isBeneficiary && isTrackingPage && (
+        <div className="grant-applications__filters">
+          <label htmlFor="beneficiary-status-filter">
+            Filter by status
+          </label>
+
+          <select
+            id="beneficiary-status-filter"
+            value={beneficiaryStatusFilter}
+            onChange={(event) => setBeneficiaryStatusFilter(event.target.value)}
+          >
+            <option value="">All statuses ({applications.length})</option>
+            <option value="DRAFT">Draft</option>
+            <option value="UNDER_REVIEW">Under Review</option>
+            <option value="NEEDS_CORRECTION">Needs Correction</option>
+            <option value="APPROVED">Approved Grants</option>
+            <option value="REJECTED">Rejected</option>
+            <option value="WITHDRAWN">Withdrawn</option>
+          </select>
+
+          <span>
+            {displayedApplications.length} application
+            {displayedApplications.length === 1 ? "" : "s"}
           </span>
         </div>
       )}
@@ -877,21 +1059,38 @@ function GrantApplicationManagement() {
               type="file"
               multiple
               accept=".pdf,.png,.jpg,.jpeg,application/pdf,image/png,image/jpeg"
-              onChange={(event) =>
-                setDocuments(
-                  Array.from(event.target.files || [])
-                )
-              }
+              onChange={handleFilesSelected}
             />
           </label>
 
           {documents.length > 0 && (
-            <p className="grant-applications__help">
-              Selected:{" "}
-              {documents
-                .map((document) => document.name)
-                .join(", ")}
-            </p>
+            <div style={{ padding: "8px 12px", background: "var(--color-surface-lowest)", borderRadius: "6px", border: "1px solid var(--color-outline-variant)" }}>
+              <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--color-on-surface)" }}>
+                Selected Documents ({documents.length}):
+              </span>
+              <ul style={{ margin: "6px 0 0", paddingLeft: "20px", fontSize: "0.82rem" }}>
+                {documents.map((document, idx) => (
+                  <li key={idx} style={{ margin: "4px 0" }}>
+                    {document.name} ({(document.size / 1024).toFixed(0)} KB){" "}
+                    <button
+                      type="button"
+                      onClick={() => setDocuments((prev) => prev.filter((_, i) => i !== idx))}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#b91c1c",
+                        fontSize: "0.8rem",
+                        cursor: "pointer",
+                        marginLeft: "6px",
+                        textDecoration: "underline",
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
           {selectedScheme && (
@@ -1062,19 +1261,19 @@ function GrantApplicationManagement() {
                       Applications could not be loaded.
                     </td>
                   </tr>
-                ) : applications.length === 0 ? (
+                ) : displayedApplications.length === 0 ? (
                   <tr>
                     <td
                       className="grant-applications__table-message"
                       colSpan={isAdmin ? 7 : 6}
                     >
-                      {statusFilter
-                        ? `No applications found with status ${statusFilter.replaceAll("_", " ")}.`
+                      {statusFilter || beneficiaryStatusFilter
+                        ? `No applications found matching the selected filter.`
                         : "No grant applications found."}
                     </td>
                   </tr>
                 ) : (
-                  applications.map((application) => (
+                  displayedApplications.map((application) => (
                     <tr key={application.id}>
                       {!isBeneficiary && (
                         <td>
@@ -1104,10 +1303,7 @@ function GrantApplicationManagement() {
 
                       <td>
                         <span className="grant-applications__status">
-                          {application.status.replaceAll(
-                            "_",
-                            " "
-                          )}
+                          {formatStatus(application.status)}
                         </span>
                       </td>
 
@@ -1274,12 +1470,37 @@ function GrantApplicationManagement() {
                 <p>
                   Status:{" "}
                   <strong>
-                    {selectedApplication.status.replaceAll(
-                      "_",
-                      " "
-                    )}
+                    {formatStatus(selectedApplication.status)}
                   </strong>
                 </p>
+
+                {/* 5-Stage Verification Progress Stepper */}
+                <div className="grant-stepper" aria-label="Verification Workflow Stages">
+                  <div className={`grant-stepper__step ${getStepState(selectedApplication, 1)}`}>
+                    <div className="grant-stepper__num">1</div>
+                    <div className="grant-stepper__label">Submitted</div>
+                  </div>
+                  <div className={`grant-stepper__line ${getStepState(selectedApplication, 2) ? "grant-stepper__line--completed" : ""}`} />
+                  <div className={`grant-stepper__step ${getStepState(selectedApplication, 2)}`}>
+                    <div className="grant-stepper__num">2</div>
+                    <div className="grant-stepper__label">Field Verification</div>
+                  </div>
+                  <div className={`grant-stepper__line ${getStepState(selectedApplication, 3) ? "grant-stepper__line--completed" : ""}`} />
+                  <div className={`grant-stepper__step ${getStepState(selectedApplication, 3)}`}>
+                    <div className="grant-stepper__num">3</div>
+                    <div className="grant-stepper__label">District Review</div>
+                  </div>
+                  <div className={`grant-stepper__line ${getStepState(selectedApplication, 4) ? "grant-stepper__line--completed" : ""}`} />
+                  <div className={`grant-stepper__step ${getStepState(selectedApplication, 4)}`}>
+                    <div className="grant-stepper__num">4</div>
+                    <div className="grant-stepper__label">Finance Approval</div>
+                  </div>
+                  <div className={`grant-stepper__line ${getStepState(selectedApplication, 5) ? "grant-stepper__line--completed" : ""}`} />
+                  <div className={`grant-stepper__step ${getStepState(selectedApplication, 5)}`}>
+                    <div className="grant-stepper__num">5</div>
+                    <div className="grant-stepper__label">Disbursement</div>
+                  </div>
+                </div>
 
                 {isBeneficiary && (
                   <p>
@@ -1471,20 +1692,17 @@ function GrantApplicationManagement() {
                   <p>
                     Current status:{" "}
                     <strong>
-                      {selectedApplication.status.replaceAll(
-                        "_",
-                        " "
-                      )}
+                      {formatStatus(selectedApplication.status)}
                     </strong>
 
                     {selectedApplication.workflowStage
                       ? ` · ${selectedApplication.workflowStage ===
                         "FIELD"
-                        ? "Field Verification"
+                        ? "Stage 1: Field Verification"
                         : selectedApplication.workflowStage ===
                           "DISTRICT"
-                          ? "District Review"
-                          : "State / Final Approval"
+                          ? "Stage 2: District Review"
+                          : "Stage 3: Finance Approval"
                       }`
                       : ""}
                   </p>
@@ -1629,13 +1847,10 @@ function GrantApplicationManagement() {
                             >
                               {item.timelineType ===
                                 "verification" &&
-                                `${item.stage}: `}
+                                `${item.stage === "STATE" ? "FINANCE" : item.stage}: `}
 
                               <strong>
-                                {item.action.replaceAll(
-                                  "_",
-                                  " "
-                                )}
+                                {formatStatus(item.action)}
                               </strong>
 
                               <span>
@@ -1648,13 +1863,11 @@ function GrantApplicationManagement() {
                                 {!isBeneficiary &&
                                   (item.previousStatus ||
                                     item.newStatus) &&
-                                  ` · ${item.previousStatus || "—"
-                                  } → ${item.newStatus || "—"
-                                  }`}
+                                  ` · ${formatStatus(item.previousStatus)} → ${formatStatus(item.newStatus)}`}
 
                                 {!isBeneficiary &&
                                   item.nextStage &&
-                                  ` · Next: ${item.nextStage}`}
+                                  ` · Next: ${item.nextStage === "STATE" ? "FINANCE" : item.nextStage}`}
                               </span>
 
                               {item.remarks && (
@@ -1689,10 +1902,7 @@ function GrantApplicationManagement() {
                               .filter((item) => item.remarks)
                               .map((item) => (
                                 <li key={item.id}>
-                                  {item.action.replaceAll(
-                                    "_",
-                                    " "
-                                  )}{" "}
+                                  {formatStatus(item.action)}{" "}
                                   by{" "}
                                   {isBeneficiary
                                     ? "Verification Officer"
@@ -1713,10 +1923,7 @@ function GrantApplicationManagement() {
                               .filter((item) => item.remarks)
                               .map((item) => (
                                 <li key={item.id}>
-                                  {item.action.replaceAll(
-                                    "_",
-                                    " "
-                                  )}{" "}
+                                  {formatStatus(item.action)}{" "}
                                   by{" "}
                                   {isBeneficiary
                                     ? "Verification Officer"

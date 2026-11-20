@@ -3,6 +3,9 @@ import { dashboardHomePaths } from "./components/dashboardNavigation";
 import BeneficiaryManagement from "./pages/BeneficiaryManagement";
 import BeneficiaryEligibility from "./pages/BeneficiaryEligibility";
 import DashboardHome from "./pages/DashboardHome";
+import AdminDashboardHome from "./pages/AdminDashboardHome";
+import AdminReports from "./pages/AdminReports";
+import AdminAuditLogs from "./pages/AdminAuditLogs";
 import DashboardLayout from "./components/DashboardLayout";
 import AdminDashboard from "./pages/AdminDashboard";
 import GrantApplicationManagement from "./pages/GrantApplicationManagement";
@@ -14,7 +17,9 @@ import PublicSchemesPage from "./pages/PublicSchemesPage";
 import PublicSiteLayout from "./components/PublicSiteLayout";
 import SchemeManagement from "./pages/SchemeManagement";
 import BeneficiarySchemes from "./pages/BeneficiarySchemes";
+import BeneficiaryNotifications from "./pages/BeneficiaryNotifications";
 import DashboardPlaceholder from "./pages/DashboardPlaceholder";
+import DisbursementManagement from "./pages/DisbursementManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
 import VerificationWorkflow from "./pages/VerificationWorkflow";
 import WorkflowSettings from "./pages/WorkflowSettings";
@@ -77,12 +82,12 @@ function App() {
             <Route
               path="/admin/beneficiaries"
               element={<AdminDashboard />}
-              handle={{ pageTitle: "Beneficiary Management" }}
+              handle={{ pageTitle: "Beneficiary & Officer Management" }}
             />
             <Route
               path="/admin/applications"
               element={<GrantApplicationManagement />}
-              handle={{ pageTitle: "Application Management" }}
+              handle={{ pageTitle: "Applications & Verification" }}
             />
             <Route
               path="/admin/eligibility"
@@ -96,13 +101,18 @@ function App() {
             <Route path="/admin/workflow-settings" element={<WorkflowSettings />} handle={{ pageTitle: "Workflow Settings" }} />
             <Route
               path="/admin/disbursement"
-              element={<DashboardPlaceholder title="Grant Disbursement" />}
-              handle={{ pageTitle: "Grant Disbursement" }}
+              element={<DisbursementManagement />}
+              handle={{ pageTitle: "Grant Disbursement & Compliance" }}
             />
             <Route
               path="/admin/reports"
-              element={<DashboardPlaceholder title="Reports and Analytics" />}
-              handle={{ pageTitle: "Reports and Analytics" }}
+              element={<AdminReports />}
+              handle={{ pageTitle: "Reports & Analytics" }}
+            />
+            <Route
+              path="/admin/audit-logs"
+              element={<AdminAuditLogs />}
+              handle={{ pageTitle: "Audit Logs" }}
             />
             <Route
               path="/admin/profile"
@@ -146,7 +156,7 @@ function App() {
             />
             <Route
               path="/beneficiary/notifications"
-              element={<DashboardPlaceholder title="Notifications" />}
+              element={<BeneficiaryNotifications />}
               handle={{ pageTitle: "Notifications" }}
             />
           </Route>
@@ -160,19 +170,9 @@ function App() {
               handle={{ pageTitle: "Dashboard" }}
             />
             <Route
-              path="/officer/assigned"
+              path="/officer/applications"
               element={<VerificationWorkflow />}
-              handle={{ pageTitle: "Assigned Applications" }}
-            />
-            <Route
-              path="/officer/pending-verification"
-              element={<VerificationWorkflow />}
-              handle={{ pageTitle: "Pending Verification" }}
-            />
-            <Route
-              path="/officer/review"
-              element={<VerificationWorkflow />}
-              handle={{ pageTitle: "Application Review" }}
+              handle={{ pageTitle: "My Applications" }}
             />
             <Route
               path="/officer/history"
@@ -184,7 +184,24 @@ function App() {
               element={<DashboardPlaceholder title="Profile" />}
               handle={{ pageTitle: "Profile" }}
             />
-            <Route path="/officer/notifications" element={<DashboardPlaceholder title="Notifications" />} handle={{ pageTitle: "Notifications" }} />
+            <Route
+              path="/officer/notifications"
+              element={<DashboardPlaceholder title="Notifications" />}
+              handle={{ pageTitle: "Notifications" }}
+            />
+            {/* Backward compatibility redirects for legacy duplicate routes */}
+            <Route
+              path="/officer/assigned"
+              element={<Navigate to="/officer/applications" replace />}
+            />
+            <Route
+              path="/officer/pending-verification"
+              element={<Navigate to="/officer/applications" replace />}
+            />
+            <Route
+              path="/officer/review"
+              element={<Navigate to="/officer/applications" replace />}
+            />
           </Route>
         </Route>
 

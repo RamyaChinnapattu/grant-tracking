@@ -2,9 +2,7 @@ import {
   BarChart3,
   Bell,
   CircleDollarSign,
-  ClipboardCheck,
   ClipboardList,
-  FileCheck2,
   FileClock,
   FilePlus2,
   FolderKanban,
@@ -19,31 +17,25 @@ export const dashboardNavigation = {
     { label: "Dashboard", path: "/admin-dashboard", icon: LayoutDashboard },
     { label: "Scheme Management", path: "/admin/schemes", icon: FolderKanban },
     {
-      label: "Beneficiary Management",
+      label: "Beneficiary & Officer Management",
       path: "/admin/beneficiaries",
       icon: UsersRound,
     },
     {
-      label: "Application Management",
+      label: "Applications & Verification",
       path: "/admin/applications",
       icon: ClipboardList,
     },
     {
-      label: "Verification & Approvals",
-      path: "/admin/verification",
-      icon: ClipboardCheck,
-    },
-    {
-      label: "Grant Disbursement",
+      label: "Grant Disbursement & Compliance",
       path: "/admin/disbursement",
       icon: CircleDollarSign,
     },
     {
-      label: "Reports and Analytics",
+      label: "Reports & Analytics",
       path: "/admin/reports",
       icon: BarChart3,
     },
-    { label: "Profile", path: "/admin/profile", icon: UserRound },
     { label: "Workflow Settings", path: "/admin/workflow-settings", icon: Settings2 },
   ],
   BENEFICIARY: [
@@ -73,19 +65,9 @@ export const dashboardNavigation = {
   OFFICER: [
     { label: "Dashboard", path: "/officer-dashboard", icon: LayoutDashboard },
     {
-      label: "Assigned Applications",
-      path: "/officer/assigned",
+      label: "My Applications",
+      path: "/officer/applications",
       icon: ClipboardList,
-    },
-    {
-      label: "Pending Verification",
-      path: "/officer/pending-verification",
-      icon: ClipboardCheck,
-    },
-    {
-      label: "Application Review",
-      path: "/officer/review",
-      icon: FileCheck2,
     },
     {
       label: "Verification History",

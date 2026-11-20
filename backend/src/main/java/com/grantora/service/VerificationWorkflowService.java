@@ -50,6 +50,7 @@ public class VerificationWorkflowService {
     private final ApplicationDocumentRepository documentRepository;
     private final VerificationRoutingRuleRepository routingRuleRepository;
     private WorkflowDeadlineConfigRepository deadlineConfigs;
+    private WorkflowAutomationService automationService;
 
     public VerificationWorkflowService(
             GrantApplicationRepository applicationRepository,
@@ -76,6 +77,21 @@ public class VerificationWorkflowService {
 
         this(a, u, h, d, r);
         this.deadlineConfigs = c;
+    }
+
+    @Autowired(required = false)
+    public void setWorkflowAutomationService(WorkflowAutomationService automationService) {
+        this.automationService = automationService;
+    }
+
+    private void notifyBeneficiary(GrantApplication application, String keySuffix, String message) {
+        if (automationService != null && application != null && application.getBeneficiary() != null) {
+            User user = application.getBeneficiary().getUser();
+            if (user != null) {
+                String eventKey = "app:" + application.getId() + ":" + keySuffix;
+                automationService.notify(user, eventKey, message, application.getId());
+            }
+        }
     }
 
     public GrantApplication submit(GrantApplication application, String email) {
@@ -128,6 +144,14 @@ public class VerificationWorkflowService {
                     application.getStatus(),
                     VerificationStage.FIELD);
 
+            GrantApplication saved = applicationRepository.save(application);
+            notifyBeneficiary(
+                    saved,
+                    "submitted",
+                    "Your grant application #" + saved.getId() + " for " + saved.getScheme().getSchemeName()
+                            + " has been submitted for field verification.");
+            return saved;
+
         } else if (application.getStatus() == GrantApplicationStatus.NEEDS_CORRECTION
                 && application.getWorkflowStage() != null) {
 
@@ -172,11 +196,16 @@ public class VerificationWorkflowService {
                     application.getStatus(),
                     application.getWorkflowStage());
 
+            GrantApplication saved = applicationRepository.save(application);
+            notifyBeneficiary(
+                    saved,
+                    "resubmitted:" + System.currentTimeMillis(),
+                    "Your corrections for application #" + saved.getId() + " have been resubmitted for verification.");
+            return saved;
+
         } else {
             throw conflict("Only a draft or returned application can be submitted.");
         }
-
-        return applicationRepository.save(application);
     }
 
     @Transactional(readOnly = true)
@@ -365,7 +394,36 @@ public class VerificationWorkflowService {
                     assignedStage);
         }
 
-        return applicationRepository.save(application);
+        GrantApplication saved = applicationRepository.save(application);
+
+        if (decision == VerificationDecision.NEEDS_CORRECTION) {
+            notifyBeneficiary(
+                    saved,
+                    "correction:" + System.currentTimeMillis(),
+                    "Action Required: Corrections requested on application #" + saved.getId() + ". Remarks: " + request.remarks());
+        } else if (decision == VerificationDecision.REJECTED) {
+            notifyBeneficiary(
+                    saved,
+                    "rejected:" + System.currentTimeMillis(),
+                    "Your grant application #" + saved.getId() + " was not approved. Remarks: " + request.remarks());
+        } else if (stage == VerificationStage.FIELD) {
+            notifyBeneficiary(
+                    saved,
+                    "field_verified:" + System.currentTimeMillis(),
+                    "Field verification completed for application #" + saved.getId() + ". It has advanced to District Review.");
+        } else if (stage == VerificationStage.DISTRICT) {
+            notifyBeneficiary(
+                    saved,
+                    "district_verified:" + System.currentTimeMillis(),
+                    "District review completed for application #" + saved.getId() + ". It has advanced to Finance Approval.");
+        } else if (stage == VerificationStage.FINANCE) {
+            notifyBeneficiary(
+                    saved,
+                    "approved:" + System.currentTimeMillis(),
+                    "Congratulations! Your grant application #" + saved.getId() + " has received final Finance Approval and is queued for disbursement.");
+        }
+
+        return saved;
     }
 
     public GrantApplication assign(

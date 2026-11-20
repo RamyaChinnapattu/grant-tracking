@@ -636,3 +636,101 @@ select.grant-applications__status {
     inset: 2vh 2vw;
   }
 }
+
+/* Workflow Stepper */
+.grant-stepper {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0;
+  padding: 18px 14px;
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 12px;
+  overflow-x: auto;
+}
+
+.grant-stepper__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-width: 90px;
+  text-align: center;
+}
+
+.grant-stepper__num {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.82rem;
+  font-weight: 700;
+  background: var(--color-surface-low);
+  color: var(--color-text-muted);
+  border: 2px solid var(--color-outline-variant);
+  transition: all 150ms ease;
+}
+
+.grant-stepper__label {
+  font-size: 0.76rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.grant-stepper__step--completed .grant-stepper__num {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #15803d;
+}
+
+.grant-stepper__step--completed .grant-stepper__label {
+  color: var(--color-on-surface);
+}
+
+.grant-stepper__step--active .grant-stepper__num {
+  background: var(--color-primary-fixed);
+  color: var(--color-primary);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+}
+
+.grant-stepper__step--active .grant-stepper__label {
+  color: var(--color-primary);
+  font-weight: 700;
+}
+
+.grant-stepper__step--warning .grant-stepper__num {
+  background: #fef3c7;
+  color: #b45309;
+  border-color: #b45309;
+}
+
+.grant-stepper__step--warning .grant-stepper__label {
+  color: #b45309;
+  font-weight: 700;
+}
+
+.grant-stepper__step--rejected .grant-stepper__num {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #b91c1c;
+}
+
+.grant-stepper__step--rejected .grant-stepper__label {
+  color: #b91c1c;
+}
+
+.grant-stepper__line {
+  flex: 1;
+  height: 2px;
+  background: var(--color-outline-variant);
+  margin: 0 8px;
+  min-width: 24px;
+}
+
+.grant-stepper__line--completed {
+  background: #15803d;
+}

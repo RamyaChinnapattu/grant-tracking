@@ -2,7 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { LogOut } from "lucide-react";
 
-function LogoutButton({ className = "" }) {
+function LogoutButton({ className = "", isCollapsed = false }) {
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -19,9 +19,19 @@ function LogoutButton({ className = "" }) {
   };
 
   return (
-    <button className={className} type="button" onClick={handleLogout}>
-      <LogOut size={18} strokeWidth={1.8} aria-hidden="true" />
+    <button
+      className={className}
+      type="button"
+      onClick={handleLogout}
+      title={isCollapsed ? "Logout" : undefined}
+    >
+      <span className="dashboard-sidebar__link-icon" aria-hidden="true">
+        <LogOut size={20} strokeWidth={1.8} />
+      </span>
       <span className="logout-button__label">Logout</span>
+      <span className="dashboard-sidebar__tooltip" role="tooltip">
+        Logout
+      </span>
     </button>
   );
 }

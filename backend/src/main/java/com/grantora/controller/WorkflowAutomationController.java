@@ -8,5 +8,6 @@ import com.grantora.entity.*;import com.grantora.service.WorkflowAutomationServi
  @PostMapping("/escalations/{id}/resolve") public WorkflowEscalation resolve(@PathVariable Long id,Authentication a){return service.resolve(id,a.getName());}
  @GetMapping("/notifications") public Map<String,Object> notifications(Authentication a){return Map.of("unreadCount",service.unread(a.getName()),"items",service.notifications(a.getName()));}
  @PostMapping("/notifications/{id}/read") public void read(@PathVariable Long id,Authentication a){service.markRead(id,a.getName());}
+ @PostMapping("/notifications/read-all") public void readAll(Authentication a){service.markAllRead(a.getName());}
  private boolean has(Authentication a,String r){return a.getAuthorities().stream().map(GrantedAuthority::getAuthority).anyMatch(r::equals);}
 }

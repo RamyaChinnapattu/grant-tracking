@@ -38,6 +38,9 @@ public class Scheme {
     @Column(name = "maximum_grant_amount", precision = 12, scale = 2)
     private BigDecimal maximumGrantAmount;
 
+    @Column(name = "allocated_funds", precision = 14, scale = 2)
+    private BigDecimal allocatedFunds;
+
     @Column(name = "eligibility_threshold", precision = 5, scale = 2)
     private BigDecimal eligibilityThreshold = BigDecimal.valueOf(70);
 
@@ -129,6 +132,14 @@ public class Scheme {
 
     public void setMaximumGrantAmount(BigDecimal maximumGrantAmount) {
         this.maximumGrantAmount = maximumGrantAmount;
+    }
+
+    public BigDecimal getAllocatedFunds() {
+        return allocatedFunds;
+    }
+
+    public void setAllocatedFunds(BigDecimal allocatedFunds) {
+        this.allocatedFunds = allocatedFunds;
     }
 
     public BigDecimal getEligibilityThreshold() {
