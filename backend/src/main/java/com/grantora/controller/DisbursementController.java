@@ -42,6 +42,16 @@ public class DisbursementController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @GetMapping("/plans/mine")
+    public List<DisbursementPlanResponse> getMyPlans(Authentication authentication) {
+        return disbursementService.getBeneficiaryPlans(authentication.getName());
+    }
+
+    @PatchMapping("/plans/{id}/deactivate")
+    public DisbursementPlanResponse deactivatePlan(@PathVariable Long id, Authentication authentication) {
+        return disbursementService.deactivatePlan(id, authentication.getName());
+    }
+
     @GetMapping("/plans")
     public ResponseEntity<?> getAllPlans(
             @RequestParam(required = false, defaultValue = "false") boolean paged,
@@ -175,11 +185,6 @@ public class DisbursementController {
             Authentication authentication,
             @RequestBody ReminderConfigDto dto) {
         return disbursementService.updateReminderConfig(dto, authentication.getName());
-    }
-
-    @PostMapping("/reminders/trigger-scan")
-    public Map<String, Object> triggerReminderScan() {
-        return disbursementService.triggerReminderScan();
     }
 
     // ==========================================

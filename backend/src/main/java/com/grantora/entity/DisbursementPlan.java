@@ -51,6 +51,10 @@ public class DisbursementPlan {
     @OrderBy("installmentNumber ASC")
     private List<DisbursementInstallment> installments = new ArrayList<>();
 
+    @OneToMany(mappedBy = "plan", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("occurredAt ASC")
+    private List<DisbursementPlanAudit> auditHistory = new ArrayList<>();
+
     @PrePersist
     public void onPrePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
@@ -109,5 +113,9 @@ public class DisbursementPlan {
     public void addInstallment(DisbursementInstallment installment) {
         installment.setPlan(this);
         this.installments.add(installment);
+    }
+
+    public void addAuditEntry(DisbursementPlanAudit entry) {
+        auditHistory.add(entry);
     }
 }

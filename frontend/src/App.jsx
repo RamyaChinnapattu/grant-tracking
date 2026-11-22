@@ -23,6 +23,9 @@ import DisbursementManagement from "./pages/DisbursementManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
 import VerificationWorkflow from "./pages/VerificationWorkflow";
 import WorkflowSettings from "./pages/WorkflowSettings";
+import BeneficiaryDisbursements from "./pages/BeneficiaryDisbursements";
+import BeneficiaryCompliance from "./pages/BeneficiaryCompliance";
+import ComplianceCenter from "./pages/ComplianceCenter";
 
 function getAuthenticatedHome() {
   const token = localStorage.getItem("token");
@@ -104,6 +107,7 @@ function App() {
               element={<DisbursementManagement />}
               handle={{ pageTitle: "Grant Disbursement & Compliance" }}
             />
+            <Route path="/admin/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Management" }} />
             <Route
               path="/admin/reports"
               element={<AdminReports />}
@@ -134,6 +138,8 @@ function App() {
               element={<BeneficiarySchemes />}
               handle={{ pageTitle: "Browse Schemes" }}
             />
+            <Route path="/beneficiary/disbursements" element={<BeneficiaryDisbursements />} handle={{ pageTitle: "My Disbursement Schedule" }} />
+            <Route path="/beneficiary/compliance" element={<BeneficiaryCompliance />} handle={{ pageTitle: "My Compliance" }} />
             <Route
               path="/beneficiary/applications"
               element={<GrantApplicationManagement />}
@@ -174,6 +180,7 @@ function App() {
               element={<VerificationWorkflow />}
               handle={{ pageTitle: "My Applications" }}
             />
+            <Route path="/officer/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Review" }} />
             <Route
               path="/officer/history"
               element={<VerificationWorkflow historyOnly />}

@@ -9,6 +9,14 @@ export async function getDisbursementPlans(paged = false, page = 0, size = 20) {
   return api.get("/disbursements/plans", { params });
 }
 
+export async function getMyDisbursementPlans() {
+  return api.get("/disbursements/plans/mine");
+}
+
+export async function deactivateDisbursementPlan(id) {
+  return api.patch(`/disbursements/plans/${id}/deactivate`);
+}
+
 export async function getDisbursementPlanById(id) {
   return api.get(`/disbursements/plans/${id}`);
 }
@@ -73,8 +81,4 @@ export async function getReminderConfig() {
 
 export async function updateReminderConfig(configData) {
   return api.put("/disbursements/reminders/config", configData);
-}
-
-export async function triggerReminderScan() {
-  return api.post("/disbursements/reminders/trigger-scan");
 }

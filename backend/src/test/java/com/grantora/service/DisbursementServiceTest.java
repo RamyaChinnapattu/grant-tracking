@@ -118,7 +118,7 @@ class DisbursementServiceTest {
         assertNotNull(response);
         assertEquals(BigDecimal.valueOf(80000), response.totalApprovedAmount());
         assertEquals(2, response.installments().size());
-        assertEquals(InstallmentStatus.READY_FOR_DISBURSEMENT, response.installments().get(0).status());
+        assertEquals(InstallmentStatus.PLANNED, response.installments().get(0).status());
         assertEquals(InstallmentStatus.PLANNED, response.installments().get(1).status());
     }
 
@@ -137,7 +137,7 @@ class DisbursementServiceTest {
         ResponseStatusException exception = assertThrows(ResponseStatusException.class, () ->
                 disbursementService.createPlan(request, "admin@grantora.gov"));
 
-        assertTrue(exception.getReason().contains("exceeds approved grant amount"));
+        assertTrue(exception.getReason().contains("must equal approved grant amount"));
     }
 
     @Test
@@ -154,6 +154,54 @@ class DisbursementServiceTest {
                 disbursementService.createPlan(request, "admin@grantora.gov"));
 
         assertTrue(exception.getReason().contains("APPROVED status"));
+    }
+
+    @Test
+    void testPercentageScheduleMustTotalOneHundredPercent() {
+        when(userRepository.findByEmail("admin@grantora.gov")).thenReturn(Optional.of(adminUser));
+        when(applicationRepository.findById(100L)).thenReturn(Optional.of(application));
+        DisbursementPlanRequest request = new DisbursementPlanRequest(100L, "Bad percentages", List.of(
+                new InstallmentRequest(1, "Stage 1", BigDecimal.valueOf(40), null, LocalDate.now(), null),
+                new InstallmentRequest(2, "Stage 2", BigDecimal.valueOf(50), null, LocalDate.now().plusMonths(1), null)));
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> disbursementService.createPlan(request, "admin@grantora.gov"));
+        assertTrue(exception.getReason().contains("must total 100%"));
+    }
+
+    @Test
+    void testDuplicateInstallmentSequenceIsRejected() {
+        when(userRepository.findByEmail("admin@grantora.gov")).thenReturn(Optional.of(adminUser));
+        when(applicationRepository.findById(100L)).thenReturn(Optional.of(application));
+        DisbursementPlanRequest request = new DisbursementPlanRequest(100L, "Duplicate sequence", List.of(
+                new InstallmentRequest(1, "Stage 1", null, BigDecimal.valueOf(40000), LocalDate.now(), null),
+                new InstallmentRequest(1, "Stage 1 duplicate", null, BigDecimal.valueOf(40000), LocalDate.now().plusMonths(1), null)));
+        ResponseStatusException exception = assertThrows(ResponseStatusException.class,
+                () -> disbursementService.createPlan(request, "admin@grantora.gov"));
+        assertTrue(exception.getReason().contains("positive and unique"));
+    }
+
+    @Test
+    void testBeneficiaryScheduleQueryFiltersByAuthenticatedUser() {
+        beneficiaryUser.setId(3L);
+        DisbursementPlan own = new DisbursementPlan();
+        own.setId(50L);
+        own.setApplication(application);
+        own.setScheme(scheme);
+        own.setTotalApprovedAmount(BigDecimal.valueOf(80000));
+        own.setTotalDisbursedAmount(BigDecimal.ZERO);
+        DisbursementPlan other = new DisbursementPlan();
+        other.setId(51L);
+        Beneficiary otherBeneficiary = new Beneficiary();
+        User otherUser = new User(); otherUser.setId(99L); otherUser.setFullName("Other");
+        otherBeneficiary.setUser(otherUser);
+        GrantApplication otherApplication = new GrantApplication(); otherApplication.setBeneficiary(otherBeneficiary);
+        other.setApplication(otherApplication);
+        when(userRepository.findByEmail("farmer@example.com")).thenReturn(Optional.of(beneficiaryUser));
+        when(planRepository.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(own, other));
+
+        List<DisbursementPlanResponse> response = disbursementService.getBeneficiaryPlans("farmer@example.com");
+        assertEquals(1, response.size());
+        assertEquals(50L, response.get(0).id());
     }
 
     @Test

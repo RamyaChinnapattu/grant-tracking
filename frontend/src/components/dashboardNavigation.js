@@ -1,5 +1,6 @@
 import {
   BarChart3,
+  BadgeCheck,
   Bell,
   CircleDollarSign,
   ClipboardList,
@@ -31,6 +32,7 @@ export const dashboardNavigation = {
       path: "/admin/disbursement",
       icon: CircleDollarSign,
     },
+    { label: "Compliance Requirements", path: "/admin/compliance", icon: BadgeCheck },
     {
       label: "Reports & Analytics",
       path: "/admin/reports",
@@ -45,6 +47,8 @@ export const dashboardNavigation = {
       icon: LayoutDashboard,
     },
     { label: "Browse Schemes", path: "/beneficiary/schemes", icon: FolderKanban },
+    { label: "My Disbursement Schedule", path: "/beneficiary/disbursements", icon: CircleDollarSign },
+    { label: "My Compliance", path: "/beneficiary/compliance", icon: BadgeCheck },
     {
       label: "My Applications",
       path: "/beneficiary/applications",
@@ -74,6 +78,7 @@ export const dashboardNavigation = {
       path: "/officer/history",
       icon: FileClock,
     },
+    { label: "Compliance Review", path: "/officer/compliance", icon: BadgeCheck },
     { label: "Profile", path: "/officer/profile", icon: UserRound },
     { label: "Notifications", path: "/officer/notifications", icon: Bell },
   ],

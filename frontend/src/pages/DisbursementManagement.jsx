@@ -40,11 +40,11 @@ import {
   verifyCompliance,
   downloadComplianceDocument,
   disburseInstallment,
+  deactivateDisbursementPlan,
   getFundUtilization,
   getRegionalAnalytics,
   getReminderConfig,
   updateReminderConfig,
-  triggerReminderScan,
 } from "../services/disbursementService";
 import "../styles/DisbursementManagement.css";
 
@@ -218,23 +218,29 @@ export default function DisbursementManagement() {
       {
         installmentNumber: 1,
         title: "Stage 1 - Initial Advance",
+        calculationType: "PERCENTAGE",
         percentage: 40,
         amount: Math.round(approvedAmt * 0.4),
         plannedReleaseDate: new Date().toISOString().split("T")[0],
+        condition: "",
       },
       {
         installmentNumber: 2,
         title: "Stage 2 - Mid Construction / Inspection",
+        calculationType: "PERCENTAGE",
         percentage: 30,
         amount: Math.round(approvedAmt * 0.3),
         plannedReleaseDate: "",
+        condition: "",
       },
       {
         installmentNumber: 3,
         title: "Stage 3 - Final Commissioning & Handover",
+        calculationType: "PERCENTAGE",
         percentage: 30,
         amount: approvedAmt - Math.round(approvedAmt * 0.4) - Math.round(approvedAmt * 0.3),
         plannedReleaseDate: "",
+        condition: "",
       },
     ];
 
@@ -250,7 +256,11 @@ export default function DisbursementManagement() {
       const nextInst = [...prev.installments];
       nextInst[index] = { ...nextInst[index], [field]: value };
 
-      if (field === "percentage" && selectedEligibleApp) {
+      if (field === "calculationType") {
+        nextInst[index].percentage = value === "PERCENTAGE" ? (Number(nextInst[index].percentage) || 0) : "";
+        if (value === "PERCENTAGE" && selectedEligibleApp) nextInst[index].amount = Math.round((Number(selectedEligibleApp.requestedAmount) * (Number(nextInst[index].percentage) || 0)) / 100);
+      }
+      if (field === "percentage" && selectedEligibleApp && nextInst[index].calculationType === "PERCENTAGE") {
         const approvedAmt = Number(selectedEligibleApp.requestedAmount) || 0;
         const pct = Number(value) || 0;
         nextInst[index].amount = Math.round((approvedAmt * pct) / 100);
@@ -267,9 +277,11 @@ export default function DisbursementManagement() {
         {
           installmentNumber: prev.installments.length + 1,
           title: `Stage ${prev.installments.length + 1} Milestone`,
+          calculationType: "FIXED",
           percentage: 0,
           amount: 0,
           plannedReleaseDate: "",
+          condition: "",
         },
       ],
     }));
@@ -298,8 +310,8 @@ export default function DisbursementManagement() {
       return;
     }
     const approvedAmt = Number(selectedEligibleApp?.requestedAmount) || 0;
-    if (totalScheduledSum > approvedAmt) {
-      setError(`Total installment sum (${formatCurrency(totalScheduledSum)}) exceeds approved grant (${formatCurrency(approvedAmt)}).`);
+    if (totalScheduledSum !== approvedAmt) {
+      setError(`Installments must total the approved grant (${formatCurrency(approvedAmt)}).`);
       return;
     }
 
@@ -310,9 +322,10 @@ export default function DisbursementManagement() {
         installments: createPlanForm.installments.map((inst) => ({
           installmentNumber: inst.installmentNumber,
           title: inst.title,
-          percentage: Number(inst.percentage) || null,
+          percentage: inst.calculationType === "PERCENTAGE" ? Number(inst.percentage) : null,
           amount: Number(inst.amount),
           plannedReleaseDate: inst.plannedReleaseDate || null,
+          milestones: [{ title: inst.title, description: inst.condition, dueDate: inst.plannedReleaseDate || null, requirementTitles: inst.condition ? [inst.condition] : [] }],
         })),
       });
 
@@ -324,16 +337,14 @@ export default function DisbursementManagement() {
     }
   };
 
-  // Trigger reminder scan
-  const handleTriggerReminderScan = async () => {
+  const handleDeactivatePlan = async (plan) => {
+    if (!window.confirm(`Deactivate the plan for application #${plan.applicationId}?`)) return;
     try {
-      const res = await triggerReminderScan();
-      showToast(
-        `Reminder Scan Complete: Sent ${res.data.upcomingRemindersSent || 0} upcoming reminders, flagged ${res.data.overdueMilestonesFlagged || 0} overdue items.`
-      );
+      await deactivateDisbursementPlan(plan.id);
+      showToast("Disbursement plan deactivated.");
       loadAllData(true);
     } catch (err) {
-      setError("Failed to run reminder automation scan.");
+      setError(err.response?.data?.message || "Could not deactivate this plan.");
     }
   };
 
@@ -520,13 +531,6 @@ export default function DisbursementManagement() {
           </p>
         </div>
         <div className="disb-header__actions">
-          <button
-            className="disb-btn disb-btn--secondary disb-btn--sm"
-            onClick={handleTriggerReminderScan}
-            title="Scan upcoming due dates & overdue compliance"
-          >
-            <Clock size={16} /> Scan Reminders
-          </button>
           <button
             className="disb-btn disb-btn--secondary disb-btn--sm"
             onClick={() => setShowReminderSettingsModal(true)}
@@ -897,6 +901,9 @@ export default function DisbursementManagement() {
                         >
                           <Eye size={15} /> View Schedule
                         </button>
+                        {plan.planStatus === "ACTIVE" && !(plan.installments || []).some((i) => i.status === "DISBURSED") && (
+                          <button className="disb-btn disb-btn--secondary disb-btn--sm" onClick={() => handleDeactivatePlan(plan)} style={{ marginTop: 6 }}>Deactivate</button>
+                        )}
                       </td>
                     </tr>
                   ))
@@ -1513,7 +1520,7 @@ export default function DisbursementManagement() {
                         style={{
                           fontSize: "1.1rem",
                           color:
-                            totalScheduledSum > Number(selectedEligibleApp.requestedAmount)
+                            totalScheduledSum !== Number(selectedEligibleApp.requestedAmount)
                               ? "#ef4444"
                               : "#10b981",
                         }}
@@ -1553,6 +1560,11 @@ export default function DisbursementManagement() {
                           />
                         </div>
                         <div>
+                          <select className="disb-form-input" value={inst.calculationType || "FIXED"} onChange={(e) => handleInstallmentRowChange(idx, "calculationType", e.target.value)} aria-label={`Stage ${inst.installmentNumber} amount type`}>
+                            <option value="FIXED">Fixed amount</option><option value="PERCENTAGE">Percentage</option>
+                          </select>
+                        </div>
+                        <div>
                           <input
                             type="number"
                             className="disb-form-input"
@@ -1561,6 +1573,7 @@ export default function DisbursementManagement() {
                             onChange={(e) => handleInstallmentRowChange(idx, "percentage", e.target.value)}
                             min="0"
                             max="100"
+                            disabled={inst.calculationType !== "PERCENTAGE"}
                           />
                         </div>
                         <div>
@@ -1570,9 +1583,13 @@ export default function DisbursementManagement() {
                             placeholder="Amount (₹)"
                             value={inst.amount}
                             onChange={(e) => handleInstallmentRowChange(idx, "amount", e.target.value)}
-                            required
+                            required={inst.calculationType !== "PERCENTAGE"}
+                            readOnly={inst.calculationType === "PERCENTAGE"}
                             min="1"
                           />
+                        </div>
+                        <div>
+                          <input type="text" className="disb-form-input" placeholder="Milestone or release condition" value={inst.condition || ""} onChange={(e) => handleInstallmentRowChange(idx, "condition", e.target.value)} />
                         </div>
                         <div>
                           <input
@@ -1627,7 +1644,7 @@ export default function DisbursementManagement() {
                   className="disb-btn disb-btn--primary"
                   disabled={
                     !createPlanForm.applicationId ||
-                    totalScheduledSum > Number(selectedEligibleApp?.requestedAmount || 0)
+                    !selectedEligibleApp || totalScheduledSum !== Number(selectedEligibleApp.requestedAmount || 0)
                   }
                 >
                   Save & Activate Plan
@@ -2165,26 +2182,7 @@ export default function DisbursementManagement() {
                     required
                   />
                   <span className="disb-form-help">
-                    Notifications are sent automatically to beneficiary and assigned officer when a milestone is within this window.
-                  </span>
-                </div>
-
-                <div className="disb-form-group">
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
-                    <input
-                      type="checkbox"
-                      checked={reminderConfigForm.autoFlagOverdue}
-                      onChange={(e) =>
-                        setReminderConfigForm((prev) => ({
-                          ...prev,
-                          autoFlagOverdue: e.target.checked,
-                        }))
-                      }
-                    />
-                    <span style={{ fontWeight: 600 }}>Automatically flag overdue milestones as non-compliant</span>
-                  </label>
-                  <span className="disb-form-help">
-                    Blocks automatic or manual fund disbursement until compliance issues are resolved by authorized officers.
+                    Notifications are sent automatically to beneficiaries and assigned officers before configured compliance deadlines.
                   </span>
                 </div>
 
