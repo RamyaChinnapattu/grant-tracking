@@ -2,6 +2,9 @@ package com.grantora.entity;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
+import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "milestone_compliances")
@@ -14,6 +17,16 @@ public class MilestoneCompliance {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "milestone_id", nullable = false)
     private DisbursementMilestone milestone;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "requirement_id")
+    private ComplianceRequirement requirement;
+
+    @Column(name = "required_obligation")
+    private Boolean required = true;
+
+    @Column(name = "submission_deadline")
+    private LocalDate submissionDeadline;
 
     @Column(name = "requirement_title", nullable = false, length = 150)
     private String requirementTitle;
@@ -58,6 +71,10 @@ public class MilestoneCompliance {
     @Column(name = "verification_remarks", columnDefinition = "TEXT")
     private String verificationRemarks;
 
+    @OneToMany(mappedBy = "compliance", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("occurredAt ASC")
+    private List<ComplianceReviewHistory> reviewHistory = new ArrayList<>();
+
     public MilestoneCompliance() {}
 
     public Long getId() { return id; }
@@ -65,6 +82,12 @@ public class MilestoneCompliance {
 
     public DisbursementMilestone getMilestone() { return milestone; }
     public void setMilestone(DisbursementMilestone milestone) { this.milestone = milestone; }
+    public ComplianceRequirement getRequirement() { return requirement; }
+    public void setRequirement(ComplianceRequirement requirement) { this.requirement = requirement; }
+    public boolean isRequired() { return !Boolean.FALSE.equals(required); }
+    public void setRequired(Boolean required) { this.required = required; }
+    public LocalDate getSubmissionDeadline() { return submissionDeadline; }
+    public void setSubmissionDeadline(LocalDate submissionDeadline) { this.submissionDeadline = submissionDeadline; }
 
     public String getRequirementTitle() { return requirementTitle; }
     public void setRequirementTitle(String requirementTitle) { this.requirementTitle = requirementTitle; }
@@ -104,4 +127,6 @@ public class MilestoneCompliance {
 
     public String getVerificationRemarks() { return verificationRemarks; }
     public void setVerificationRemarks(String verificationRemarks) { this.verificationRemarks = verificationRemarks; }
+    public List<ComplianceReviewHistory> getReviewHistory() { return reviewHistory; }
+    public void addHistory(ComplianceReviewHistory entry) { entry.setCompliance(this); reviewHistory.add(entry); }
 }

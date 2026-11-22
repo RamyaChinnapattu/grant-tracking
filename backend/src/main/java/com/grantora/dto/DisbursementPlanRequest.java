@@ -2,6 +2,7 @@ package com.grantora.dto;
 
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.Valid;
 import java.util.List;
 
 public record DisbursementPlanRequest(
@@ -11,5 +12,5 @@ public record DisbursementPlanRequest(
     String notes,
 
     @NotEmpty(message = "At least one installment stage is required")
-    List<InstallmentRequest> installments
+    List<@Valid InstallmentRequest> installments
 ) {}

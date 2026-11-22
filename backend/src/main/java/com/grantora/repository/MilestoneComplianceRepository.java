@@ -17,4 +17,6 @@ public interface MilestoneComplianceRepository extends JpaRepository<MilestoneCo
     long countByMilestone_Installment_IdAndStatusNot(Long installmentId, ComplianceStatus status);
 
     long countByMilestone_IdAndStatusNot(Long milestoneId, ComplianceStatus status);
+
+    boolean existsByRequirement_IdAndMilestone_Id(Long requirementId, Long milestoneId);
 }
