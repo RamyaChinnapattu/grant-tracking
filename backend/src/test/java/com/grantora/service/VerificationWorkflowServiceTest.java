@@ -77,6 +77,9 @@ class VerificationWorkflowServiceTest {
                 financeOfficer = user(
                                 30L, Role.OFFICER, "FINANCE", "Test State", null);
 
+                Scheme scheme = new Scheme();
+                scheme.setSchemeName("Education Assistance");
+                application.setScheme(scheme);
                 application.setAssignedOfficer(fieldOfficer);
 
                 when(applicationRepository.findById(99L))
@@ -88,8 +91,16 @@ class VerificationWorkflowServiceTest {
                 when(applicationRepository.save(any(GrantApplication.class)))
                                 .thenAnswer(invocation -> invocation.getArgument(0));
 
+                List<ApplicationVerification> savedHistory = new java.util.ArrayList<>();
                 when(historyRepository.save(any(ApplicationVerification.class)))
-                                .thenAnswer(invocation -> invocation.getArgument(0));
+                                .thenAnswer(invocation -> {
+                                        ApplicationVerification v = invocation.getArgument(0);
+                                        savedHistory.add(v);
+                                        return v;
+                                });
+
+                when(historyRepository.findByApplication_IdOrderByCreatedAtAsc(anyLong()))
+                                .thenAnswer(invocation -> savedHistory);
         }
 
         @Test
@@ -395,6 +406,172 @@ class VerificationWorkflowServiceTest {
 
                 verify(historyRepository, never())
                                 .save(any(ApplicationVerification.class));
+        }
+
+        @Test
+        void fieldOfficerCannotPerformDistrictOrFinanceApproval() {
+                application.setWorkflowStage(VerificationStage.DISTRICT);
+                application.setStatus(GrantApplicationStatus.DISTRICT_REVIEW);
+                application.setAssignedOfficer(fieldOfficer);
+
+                when(userRepository.findByEmail("field@test.local"))
+                                .thenReturn(Optional.of(fieldOfficer));
+
+                ResponseStatusException districtException = assertThrows(
+                                ResponseStatusException.class,
+                                () -> workflow.decide(
+                                                99L,
+                                                "field@test.local",
+                                                false,
+                                                new VerificationDecisionRequest(
+                                                                VerificationDecision.APPROVED,
+                                                                "Trying district review as field officer",
+                                                                false, false, false, false)));
+
+                assertEquals(403, districtException.getStatusCode().value());
+                assertTrue(districtException.getReason().contains("not authorized for this review level"));
+
+                application.setWorkflowStage(VerificationStage.FINANCE);
+                application.setStatus(GrantApplicationStatus.FINANCE_REVIEW);
+                application.setAssignedOfficer(fieldOfficer);
+
+                ResponseStatusException financeException = assertThrows(
+                                ResponseStatusException.class,
+                                () -> workflow.decide(
+                                                99L,
+                                                "field@test.local",
+                                                false,
+                                                new VerificationDecisionRequest(
+                                                                VerificationDecision.APPROVED,
+                                                                "Trying finance review as field officer",
+                                                                false, false, false, false)));
+
+                assertEquals(403, financeException.getStatusCode().value());
+                assertTrue(financeException.getReason().contains("not authorized for this review level"));
+        }
+
+        @Test
+        void districtOfficerCannotPerformFinanceApproval() {
+                application.setWorkflowStage(VerificationStage.FINANCE);
+                application.setStatus(GrantApplicationStatus.FINANCE_REVIEW);
+                application.setAssignedOfficer(districtOfficer);
+
+                when(userRepository.findByEmail("district@test.local"))
+                                .thenReturn(Optional.of(districtOfficer));
+
+                ResponseStatusException financeException = assertThrows(
+                                ResponseStatusException.class,
+                                () -> workflow.decide(
+                                                99L,
+                                                "district@test.local",
+                                                false,
+                                                new VerificationDecisionRequest(
+                                                                VerificationDecision.APPROVED,
+                                                                "Trying finance review as district officer",
+                                                                false, false, false, false)));
+
+                assertEquals(403, financeException.getStatusCode().value());
+                assertTrue(financeException.getReason().contains("not authorized for this review level"));
+        }
+
+        @Test
+        void skippingVerificationStagesIsBlockedAtFinance() {
+                application.setWorkflowStage(VerificationStage.FINANCE);
+                application.setStatus(GrantApplicationStatus.FINANCE_REVIEW);
+                application.setAssignedOfficer(financeOfficer);
+
+                when(userRepository.findByEmail("finance@test.local"))
+                                .thenReturn(Optional.of(financeOfficer));
+
+                // History only has a field submission, not verified and district approved
+                ApplicationVerification draftSubmission = new ApplicationVerification();
+                draftSubmission.setStage(VerificationStage.FIELD);
+                draftSubmission.setAction("SUBMITTED");
+                when(historyRepository.findByApplication_IdOrderByCreatedAtAsc(99L))
+                                .thenReturn(List.of(draftSubmission));
+
+                ResponseStatusException conflictException = assertThrows(
+                                ResponseStatusException.class,
+                                () -> workflow.decide(
+                                                99L,
+                                                "finance@test.local",
+                                                false,
+                                                new VerificationDecisionRequest(
+                                                                VerificationDecision.APPROVED,
+                                                                "Approving without prior reviews",
+                                                                false, false, false, false)));
+
+                assertEquals(409, conflictException.getStatusCode().value());
+                assertTrue(conflictException.getReason().contains("Field verification and District review must be completed first"));
+        }
+
+        @Test
+        void selfApprovalIsForbidden() throws Exception {
+                // Beneficiary user who is also registered as a field officer
+                User beneficiaryAsOfficer = user(1L, Role.OFFICER, "FIELD", "Test State", "Test District");
+                application.getBeneficiary().setUser(beneficiaryAsOfficer);
+                application.setAssignedOfficer(beneficiaryAsOfficer);
+
+                when(userRepository.findByEmail("beneficiary-officer@test.local"))
+                                .thenReturn(Optional.of(beneficiaryAsOfficer));
+
+                ResponseStatusException forbiddenException = assertThrows(
+                                ResponseStatusException.class,
+                                () -> workflow.decide(
+                                                99L,
+                                                "beneficiary-officer@test.local",
+                                                false,
+                                                new VerificationDecisionRequest(
+                                                                VerificationDecision.VERIFIED,
+                                                                "Self verifying",
+                                                                true, true, true, true)));
+
+                assertEquals(403, forbiddenException.getStatusCode().value());
+                assertTrue(forbiddenException.getReason().contains("Officers cannot verify or approve their own grant applications"));
+        }
+
+        @Test
+        void rejectionAtFieldOrDistrictOrFinanceTerminatesWorkflow() {
+                when(userRepository.findByEmail("field@test.local"))
+                                .thenReturn(Optional.of(fieldOfficer));
+
+                workflow.decide(
+                                99L,
+                                "field@test.local",
+                                false,
+                                new VerificationDecisionRequest(
+                                                VerificationDecision.REJECTED,
+                                                "Documents invalid.",
+                                                false, false, false, false));
+
+                assertEquals(GrantApplicationStatus.REJECTED, application.getStatus());
+                assertEquals(null, application.getAssignedOfficer());
+                assertEquals(true, application.getTaskCompletedAt() != null);
+        }
+
+        @Test
+        void unauthorizedJurisdictionCannotReviewApplication() throws Exception {
+                User wrongDistrictOfficer = user(25L, Role.OFFICER, "DISTRICT", "Test State", "Different District");
+                application.setWorkflowStage(VerificationStage.DISTRICT);
+                application.setStatus(GrantApplicationStatus.DISTRICT_REVIEW);
+                application.setAssignedOfficer(wrongDistrictOfficer);
+
+                when(userRepository.findByEmail("wrong-district@test.local"))
+                                .thenReturn(Optional.of(wrongDistrictOfficer));
+
+                ResponseStatusException jurisdictionException = assertThrows(
+                                ResponseStatusException.class,
+                                () -> workflow.decide(
+                                                99L,
+                                                "wrong-district@test.local",
+                                                false,
+                                                new VerificationDecisionRequest(
+                                                                VerificationDecision.APPROVED,
+                                                                "Reviewing across district boundaries",
+                                                                false, false, false, false)));
+
+                assertEquals(403, jurisdictionException.getStatusCode().value());
+                assertTrue(jurisdictionException.getReason().contains("Application is outside the officer's jurisdiction"));
         }
 
         private User user(

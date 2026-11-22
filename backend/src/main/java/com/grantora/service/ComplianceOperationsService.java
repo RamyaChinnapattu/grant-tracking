@@ -132,7 +132,13 @@ public class ComplianceOperationsService {
         item.setSubmissionNotes(notes); item.setSubmittedBy(actor); item.setSubmittedAt(LocalDateTime.now()); item.setStatus(ComplianceStatus.SUBMITTED);
         item.setVerificationRemarks(null); item.setVerifiedBy(null); item.setVerifiedAt(null);
         history(item,actor,"SUBMITTED",notes,filename);
-        DisbursementMilestone m=item.getMilestone(); GrantApplication app=m.getInstallment().getPlan().getApplication();
+        DisbursementMilestone m=item.getMilestone();
+        if (m != null && m.getNonCompliant() && m.getNonComplianceReason() != null && m.getNonComplianceReason().toLowerCase(Locale.ROOT).contains("compliance")) {
+            m.setNonCompliant(false);
+            m.setNonComplianceReason(null);
+            milestones.save(m);
+        }
+        GrantApplication app=m.getInstallment().getPlan().getApplication();
         if(app.getAssignedOfficer()!=null) notifications.notify(app.getAssignedOfficer(),"compliance_submitted:"+id+":"+item.getSubmittedAt(),"A compliance document is ready for review: "+item.getRequirementTitle()+".",app.getId());
         return toItem(compliances.save(item));
     }
@@ -147,9 +153,50 @@ public class ComplianceOperationsService {
         String decision=req.decision().trim().toUpperCase(Locale.ROOT);
         if(!Set.of("APPROVED","REJECTED","CORRECTION_REQUIRED").contains(decision)) throw bad("Decision must be APPROVED, REJECTED, or CORRECTION_REQUIRED.");
         if(!decision.equals("APPROVED") && (req.remarks()==null || req.remarks().isBlank())) throw bad("Remarks are required for a rejection or correction request.");
+        if(decision.equals("APPROVED") && (item.getDocumentData()==null || item.getDocumentData().length==0)) {
+            throw bad("Cannot approve compliance evidence without an uploaded supporting document.");
+        }
         item.setStatus(decision.equals("APPROVED")?ComplianceStatus.APPROVED:decision.equals("REJECTED")?ComplianceStatus.REJECTED:ComplianceStatus.CORRECTION_REQUIRED);
         item.setVerifiedBy(actor); item.setVerifiedAt(LocalDateTime.now()); item.setVerificationRemarks(req.remarks());
         history(item,actor,decision,req.remarks(),null);
+
+        DisbursementMilestone m = item.getMilestone();
+        if (m != null) {
+            if (decision.equals("APPROVED")) {
+                boolean allSatisfied = m.getCompliances().stream().allMatch(c ->
+                        !c.isRequired() || c.getId().equals(item.getId())
+                        || c.getStatus() == ComplianceStatus.APPROVED
+                        || c.getStatus() == ComplianceStatus.VERIFIED
+                        || c.getStatus() == ComplianceStatus.WAIVED
+                );
+                if (allSatisfied) {
+                    m.setNonCompliant(false);
+                    m.setNonComplianceReason(null);
+                    m.setStatus(MilestoneStatus.COMPLETED);
+                    m.setProgressPercentage(100);
+                    m.setCompletedAt(LocalDateTime.now());
+                } else {
+                    long totalReq = m.getCompliances().stream().filter(MilestoneCompliance::isRequired).count();
+                    long completedReq = m.getCompliances().stream().filter(c ->
+                            c.isRequired() && (c.getId().equals(item.getId()) || c.getStatus() == ComplianceStatus.APPROVED || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.WAIVED)
+                    ).count();
+                    int progress = totalReq > 0 ? (int) ((completedReq * 100) / totalReq) : 50;
+                    m.setProgressPercentage(progress);
+                    if (m.getStatus() == MilestoneStatus.PLANNED) {
+                        m.setStatus(MilestoneStatus.PENDING);
+                    }
+                }
+            } else {
+                m.setNonCompliant(true);
+                m.setNonComplianceReason("Compliance " + decision.toLowerCase(Locale.ROOT) + ": " + (req.remarks() != null ? req.remarks() : "Requirements not satisfied"));
+                if (m.getStatus() == MilestoneStatus.COMPLETED) {
+                    m.setStatus(MilestoneStatus.PENDING);
+                    m.setProgressPercentage(50);
+                }
+            }
+            milestones.save(m);
+        }
+
         long correctionCount=item.getReviewHistory().stream().filter(h->h.getAction().equals("REJECTED")||h.getAction().equals("CORRECTION_REQUIRED")).count();
         if(!decision.equals("APPROVED") && correctionCount>=3) createNonCompliance(item,LocalDate.now(),"Repeated unsuccessful compliance submissions.","HIGH");
         GrantApplication app=item.getMilestone().getInstallment().getPlan().getApplication();
@@ -164,6 +211,24 @@ public class ComplianceOperationsService {
         if(item.getStatus()==ComplianceStatus.VERIFIED || item.getStatus()==ComplianceStatus.APPROVED || item.getStatus()==ComplianceStatus.WAIVED) throw new ResponseStatusException(HttpStatus.CONFLICT,"This requirement is already closed.");
         item.setStatus(ComplianceStatus.WAIVED);item.setVerifiedBy(actor);item.setVerifiedAt(LocalDateTime.now());item.setVerificationRemarks(req.remarks());
         history(item,actor,"WAIVED",req.remarks(),null);
+
+        DisbursementMilestone m = item.getMilestone();
+        if (m != null) {
+            boolean allSatisfied = m.getCompliances().stream().allMatch(c ->
+                    !c.isRequired() || c.getId().equals(item.getId())
+                    || c.getStatus() == ComplianceStatus.APPROVED
+                    || c.getStatus() == ComplianceStatus.VERIFIED
+                    || c.getStatus() == ComplianceStatus.WAIVED
+            );
+            if (allSatisfied) {
+                m.setNonCompliant(false);
+                m.setNonComplianceReason(null);
+                m.setStatus(MilestoneStatus.COMPLETED);
+                m.setProgressPercentage(100);
+                m.setCompletedAt(LocalDateTime.now());
+                milestones.save(m);
+            }
+        }
         return toItem(compliances.save(item));
     }
 

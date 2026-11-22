@@ -35,16 +35,25 @@ public class SchemeService {
     private final BeneficiaryRepository beneficiaryRepository;
     private final EligibilityScoringService eligibilityScoringService;
     private final GrantApplicationRepository grantApplicationRepository;
+    private final AuditService auditService;
 
     public SchemeService(SchemeRepository schemeRepository) {
-        this(schemeRepository, null, null, null);
+        this(schemeRepository, null, null, null, null);
     }
 
     public SchemeService(
             SchemeRepository schemeRepository,
             BeneficiaryRepository beneficiaryRepository,
             EligibilityScoringService eligibilityScoringService) {
-        this(schemeRepository, beneficiaryRepository, eligibilityScoringService, null);
+        this(schemeRepository, beneficiaryRepository, eligibilityScoringService, null, null);
+    }
+
+    public SchemeService(
+            SchemeRepository schemeRepository,
+            BeneficiaryRepository beneficiaryRepository,
+            EligibilityScoringService eligibilityScoringService,
+            GrantApplicationRepository grantApplicationRepository) {
+        this(schemeRepository, beneficiaryRepository, eligibilityScoringService, grantApplicationRepository, null);
     }
 
     @Autowired
@@ -52,11 +61,13 @@ public class SchemeService {
             SchemeRepository schemeRepository,
             BeneficiaryRepository beneficiaryRepository,
             EligibilityScoringService eligibilityScoringService,
-            GrantApplicationRepository grantApplicationRepository) {
+            GrantApplicationRepository grantApplicationRepository,
+            @Autowired(required = false) AuditService auditService) {
         this.schemeRepository = schemeRepository;
         this.beneficiaryRepository = beneficiaryRepository;
         this.eligibilityScoringService = eligibilityScoringService;
         this.grantApplicationRepository = grantApplicationRepository;
+        this.auditService = auditService;
     }
 
     public List<Scheme> getAllSchemes() {
@@ -85,6 +96,12 @@ public class SchemeService {
     @Transactional
     public Scheme createScheme(Scheme scheme) {
         validateEligibilityConfiguration(scheme);
+        if (scheme.getAllocatedFunds() != null && scheme.getAllocatedFunds().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Allocated funds cannot be negative.");
+        }
+        if (scheme.getMaximumGrantAmount() != null && scheme.getMaximumGrantAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum grant amount must be greater than zero.");
+        }
         if (scheme.getEligibilityQuestions() != null) {
             for (SchemeEligibilityQuestion question : scheme.getEligibilityQuestions()) {
                 if (question != null && question.getId() != null) {
@@ -104,12 +121,27 @@ public class SchemeService {
             }
         }
         scheme.setEligibilityQuestions(questions);
-        return schemeRepository.save(scheme);
+        Scheme saved = schemeRepository.save(scheme);
+        if (auditService != null) {
+            auditService.recordAudit(
+                    "SCHEME_CREATED",
+                    "SCHEME",
+                    "Scheme",
+                    saved.getId(),
+                    "Created scheme: " + saved.getSchemeName() + " (Allocated funds: ₹" + saved.getAllocatedFunds() + ")");
+        }
+        return saved;
     }
 
     @Transactional
     public Scheme updateScheme(Long id, Scheme updatedScheme) {
         validateEligibilityConfiguration(updatedScheme);
+        if (updatedScheme.getAllocatedFunds() != null && updatedScheme.getAllocatedFunds().compareTo(BigDecimal.ZERO) < 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Allocated funds cannot be negative.");
+        }
+        if (updatedScheme.getMaximumGrantAmount() != null && updatedScheme.getMaximumGrantAmount().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum grant amount must be greater than zero.");
+        }
         Scheme existing = getSchemeById(id);
 
         existing.setSchemeName(updatedScheme.getSchemeName());
@@ -119,6 +151,7 @@ public class SchemeService {
         existing.setMaximumAge(updatedScheme.getMaximumAge());
         existing.setMaximumAnnualIncome(updatedScheme.getMaximumAnnualIncome());
         existing.setMaximumGrantAmount(updatedScheme.getMaximumGrantAmount());
+        existing.setAllocatedFunds(updatedScheme.getAllocatedFunds());
         existing.setEligibilityThreshold(updatedScheme.getEligibilityThreshold());
         existing.setEligibleCategories(updatedScheme.getEligibleCategories());
         reconcileQuestions(existing, updatedScheme.getEligibilityQuestions());
@@ -126,12 +159,25 @@ public class SchemeService {
         existing.setApplicationEndDate(updatedScheme.getApplicationEndDate());
         existing.setStatus(updatedScheme.getStatus());
 
-        return schemeRepository.save(existing);
+        Scheme saved = schemeRepository.save(existing);
+        if (auditService != null) {
+            auditService.recordAudit(
+                    "SCHEME_BUDGET_UPDATED",
+                    "SCHEME",
+                    "Scheme",
+                    saved.getId(),
+                    "Updated scheme " + saved.getSchemeName() + " (Allocated funds: ₹" + saved.getAllocatedFunds() + ")");
+        }
+        return saved;
     }
 
     private void reconcileQuestions(
             Scheme existingScheme,
             List<SchemeEligibilityQuestion> incomingQuestions) {
+        if (incomingQuestions == null) {
+            return;
+        }
+        List<SchemeEligibilityQuestion> incomingCopy = new ArrayList<>(incomingQuestions);
         List<SchemeEligibilityQuestion> currentQuestions = existingScheme.getEligibilityQuestions();
         if (currentQuestions == null) {
             currentQuestions = new ArrayList<>();
@@ -143,7 +189,7 @@ public class SchemeService {
                 .collect(Collectors.toMap(SchemeEligibilityQuestion::getId, Function.identity()));
 
         Set<Long> seenIncomingIds = new HashSet<>();
-        for (SchemeEligibilityQuestion incoming : incomingQuestions) {
+        for (SchemeEligibilityQuestion incoming : incomingCopy) {
             if (incoming != null && incoming.getId() != null) {
                 if (!existingById.containsKey(incoming.getId())) {
                     throw new ResponseStatusException(
@@ -190,8 +236,8 @@ public class SchemeService {
         currentQuestions.removeIf(q -> q.getId() != null && !seenIncomingIds.contains(q.getId()));
 
         // Update existing questions in-place and add new questions
-        for (int index = 0; index < incomingQuestions.size(); index++) {
-            SchemeEligibilityQuestion incoming = incomingQuestions.get(index);
+        for (int index = 0; index < incomingCopy.size(); index++) {
+            SchemeEligibilityQuestion incoming = incomingCopy.get(index);
             if (incoming.getId() != null) {
                 SchemeEligibilityQuestion existing = existingById.get(incoming.getId());
                 existing.setDisplayOrder(index);

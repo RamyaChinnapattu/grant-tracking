@@ -173,7 +173,7 @@ public class EligibilityScoringService {
                                 questionMaximum,
                                 false,
                                 question.isRequired(),
-                                "The supplied answer does not match any configured option."));
+                                "Invalid answer value provided: The supplied answer does not match any configured option."));
 
                 continue;
             }
@@ -186,21 +186,9 @@ public class EligibilityScoringService {
 
             boolean meetsCondition = selected.meetsEligibilityCondition();
 
-            if (question.isRequired() && !meetsCondition) {
-                failedCriteria.add(
-                        "Eligibility condition failed: "
-                                + question.getQuestionText());
-            }
-
-            String explanation;
-
-            if (meetsCondition) {
-                explanation = "The answer meets this configured condition.";
-            } else if (question.isRequired()) {
-                explanation = "This answer fails a mandatory scheme eligibility condition.";
-            } else {
-                explanation = "This optional answer does not meet the configured condition.";
-            }
+            String explanation = meetsCondition
+                    ? "The answer meets this configured condition."
+                    : "The answer does not meet this configured condition.";
 
             questionResults.add(
                     new EligibilityEvaluationResult.QuestionResult(

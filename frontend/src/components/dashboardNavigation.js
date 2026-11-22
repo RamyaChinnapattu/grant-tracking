@@ -41,6 +41,7 @@ export const dashboardNavigation = {
       path: "/admin/reports",
       icon: BarChart3,
     },
+    { label: "Audit Logs", path: "/admin/audit-logs", icon: FileClock },
     { label: "Workflow Settings", path: "/admin/workflow-settings", icon: Settings2 },
   ],
   BENEFICIARY: [

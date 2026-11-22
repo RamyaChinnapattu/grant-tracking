@@ -52,6 +52,8 @@ class ComplianceOperationsServiceTest {
         DisbursementInstallment installment=new DisbursementInstallment();installment.setPlan(plan);
         DisbursementMilestone milestone=new DisbursementMilestone();milestone.setId(31L);milestone.setTitle("Progress report");milestone.setInstallment(installment);
         compliance=new MilestoneCompliance();compliance.setId(41L);compliance.setMilestone(milestone);compliance.setRequirementTitle("Progress report");compliance.setStatus(ComplianceStatus.SUBMITTED);
+        compliance.setDocumentData("%PDF-1.7 dummy".getBytes());
+        milestone.addCompliance(compliance);
     }
     private User user(Long id,Role role){User u=new User();u.setId(id);u.setRole(role);u.setFullName(role.name());u.setEmail(role.name().toLowerCase()+"@example.test");return u;}
 
@@ -128,5 +130,62 @@ class ComplianceOperationsServiceTest {
         var response=service.resolveNonCompliance(17L,new com.grantora.dto.NonComplianceResolutionRequest(NonComplianceStatus.RESOLVED,"Report received and checked."),officer.getEmail());
         assertEquals(NonComplianceStatus.RESOLVED,response.status());assertEquals(1,response.history().size());
         assertEquals("Report received and checked.",response.history().get(0).remarks());
+    }
+
+    @Test void officerReviewCannotApproveWithoutDocumentData(){
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        compliance.setDocumentData(null);
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        ResponseStatusException ex=assertThrows(ResponseStatusException.class,()->
+                service.review(41L,new ComplianceReviewRequest("APPROVED",null),officer.getEmail()));
+        assertTrue(ex.getReason().contains("Cannot approve compliance evidence without an uploaded supporting document"));
+    }
+
+    @Test void officerReviewApprovalCompletesMilestone(){
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.save(any())).thenAnswer(inv->inv.getArgument(0));
+
+        service.review(41L,new ComplianceReviewRequest("APPROVED","Approved by officer"),officer.getEmail());
+
+        assertEquals(MilestoneStatus.COMPLETED, compliance.getMilestone().getStatus());
+        assertEquals(100, compliance.getMilestone().getProgressPercentage());
+        assertFalse(compliance.getMilestone().getNonCompliant());
+        verify(milestoneRepo).save(compliance.getMilestone());
+    }
+
+    @Test void officerReviewRejectionFlagsMilestoneNonCompliant(){
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.save(any())).thenAnswer(inv->inv.getArgument(0));
+
+        service.review(41L,new ComplianceReviewRequest("REJECTED","Invalid receipts"),officer.getEmail());
+
+        assertTrue(compliance.getMilestone().getNonCompliant());
+        assertTrue(compliance.getMilestone().getNonComplianceReason().contains("rejected"));
+        verify(milestoneRepo).save(compliance.getMilestone());
+    }
+
+    @Test void adminWaiverCompletesMilestone(){
+        when(userRepo.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.save(any())).thenAnswer(inv->inv.getArgument(0));
+
+        service.waive(41L,new com.grantora.dto.ComplianceWaiverRequest("Waived by special order"),admin.getEmail());
+
+        assertEquals(MilestoneStatus.COMPLETED, compliance.getMilestone().getStatus());
+        assertEquals(100, compliance.getMilestone().getProgressPercentage());
+        assertFalse(compliance.getMilestone().getNonCompliant());
+        verify(milestoneRepo).save(compliance.getMilestone());
+    }
+
+    @Test void unauthorizedUserCannotDownloadComplianceDocument(){
+        User stranger=user(99L,Role.BENEFICIARY);
+        when(userRepo.findByEmail(stranger.getEmail())).thenReturn(Optional.of(stranger));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+
+        ResponseStatusException ex=assertThrows(ResponseStatusException.class,()->
+                service.document(41L,stranger.getEmail()));
+        assertTrue(ex.getReason().contains("You do not have access to this compliance document"));
     }
 }
