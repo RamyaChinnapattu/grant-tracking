@@ -34,6 +34,7 @@ export const dashboardNavigation = {
     },
     { label: "Compliance Requirements", path: "/admin/compliance", icon: BadgeCheck },
     { label: "Fund Analytics", path: "/admin/fund-analytics", icon: BarChart3 },
+    { label: "Disbursement Dashboard", path: "/admin/disbursement-dashboard", icon: CircleDollarSign },
     { label: "Utilization Review", path: "/admin/utilization-review", icon: BadgeCheck },
     {
       label: "Reports & Analytics",

@@ -29,6 +29,7 @@ import ComplianceCenter from "./pages/ComplianceCenter";
 import FundAnalytics from "./pages/FundAnalytics";
 import BeneficiaryUtilization from "./pages/BeneficiaryUtilization";
 import UtilizationReview from "./pages/UtilizationReview";
+import AdminDisbursementDashboard from "./pages/AdminDisbursementDashboard";
 
 function getAuthenticatedHome() {
   const token = localStorage.getItem("token");
@@ -112,6 +113,7 @@ function App() {
             />
             <Route path="/admin/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Management" }} />
             <Route path="/admin/fund-analytics" element={<FundAnalytics />} handle={{ pageTitle: "Fund Analytics" }} />
+            <Route path="/admin/disbursement-dashboard" element={<AdminDisbursementDashboard />} handle={{ pageTitle: "Disbursement Dashboard" }} />
             <Route path="/admin/utilization-review" element={<UtilizationReview />} handle={{ pageTitle: "Utilization Review" }} />
             <Route
               path="/admin/reports"
