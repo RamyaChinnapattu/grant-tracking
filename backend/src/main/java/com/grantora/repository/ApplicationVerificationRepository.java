@@ -7,4 +7,5 @@ import java.util.List;
 public interface ApplicationVerificationRepository
         extends JpaRepository<ApplicationVerification, Long> {
     List<ApplicationVerification> findByApplication_IdOrderByCreatedAtAsc(Long applicationId);
+    List<ApplicationVerification> findAllByOrderByCreatedAtDesc();
 }

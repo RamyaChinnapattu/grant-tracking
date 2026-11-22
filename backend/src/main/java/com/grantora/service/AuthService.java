@@ -33,6 +33,15 @@ public class AuthService {
     // Registration
     public User register(RegisterRequest request) {
 
+        if (request.getRole() != null && !request.getRole().isBlank()) {
+            String requestedRole = request.getRole().trim();
+            if (!Role.BENEFICIARY.name().equalsIgnoreCase(requestedRole)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "Self-registration is only permitted for the BENEFICIARY role. Officer and Administrator accounts must be created by an Administrator.");
+            }
+        }
+
         if (userRepository.existsByEmail(request.getEmail().trim().toLowerCase())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email already registered");
         }

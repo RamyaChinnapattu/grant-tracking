@@ -145,10 +145,13 @@ public class VerificationWorkflowService {
                     VerificationStage.FIELD);
 
             GrantApplication saved = applicationRepository.save(application);
+            String schemeName = (saved.getScheme() != null && saved.getScheme().getSchemeName() != null)
+                    ? saved.getScheme().getSchemeName()
+                    : "grant";
             notifyBeneficiary(
                     saved,
                     "submitted",
-                    "Your grant application #" + saved.getId() + " for " + saved.getScheme().getSchemeName()
+                    "Your grant application #" + saved.getId() + " for " + schemeName
                             + " has been submitted for field verification.");
             return saved;
 
@@ -361,6 +364,25 @@ public class VerificationWorkflowService {
             nextOfficer = advance(application, assignedStage);
 
         } else if (stage == VerificationStage.FINANCE) {
+
+            // Verify prior stages were completed before granting final finance approval
+            List<ApplicationVerification> history = historyRepository
+                    .findByApplication_IdOrderByCreatedAtAsc(applicationId);
+            if (history != null && !history.isEmpty()) {
+                boolean hasFieldVerification = history.stream()
+                        .anyMatch(h -> h.getStage() == VerificationStage.FIELD
+                                && ("VERIFIED".equalsIgnoreCase(h.getAction())
+                                        || VerificationDecision.VERIFIED.name().equalsIgnoreCase(h.getAction())));
+                boolean hasDistrictApproval = history.stream()
+                        .anyMatch(h -> h.getStage() == VerificationStage.DISTRICT
+                                && ("APPROVED".equalsIgnoreCase(h.getAction())
+                                        || VerificationDecision.APPROVED.name().equalsIgnoreCase(h.getAction())));
+                if (!hasFieldVerification || !hasDistrictApproval) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Cannot grant Finance approval: Field verification and District review must be completed first.");
+                }
+            }
 
             application.setTaskCompletedAt(LocalDateTime.now());
             application.setStatus(GrantApplicationStatus.APPROVED);
@@ -575,6 +597,14 @@ public class VerificationWorkflowService {
 
         if (!isAwaitingReview(application)) {
             throw conflict("This application is not awaiting verification.");
+        }
+
+        if (application.getBeneficiary() != null
+                && application.getBeneficiary().getUser() != null
+                && Objects.equals(application.getBeneficiary().getUser().getId(), actor.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Officers cannot verify or approve their own grant applications.");
         }
 
         if (admin) {

@@ -80,6 +80,50 @@ class AuthValidationAndSecurityTest {
     }
 
     @Test
+    void register_shouldRejectWhenAdminRoleRequested() {
+        RegisterRequest request = new RegisterRequest(
+                "Escalation Attempt", "attacker@example.com", "SecurePass123!", "+919876543210");
+        request.setRole("ADMIN");
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> authService.register(request));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("Self-registration is only permitted for the BENEFICIARY role"));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void register_shouldRejectWhenOfficerRoleRequested() {
+        RegisterRequest request = new RegisterRequest(
+                "Escalation Attempt", "officer.fraud@example.com", "SecurePass123!", "+919876543210");
+        request.setRole("OFFICER");
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> authService.register(request));
+
+        assertEquals(400, ex.getStatusCode().value());
+        assertTrue(ex.getReason().contains("Self-registration is only permitted for the BENEFICIARY role"));
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void register_shouldAllowExplicitBeneficiaryRole() {
+        RegisterRequest request = new RegisterRequest(
+                "Explicit Beneficiary", "explicit@example.com", "SecurePass123!", "+919876543210");
+        request.setRole("BENEFICIARY");
+
+        when(userRepository.existsByEmail("explicit@example.com")).thenReturn(false);
+        when(userRepository.save(any(User.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        User registered = authService.register(request);
+        assertNotNull(registered);
+        assertEquals(Role.BENEFICIARY, registered.getRole());
+    }
+
+    @Test
     void login_shouldSucceedWithValidCredentials() {
         BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
         User user = new User();

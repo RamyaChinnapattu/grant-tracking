@@ -25,6 +25,8 @@ public interface DisbursementPlanRepository extends JpaRepository<DisbursementPl
 
     List<DisbursementPlan> findByPlanStatus(DisbursementPlanStatus planStatus);
 
+    List<DisbursementPlan> findByScheme_Id(Long schemeId);
+
     @Query("SELECT p FROM DisbursementPlan p JOIN FETCH p.application a JOIN FETCH a.beneficiary b WHERE p.id = :id")
     Optional<DisbursementPlan> findDetailedById(@Param("id") Long id);
 }

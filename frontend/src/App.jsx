@@ -202,7 +202,7 @@ function App() {
             />
             <Route
               path="/officer/notifications"
-              element={<DashboardPlaceholder title="Notifications" />}
+              element={<BeneficiaryNotifications />}
               handle={{ pageTitle: "Notifications" }}
             />
             {/* Backward compatibility redirects for legacy duplicate routes */}
