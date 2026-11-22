@@ -110,6 +110,14 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/compliance/submissions/*/document").hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
                         .requestMatchers("/api/compliance/**").authenticated()
 
+                        .requestMatchers(HttpMethod.GET, "/api/fund-analytics/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/utilization/mine").hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.POST, "/api/utilization").hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.PUT, "/api/utilization/*").hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.GET, "/api/utilization/review-queue").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/utilization/*/review").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers("/api/utilization/**").authenticated()
+
                         .requestMatchers(HttpMethod.POST, "/api/disbursements/plans").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/disbursements/milestones/*/compliance").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/disbursements/plans/*/deactivate").hasRole("ADMIN")

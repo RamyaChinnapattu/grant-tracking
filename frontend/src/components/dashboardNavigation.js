@@ -33,6 +33,8 @@ export const dashboardNavigation = {
       icon: CircleDollarSign,
     },
     { label: "Compliance Requirements", path: "/admin/compliance", icon: BadgeCheck },
+    { label: "Fund Analytics", path: "/admin/fund-analytics", icon: BarChart3 },
+    { label: "Utilization Review", path: "/admin/utilization-review", icon: BadgeCheck },
     {
       label: "Reports & Analytics",
       path: "/admin/reports",
@@ -49,6 +51,7 @@ export const dashboardNavigation = {
     { label: "Browse Schemes", path: "/beneficiary/schemes", icon: FolderKanban },
     { label: "My Disbursement Schedule", path: "/beneficiary/disbursements", icon: CircleDollarSign },
     { label: "My Compliance", path: "/beneficiary/compliance", icon: BadgeCheck },
+    { label: "My Grant Expenditure", path: "/beneficiary/utilization", icon: CircleDollarSign },
     {
       label: "My Applications",
       path: "/beneficiary/applications",
@@ -79,6 +82,7 @@ export const dashboardNavigation = {
       icon: FileClock,
     },
     { label: "Compliance Review", path: "/officer/compliance", icon: BadgeCheck },
+    { label: "Utilization Review", path: "/officer/utilization", icon: CircleDollarSign },
     { label: "Profile", path: "/officer/profile", icon: UserRound },
     { label: "Notifications", path: "/officer/notifications", icon: Bell },
   ],
