@@ -24,6 +24,7 @@ import {
 import { getMyApplications } from "../services/grantApplicationService";
 import { getNotifications } from "../services/notificationService";
 import AdminDashboardHome from "./AdminDashboardHome";
+import OfficerMilestone3Dashboard from "./OfficerMilestone3Dashboard";
 import "../styles/DashboardHome.css";
 
 function BeneficiaryDashboardHome() {
@@ -459,6 +460,10 @@ function DashboardHome({ role }) {
 
   if (role === "BENEFICIARY") {
     return <BeneficiaryDashboardHome />;
+  }
+
+  if (role === "OFFICER") {
+    return <OfficerMilestone3Dashboard />;
   }
 
   const name = localStorage.getItem("fullName")?.trim().split(/\s+/)[0];

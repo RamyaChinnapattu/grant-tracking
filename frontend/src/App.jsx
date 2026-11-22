@@ -26,6 +26,10 @@ import WorkflowSettings from "./pages/WorkflowSettings";
 import BeneficiaryDisbursements from "./pages/BeneficiaryDisbursements";
 import BeneficiaryCompliance from "./pages/BeneficiaryCompliance";
 import ComplianceCenter from "./pages/ComplianceCenter";
+import FundAnalytics from "./pages/FundAnalytics";
+import BeneficiaryUtilization from "./pages/BeneficiaryUtilization";
+import UtilizationReview from "./pages/UtilizationReview";
+import AdminDisbursementDashboard from "./pages/AdminDisbursementDashboard";
 
 function getAuthenticatedHome() {
   const token = localStorage.getItem("token");
@@ -108,6 +112,9 @@ function App() {
               handle={{ pageTitle: "Grant Disbursement & Compliance" }}
             />
             <Route path="/admin/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Management" }} />
+            <Route path="/admin/fund-analytics" element={<FundAnalytics />} handle={{ pageTitle: "Fund Analytics" }} />
+            <Route path="/admin/disbursement-dashboard" element={<AdminDisbursementDashboard />} handle={{ pageTitle: "Disbursement Dashboard" }} />
+            <Route path="/admin/utilization-review" element={<UtilizationReview />} handle={{ pageTitle: "Utilization Review" }} />
             <Route
               path="/admin/reports"
               element={<AdminReports />}
@@ -140,6 +147,7 @@ function App() {
             />
             <Route path="/beneficiary/disbursements" element={<BeneficiaryDisbursements />} handle={{ pageTitle: "My Disbursement Schedule" }} />
             <Route path="/beneficiary/compliance" element={<BeneficiaryCompliance />} handle={{ pageTitle: "My Compliance" }} />
+            <Route path="/beneficiary/utilization" element={<BeneficiaryUtilization />} handle={{ pageTitle: "My Grant Expenditure" }} />
             <Route
               path="/beneficiary/applications"
               element={<GrantApplicationManagement />}
@@ -181,6 +189,7 @@ function App() {
               handle={{ pageTitle: "My Applications" }}
             />
             <Route path="/officer/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Review" }} />
+            <Route path="/officer/utilization" element={<UtilizationReview />} handle={{ pageTitle: "Utilization Review" }} />
             <Route
               path="/officer/history"
               element={<VerificationWorkflow historyOnly />}

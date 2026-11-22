@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { getApplications } from "../services/grantApplicationService";
 import { getSchemes } from "../services/schemeService";
+import Milestone3ReportExports from "../components/Milestone3ReportExports";
 import "../styles/DashboardHome.css";
 import "../styles/AdminDashboardHome.css";
 
@@ -167,6 +168,8 @@ function AdminReports() {
           </button>
         </div>
       )}
+
+      <Milestone3ReportExports />
 
       {/* Scheme Performance Table */}
       <div className="dash-section">

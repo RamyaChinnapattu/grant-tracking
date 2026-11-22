@@ -1,16 +1,22 @@
-import { useEffect, useState } from "react";
+import { useEffect,useState } from "react";
+import { Link } from "react-router-dom";
+import { RefreshCw } from "lucide-react";
 import { getMyDisbursementPlans } from "../services/disbursementService";
+import { getComplianceMine } from "../services/complianceService";
+import { getMyUtilization } from "../services/fundAnalyticsService";
 import "../styles/DisbursementManagement.css";
-
-const money = (value) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 }).format(Number(value || 0));
-
-export default function BeneficiaryDisbursements() {
-  const [plans, setPlans] = useState([]);
-  const [error, setError] = useState("");
-  useEffect(() => { getMyDisbursementPlans().then(({ data }) => setPlans(data || [])).catch(() => setError("Could not load your disbursement schedules.")); }, []);
-  return <section className="disb-page"><header className="disb-page__header"><div><h1>My Disbursement Schedule</h1><p>Read-only schedule for your approved grant applications.</p></div></header>
-    {error && <p role="alert">{error}</p>}
-    {plans.length === 0 && !error && <div className="disb-card">No approved disbursement schedules are available yet.</div>}
-    {plans.map((plan) => <article className="disb-card" key={plan.id}><h2>{plan.schemeName} · Application #{plan.applicationId}</h2><p>Approved grant: <strong>{money(plan.totalApprovedAmount)}</strong> · Plan status: {plan.planStatus}</p><div className="disb-table-wrap"><table className="disb-table"><thead><tr><th>Installment</th><th>Amount</th><th>Share</th><th>Planned release</th><th>Actual release</th><th>Status</th><th>Milestone / condition</th></tr></thead><tbody>{(plan.installments || []).map((i) => <tr key={i.id}><td>{i.installmentNumber}. {i.title}</td><td>{money(i.amount)}</td><td>{i.percentage}%</td><td>{i.plannedReleaseDate || "—"}</td><td>{i.actualDisbursementDate || "—"}</td><td>{i.status}</td><td>{i.milestones?.map((m) => <div key={m.id}><strong>{m.title}</strong>{m.description && <div>{m.description}</div>}{m.compliances?.map((c) => <small key={c.id}>{c.requirementTitle}</small>)}</div>)}</td></tr>)}</tbody></table></div></article>)}
-  </section>;
+import "../styles/FundAnalytics.css";
+const money=(value)=>new Intl.NumberFormat("en-IN",{style:"currency",currency:"INR",maximumFractionDigits:2}).format(Number(value||0));
+export default function BeneficiaryDisbursements(){
+ const [plans,setPlans]=useState([]);const [compliance,setCompliance]=useState([]);const [reports,setReports]=useState([]);const [error,setError]=useState("");const [busy,setBusy]=useState(true);
+ const load=async()=>{setBusy(true);setError("");try{const [p,c,u]=await Promise.all([getMyDisbursementPlans(),getComplianceMine(),getMyUtilization()]);setPlans(p.data||[]);setCompliance(c.data||[]);setReports(u.data||[]);}catch(e){setError(e.response?.data?.message||"Could not load your grant information.");}finally{setBusy(false);}};
+ useEffect(()=>{load();},[]);
+ const pending=compliance.filter(c=>["PENDING","OVERDUE","CORRECTION_REQUIRED","REJECTED"].includes(c.status));
+ return <main className="disb-page"><header className="disb-page__header"><div><h1>My Grant Disbursements</h1><p>Schedules, compliance deadlines, release history, and utilization review for your grants.</p></div><button className="fund-button secondary" onClick={load} disabled={busy}><RefreshCw size={15}/>Refresh</button></header>
+ {error&&<div role="alert" className="fund-error">{error}</div>}{busy&&!plans.length?<div className="disb-card">Loading your grant schedule…</div>:null}
+ {!busy&&!plans.length&&!error&&<div className="disb-card">No approved disbursement schedules are available yet.</div>}
+ {plans.map(plan=><article className="disb-card" key={plan.id}><h2>{plan.schemeName} · Application #{plan.applicationId}</h2><p>Approved grant: <strong>{money(plan.totalApprovedAmount)}</strong> · Plan status: {plan.planStatus}</p><div className="disb-table-wrap"><table className="disb-table"><thead><tr><th>Installment</th><th>Amount</th><th>Share</th><th>Scheduled</th><th>Actual release</th><th>Status</th><th>Milestone / condition</th></tr></thead><tbody>{(plan.installments||[]).map(i=><tr key={i.id}><td>{i.installmentNumber}. {i.title}</td><td>{money(i.amount)}</td><td>{i.percentage}%</td><td>{i.plannedReleaseDate||"—"}</td><td>{i.actualDisbursementDate||"—"}</td><td>{i.status}</td><td>{i.milestones?.map(m=><div key={m.id}><strong>{m.title}</strong>{m.description&&<div>{m.description}</div>}{m.compliances?.map(c=><small key={c.id}>{c.requirementTitle} · {c.status}{c.submissionDeadline?` · due ${c.submissionDeadline}`:""}</small>)}</div>)}</td></tr>)}</tbody></table></div></article>)}
+ <section className="fund-panel"><div className="fund-panel__heading"><div><h2>Pending compliance</h2><p>Requirements needing a submission or correction.</p></div><Link className="fund-button secondary" to="/beneficiary/compliance">Open compliance center</Link></div>{pending.length?<div className="fund-table-wrap"><table><thead><tr><th>Requirement</th><th>Application</th><th>Milestone</th><th>Status</th><th>Deadline</th><th>Officer remarks</th></tr></thead><tbody>{pending.map(c=><tr key={c.id}><td>{c.requirementTitle}</td><td>#{c.applicationId}</td><td>{c.milestoneTitle}</td><td>{c.status.replaceAll("_"," ")}</td><td>{c.submissionDeadline||"—"}</td><td>{c.verificationRemarks||"—"}</td></tr>)}</tbody></table></div>:<p className="fund-empty">No pending compliance obligations.</p>}</section>
+ <section className="fund-panel"><div className="fund-panel__heading"><div><h2>Utilization report history</h2><p>Reported expenditure remains unverified until an officer approves its evidence.</p></div><Link className="fund-button secondary" to="/beneficiary/utilization">Report expenditure</Link></div>{reports.length?<div className="fund-table-wrap"><table><thead><tr><th>Application</th><th>Installment</th><th>Category</th><th>Reported</th><th>Status</th><th>Submitted</th><th>Officer remarks</th></tr></thead><tbody>{reports.map(r=><tr key={r.id}><td>#{r.applicationId}</td><td>{r.installmentNumber}</td><td>{r.category}</td><td>{money(r.reportedAmount)}</td><td>{r.status.replaceAll("_"," ")}</td><td>{r.submittedAt?new Date(r.submittedAt).toLocaleDateString("en-IN"):"—"}</td><td>{r.reviewRemarks||"—"}</td></tr>)}</tbody></table></div>:<p className="fund-empty">No utilization reports submitted.</p>}</section>
+ </main>;
 }

@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -121,7 +122,7 @@ class ComplianceOperationsServiceTest {
     }
 
     @Test void assignedOfficerCanResolveCaseAndResolutionIsRecorded(){
-        ComplianceNonCompliance item=new ComplianceNonCompliance();item.setId(17L);item.setCompliance(compliance);item.setReason("Late report");item.setSeverity("MEDIUM");
+        ComplianceNonCompliance item=new ComplianceNonCompliance();ReflectionTestUtils.setField(item,"id",17L);item.setCompliance(compliance);item.setReason("Late report");item.setSeverity("MEDIUM");
         when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));when(nonComplianceRepo.findById(17L)).thenReturn(Optional.of(item));
         when(nonComplianceRepo.save(any())).thenAnswer(inv->inv.getArgument(0));
         var response=service.resolveNonCompliance(17L,new com.grantora.dto.NonComplianceResolutionRequest(NonComplianceStatus.RESOLVED,"Report received and checked."),officer.getEmail());
