@@ -1036,14 +1036,18 @@ public class DisbursementService {
         Beneficiary ben = app != null ? app.getBeneficiary() : null;
         Scheme scheme = plan.getScheme();
 
-        BigDecimal scheduledTotal = plan.getInstallments().stream()
+        List<DisbursementInstallment> installments = plan.getInstallments() == null ? Collections.emptyList() : plan.getInstallments();
+
+        BigDecimal scheduledTotal = installments.stream()
                 .map(DisbursementInstallment::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal remaining = plan.getTotalApprovedAmount().subtract(plan.getTotalDisbursedAmount());
+        BigDecimal approved = plan.getTotalApprovedAmount() != null ? plan.getTotalApprovedAmount() : BigDecimal.ZERO;
+        BigDecimal disbursed = plan.getTotalDisbursedAmount() != null ? plan.getTotalDisbursedAmount() : BigDecimal.ZERO;
+        BigDecimal remaining = approved.subtract(disbursed);
 
-        List<DisbursementInstallmentResponse> instResponses = plan.getInstallments().stream()
+        List<DisbursementInstallmentResponse> instResponses = installments.stream()
                 .map(this::toInstallmentResponse)
                 .collect(Collectors.toList());
 
@@ -1057,8 +1061,8 @@ public class DisbursementService {
                 ben != null && ben.getUser() != null ? ben.getUser().getFullName() : "Beneficiary",
                 ben != null ? ben.getState() : null,
                 ben != null ? ben.getDistrict() : null,
-                plan.getTotalApprovedAmount(),
-                plan.getTotalDisbursedAmount(),
+                approved,
+                disbursed,
                 scheduledTotal,
                 remaining,
                 plan.getPlanStatus(),
@@ -1071,12 +1075,14 @@ public class DisbursementService {
     }
 
     private DisbursementInstallmentResponse toInstallmentResponse(DisbursementInstallment inst) {
-        List<DisbursementMilestoneResponse> milestoneResponses = inst.getMilestones().stream()
+        List<DisbursementMilestone> milestones = inst.getMilestones() == null ? Collections.emptyList() : inst.getMilestones();
+
+        List<DisbursementMilestoneResponse> milestoneResponses = milestones.stream()
                 .map(this::toMilestoneResponse)
                 .collect(Collectors.toList());
 
-        boolean allVerified = !inst.getMilestones().isEmpty() && inst.getMilestones().stream().allMatch(m ->
-                !m.getNonCompliant() && m.getCompliances().stream().allMatch(c -> !c.isRequired()
+        boolean allVerified = !milestones.isEmpty() && milestones.stream().allMatch(m ->
+                !Boolean.TRUE.equals(m.getNonCompliant()) && (m.getCompliances() == null ? Collections.<MilestoneCompliance>emptyList() : m.getCompliances()).stream().allMatch(c -> !c.isRequired()
                         || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.APPROVED
                         || c.getStatus() == ComplianceStatus.WAIVED)
         );
@@ -1106,7 +1112,9 @@ public class DisbursementService {
         GrantApplication app = plan != null ? plan.getApplication() : null;
         Beneficiary ben = app != null ? app.getBeneficiary() : null;
 
-        List<MilestoneComplianceResponse> compResponses = m.getCompliances().stream()
+        List<MilestoneCompliance> compliances = m.getCompliances() == null ? Collections.emptyList() : m.getCompliances();
+
+        List<MilestoneComplianceResponse> compResponses = compliances.stream()
                 .map(this::toComplianceResponse)
                 .collect(Collectors.toList());
 
