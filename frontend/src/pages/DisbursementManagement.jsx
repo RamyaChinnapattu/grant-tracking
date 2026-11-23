@@ -96,6 +96,8 @@ export default function DisbursementManagement() {
 
   // Modal states
   const [showCreatePlanModal, setShowCreatePlanModal] = useState(false);
+  const [planAllocationMode, setPlanAllocationMode] = useState("PERCENTAGE");
+  const [planSubmitting, setPlanSubmitting] = useState(false);
   const [showPlanDetailsModal, setShowPlanDetailsModal] = useState(null);
   const [showProgressModal, setShowProgressModal] = useState(null);
   const [showSubmitComplianceModal, setShowSubmitComplianceModal] = useState(null);
@@ -206,6 +208,35 @@ export default function DisbursementManagement() {
     return eligibleApps.find((a) => a.id === Number(createPlanForm.applicationId)) || null;
   }, [eligibleApps, createPlanForm.applicationId]);
 
+  // Modal scroll lock effect to prevent background page scrolling
+  useEffect(() => {
+    const isAnyModalOpen = Boolean(
+      showCreatePlanModal ||
+      showPlanDetailsModal ||
+      showProgressModal ||
+      showSubmitComplianceModal ||
+      showVerifyComplianceModal ||
+      showDisburseModal ||
+      showReminderSettingsModal
+    );
+
+    if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [
+    showCreatePlanModal,
+    showPlanDetailsModal,
+    showProgressModal,
+    showSubmitComplianceModal,
+    showVerifyComplianceModal,
+    showDisburseModal,
+    showReminderSettingsModal,
+  ]);
+
   // Recalculate amounts when app or percentages change
   const handleAppSelectChange = (appId) => {
     const app = eligibleApps.find((a) => a.id === Number(appId));
@@ -214,33 +245,37 @@ export default function DisbursementManagement() {
       return;
     }
     const approvedAmt = Number(app.requestedAmount) || 0;
+    const s1 = Math.round(approvedAmt * 0.4);
+    const s2 = Math.round(approvedAmt * 0.3);
+    const s3 = Math.max(0, approvedAmt - s1 - s2);
+
     const installments = [
       {
         installmentNumber: 1,
         title: "Stage 1 - Initial Advance",
-        calculationType: "PERCENTAGE",
+        calculationType: planAllocationMode,
         percentage: 40,
-        amount: Math.round(approvedAmt * 0.4),
+        amount: s1,
         plannedReleaseDate: new Date().toISOString().split("T")[0],
-        condition: "",
+        condition: "Application verification completed and grant agreement signed",
       },
       {
         installmentNumber: 2,
-        title: "Stage 2 - Mid Construction / Inspection",
-        calculationType: "PERCENTAGE",
+        title: "Stage 2 - Mid Milestone Inspection",
+        calculationType: planAllocationMode,
         percentage: 30,
-        amount: Math.round(approvedAmt * 0.3),
+        amount: s2,
         plannedReleaseDate: "",
-        condition: "",
+        condition: "Field inspection report and mid-term milestone verification",
       },
       {
         installmentNumber: 3,
-        title: "Stage 3 - Final Commissioning & Handover",
-        calculationType: "PERCENTAGE",
+        title: "Stage 3 - Final Completion & Handover",
+        calculationType: planAllocationMode,
         percentage: 30,
-        amount: approvedAmt - Math.round(approvedAmt * 0.4) - Math.round(approvedAmt * 0.3),
+        amount: s3,
         plannedReleaseDate: "",
-        condition: "",
+        condition: "Final utilization certificate, geo-tagged photos, and project sign-off",
       },
     ];
 
@@ -251,40 +286,85 @@ export default function DisbursementManagement() {
     }));
   };
 
+  const handleModeChange = (newMode) => {
+    setPlanAllocationMode(newMode);
+    const approvedAmt = Number(selectedEligibleApp?.requestedAmount) || 0;
+    if (!approvedAmt) return;
+
+    setCreatePlanForm((prev) => {
+      const nextInst = prev.installments.map((inst) => {
+        if (newMode === "PERCENTAGE") {
+          const pct = approvedAmt > 0 ? Number(((Number(inst.amount || 0) / approvedAmt) * 100).toFixed(2)) : 0;
+          return {
+            ...inst,
+            calculationType: "PERCENTAGE",
+            percentage: pct,
+          };
+        } else {
+          return {
+            ...inst,
+            calculationType: "FIXED",
+            amount: Number(inst.amount) || 0,
+          };
+        }
+      });
+      return { ...prev, installments: nextInst };
+    });
+  };
+
   const handleInstallmentRowChange = (index, field, value) => {
     setCreatePlanForm((prev) => {
       const nextInst = [...prev.installments];
       nextInst[index] = { ...nextInst[index], [field]: value };
+      const approvedAmt = Number(selectedEligibleApp?.requestedAmount) || 0;
 
-      if (field === "calculationType") {
-        nextInst[index].percentage = value === "PERCENTAGE" ? (Number(nextInst[index].percentage) || 0) : "";
-        if (value === "PERCENTAGE" && selectedEligibleApp) nextInst[index].amount = Math.round((Number(selectedEligibleApp.requestedAmount) * (Number(nextInst[index].percentage) || 0)) / 100);
-      }
-      if (field === "percentage" && selectedEligibleApp && nextInst[index].calculationType === "PERCENTAGE") {
-        const approvedAmt = Number(selectedEligibleApp.requestedAmount) || 0;
+      if (field === "percentage" && approvedAmt > 0 && planAllocationMode === "PERCENTAGE") {
         const pct = Number(value) || 0;
         nextInst[index].amount = Math.round((approvedAmt * pct) / 100);
       }
+
+      if (field === "amount" && approvedAmt > 0 && planAllocationMode === "FIXED") {
+        const amt = Number(value) || 0;
+        nextInst[index].percentage = approvedAmt > 0 ? Number(((amt / approvedAmt) * 100).toFixed(2)) : 0;
+      }
+
       return { ...prev, installments: nextInst };
     });
   };
 
   const addInstallmentStage = () => {
-    setCreatePlanForm((prev) => ({
-      ...prev,
-      installments: [
-        ...prev.installments,
-        {
-          installmentNumber: prev.installments.length + 1,
-          title: `Stage ${prev.installments.length + 1} Milestone`,
-          calculationType: "FIXED",
-          percentage: 0,
-          amount: 0,
-          plannedReleaseDate: "",
-          condition: "",
-        },
-      ],
-    }));
+    setCreatePlanForm((prev) => {
+      const nextNum = prev.installments.length + 1;
+      const approvedAmt = Number(selectedEligibleApp?.requestedAmount) || 0;
+      let newPct = 0;
+      let newAmt = 0;
+
+      if (planAllocationMode === "PERCENTAGE") {
+        const currentPctSum = prev.installments.reduce((sum, inst) => sum + (Number(inst.percentage) || 0), 0);
+        newPct = Math.max(0, Number((100 - currentPctSum).toFixed(2)));
+        newAmt = Math.round((approvedAmt * newPct) / 100);
+      } else {
+        const currentAmtSum = prev.installments.reduce((sum, inst) => sum + (Number(inst.amount) || 0), 0);
+        newAmt = Math.max(0, approvedAmt - currentAmtSum);
+        newPct = approvedAmt > 0 ? Number(((newAmt / approvedAmt) * 100).toFixed(2)) : 0;
+      }
+
+      return {
+        ...prev,
+        installments: [
+          ...prev.installments,
+          {
+            installmentNumber: nextNum,
+            title: `Stage ${nextNum} - Milestone`,
+            calculationType: planAllocationMode,
+            percentage: newPct,
+            amount: newAmt,
+            plannedReleaseDate: "",
+            condition: "",
+          },
+        ],
+      };
+    });
   };
 
   const removeInstallmentStage = (index) => {
@@ -303,6 +383,28 @@ export default function DisbursementManagement() {
     );
   }, [createPlanForm.installments]);
 
+  const totalPercentageSum = useMemo(() => {
+    if (planAllocationMode === "PERCENTAGE") {
+      return createPlanForm.installments.reduce(
+        (sum, inst) => sum + (Number(inst.percentage) || 0),
+        0
+      );
+    }
+    const approvedAmt = Number(selectedEligibleApp?.requestedAmount) || 0;
+    if (approvedAmt <= 0) return 0;
+    return (totalScheduledSum / approvedAmt) * 100;
+  }, [createPlanForm.installments, planAllocationMode, selectedEligibleApp, totalScheduledSum]);
+
+  const approvedGrantAmount = Number(selectedEligibleApp?.requestedAmount || 0);
+  const remainingToAllocate = approvedGrantAmount - totalScheduledSum;
+  const isTotalMatching = Boolean(
+    selectedEligibleApp &&
+    approvedGrantAmount > 0 &&
+    (planAllocationMode === "PERCENTAGE"
+      ? Math.abs(totalPercentageSum - 100) < 0.01 && totalScheduledSum === approvedGrantAmount
+      : totalScheduledSum === approvedGrantAmount)
+  );
+
   const handleCreatePlanSubmit = async (e) => {
     e.preventDefault();
     if (!createPlanForm.applicationId) {
@@ -310,30 +412,79 @@ export default function DisbursementManagement() {
       return;
     }
     const approvedAmt = Number(selectedEligibleApp?.requestedAmount) || 0;
-    if (totalScheduledSum !== approvedAmt) {
-      setError(`Installments must total the approved grant (${formatCurrency(approvedAmt)}).`);
+    if (approvedAmt <= 0) {
+      setError("Selected application has an invalid grant amount.");
       return;
     }
+
+    if (createPlanForm.installments.length === 0) {
+      setError("At least one installment stage is required to create a disbursement plan.");
+      return;
+    }
+
+    if (planAllocationMode === "PERCENTAGE") {
+      const totalPct = createPlanForm.installments.reduce((sum, inst) => sum + (Number(inst.percentage) || 0), 0);
+      if (Math.abs(totalPct - 100) > 0.01) {
+        setError(`Percentage-based installments must total exactly 100% (currently ${totalPct.toFixed(1)}%).`);
+        return;
+      }
+    }
+
+    if (totalScheduledSum !== approvedAmt) {
+      setError(
+        `Total scheduled installment amount (${formatCurrency(totalScheduledSum)}) must equal the approved grant amount (${formatCurrency(approvedAmt)}). Difference: ${formatCurrency(Math.abs(remainingToAllocate))}.`
+      );
+      return;
+    }
+
+    for (const inst of createPlanForm.installments) {
+      if (!inst.title?.trim()) {
+        setError(`Stage ${inst.installmentNumber} title is required.`);
+        return;
+      }
+      if (Number(inst.amount) <= 0) {
+        setError(`Stage ${inst.installmentNumber} amount must be greater than zero.`);
+        return;
+      }
+    }
+
+    setPlanSubmitting(true);
+    setError("");
 
     try {
       await createDisbursementPlan({
         applicationId: Number(createPlanForm.applicationId),
-        notes: createPlanForm.notes,
+        notes: createPlanForm.notes?.trim() || "",
         installments: createPlanForm.installments.map((inst) => ({
           installmentNumber: inst.installmentNumber,
-          title: inst.title,
-          percentage: inst.calculationType === "PERCENTAGE" ? Number(inst.percentage) : null,
+          title: inst.title.trim(),
+          percentage: planAllocationMode === "PERCENTAGE" ? Number(inst.percentage) : null,
           amount: Number(inst.amount),
           plannedReleaseDate: inst.plannedReleaseDate || null,
-          milestones: [{ title: inst.title, description: inst.condition, dueDate: inst.plannedReleaseDate || null, requirementTitles: inst.condition ? [inst.condition] : [] }],
+          milestones: [
+            {
+              title: inst.title.trim(),
+              description: inst.condition?.trim() || `Stage ${inst.installmentNumber} Milestone`,
+              dueDate: inst.plannedReleaseDate || null,
+              amount: Number(inst.amount),
+              requirementTitles: inst.condition?.trim() ? [inst.condition.trim()] : [],
+            },
+          ],
         })),
       });
 
-      showToast("Disbursement plan configured successfully.");
+      showToast("Disbursement plan configured and activated successfully.");
       setShowCreatePlanModal(false);
-      loadAllData(true);
+      setCreatePlanForm({
+        applicationId: "",
+        notes: "",
+        installments: [],
+      });
+      await loadAllData(true);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to create disbursement plan.");
+      setError(err.response?.data?.message || err.message || "Failed to create disbursement plan.");
+    } finally {
+      setPlanSubmitting(false);
     }
   };
 
@@ -1461,31 +1612,52 @@ export default function DisbursementManagement() {
       {/* MODAL 1: CONFIGURE DISBURSEMENT PLAN */}
       {/* ================================================================= */}
       {showCreatePlanModal && (
-        <div className="disb-modal-overlay">
-          <div className="disb-modal disb-modal--wide">
+        <div
+          className="disb-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget && !planSubmitting) {
+              setShowCreatePlanModal(false);
+            }
+          }}
+        >
+          <div className="disb-modal disb-modal--wide" role="dialog" aria-modal="true" aria-labelledby="create-plan-modal-title">
             <div className="disb-modal__header">
-              <h3 className="disb-modal__title">Configure Staged Disbursement Plan</h3>
+              <div>
+                <h3 id="create-plan-modal-title" className="disb-modal__title">Configure Staged Disbursement Plan</h3>
+                <p style={{ margin: "4px 0 0", fontSize: "0.82rem", color: "var(--color-text-muted)" }}>
+                  Schedule installment stages, percentages, and milestone conditions for approved grants.
+                </p>
+              </div>
               <button
+                type="button"
                 className="disb-modal__close-btn"
-                onClick={() => setShowCreatePlanModal(false)}
+                onClick={() => !planSubmitting && setShowCreatePlanModal(false)}
+                disabled={planSubmitting}
+                aria-label="Close modal"
               >
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleCreatePlanSubmit}>
+
+            <form onSubmit={handleCreatePlanSubmit} className="disb-modal__form">
               <div className="disb-modal__body">
+                {/* Application Selector */}
                 <div className="disb-form-group">
-                  <label className="disb-form-label">Select Approved Application *</label>
+                  <label className="disb-form-label" htmlFor="plan-application-select">
+                    Select Approved Application *
+                  </label>
                   <select
+                    id="plan-application-select"
                     className="disb-form-select"
                     value={createPlanForm.applicationId}
                     onChange={(e) => handleAppSelectChange(e.target.value)}
                     required
+                    disabled={planSubmitting}
                   >
                     <option value="">-- Choose an Approved Application --</option>
                     {eligibleApps.map((a) => (
                       <option key={a.id} value={a.id}>
-                        App #{a.id} - {a.beneficiaryName || "Beneficiary"} ({a.schemeName}) — Grant: {formatCurrency(a.requestedAmount)}
+                        App #{a.id} — {a.beneficiaryName || "Beneficiary"} ({a.schemeName}) • Approved Grant: {formatCurrency(a.requestedAmount)}
                       </option>
                     ))}
                   </select>
@@ -1496,146 +1668,310 @@ export default function DisbursementManagement() {
                   )}
                 </div>
 
+                {/* Allocation Summary KPI Banner */}
                 {selectedEligibleApp && (
-                  <div
-                    style={{
-                      padding: "12px 16px",
-                      borderRadius: "8px",
-                      background: "var(--color-surface-low)",
-                      border: "1px solid var(--color-outline-variant)",
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                    }}
-                  >
-                    <div>
-                      <strong>Approved Grant Limit:</strong> {formatCurrency(selectedEligibleApp.requestedAmount)}
-                      <div style={{ fontSize: "0.78rem", color: "var(--color-text-muted)" }}>
-                        {selectedEligibleApp.schemeName} • {selectedEligibleApp.beneficiaryDetails?.state || ""}
+                  <div className="disb-plan-summary-card">
+                    <div className="disb-plan-summary-grid">
+                      <div className="disb-plan-summary-col">
+                        <span className="disb-plan-summary-label">Approved Grant Limit</span>
+                        <strong className="disb-plan-summary-value disb-plan-summary-value--approved">
+                          {formatCurrency(approvedGrantAmount)}
+                        </strong>
+                        <span className="disb-plan-summary-sub">
+                          {selectedEligibleApp.schemeName} • App #{selectedEligibleApp.id}
+                        </span>
+                      </div>
+
+                      <div className="disb-plan-summary-col">
+                        <span className="disb-plan-summary-label">Total Scheduled</span>
+                        <strong
+                          className={`disb-plan-summary-value ${
+                            isTotalMatching ? "disb-plan-summary-value--success" : "disb-plan-summary-value--danger"
+                          }`}
+                        >
+                          {formatCurrency(totalScheduledSum)}
+                        </strong>
+                        <span className="disb-plan-summary-sub">
+                          Across {createPlanForm.installments.length} stage{createPlanForm.installments.length === 1 ? "" : "s"} ({totalPercentageSum.toFixed(1)}%)
+                        </span>
+                      </div>
+
+                      <div className="disb-plan-summary-col">
+                        <span className="disb-plan-summary-label">
+                          {remainingToAllocate === 0
+                            ? "Allocation Status"
+                            : remainingToAllocate > 0
+                            ? "Remaining to Allocate"
+                            : "Over-Allocated Amount"}
+                        </span>
+                        <strong
+                          className={`disb-plan-summary-value ${
+                            isTotalMatching
+                              ? "disb-plan-summary-value--success"
+                              : remainingToAllocate > 0
+                              ? "disb-plan-summary-value--warning"
+                              : "disb-plan-summary-value--danger"
+                          }`}
+                        >
+                          {remainingToAllocate === 0
+                            ? "100% Balanced"
+                            : formatCurrency(Math.abs(remainingToAllocate))}
+                        </strong>
+                        <span className="disb-plan-summary-sub">
+                          {remainingToAllocate === 0
+                            ? "Ready to activate"
+                            : remainingToAllocate > 0
+                            ? `${formatCurrency(remainingToAllocate)} unassigned`
+                            : `Exceeds grant by ${formatCurrency(Math.abs(remainingToAllocate))}`}
+                        </span>
                       </div>
                     </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: "0.78rem", color: "var(--color-text-muted)" }}>Scheduled Total</div>
-                      <strong
-                        style={{
-                          fontSize: "1.1rem",
-                          color:
-                            totalScheduledSum !== Number(selectedEligibleApp.requestedAmount)
-                              ? "#ef4444"
-                              : "#10b981",
-                        }}
-                      >
-                        {formatCurrency(totalScheduledSum)}
-                      </strong>
-                    </div>
+
+                    {/* Validation Mismatch Alert */}
+                    {!isTotalMatching && (
+                      <div className="disb-plan-validation-alert">
+                        <AlertCircle size={18} />
+                        <div>
+                          <strong>Schedule Mismatch: </strong>
+                          {remainingToAllocate > 0
+                            ? `Installments total ${formatCurrency(totalScheduledSum)} (${totalPercentageSum.toFixed(1)}%), which is ${formatCurrency(remainingToAllocate)} short of the approved grant (${formatCurrency(approvedGrantAmount)}). Adjust stage percentages or amounts to reach 100%.`
+                            : `Installments total ${formatCurrency(totalScheduledSum)} (${totalPercentageSum.toFixed(1)}%), which exceeds the approved grant (${formatCurrency(approvedGrantAmount)}) by ${formatCurrency(Math.abs(remainingToAllocate))}. Reduce stage percentages or amounts.`}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <div className="disb-form-group">
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <label className="disb-form-label">Disbursement Stages / Installments *</label>
-                    <button
-                      type="button"
-                      className="disb-btn disb-btn--secondary disb-btn--sm"
-                      onClick={addInstallmentStage}
-                    >
-                      <Plus size={14} /> Add Stage
-                    </button>
-                  </div>
+                {/* Allocation Mode Selector & Add Stage Row */}
+                {selectedEligibleApp && (
+                  <div className="disb-allocation-mode-card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>
+                      <div>
+                        <span className="disb-form-label" style={{ display: "block", marginBottom: "4px" }}>
+                          Stage Allocation Mode
+                        </span>
+                        <div className="disb-allocation-mode-options">
+                          <label className="disb-radio-option">
+                            <input
+                              type="radio"
+                              name="planMode"
+                              value="PERCENTAGE"
+                              checked={planAllocationMode === "PERCENTAGE"}
+                              onChange={() => handleModeChange("PERCENTAGE")}
+                              disabled={planSubmitting}
+                            />
+                            <span>Percentage Split (%)</span>
+                          </label>
+                          <label className="disb-radio-option">
+                            <input
+                              type="radio"
+                              name="planMode"
+                              value="FIXED"
+                              checked={planAllocationMode === "FIXED"}
+                              onChange={() => handleModeChange("FIXED")}
+                              disabled={planSubmitting}
+                            />
+                            <span>Fixed Amount (₹)</span>
+                          </label>
+                        </div>
+                      </div>
 
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
+                      <button
+                        type="button"
+                        className="disb-btn disb-btn--secondary disb-btn--sm"
+                        onClick={addInstallmentStage}
+                        disabled={planSubmitting}
+                      >
+                        <Plus size={14} /> Add Stage
+                      </button>
+                    </div>
+                    <span className="disb-stage-field__help">
+                      {planAllocationMode === "PERCENTAGE"
+                        ? "Percentage Mode: Specify the % share for each milestone. Stage rupee amounts are computed automatically based on the approved grant."
+                        : "Fixed Amount Mode: Specify exact rupee disbursements for each milestone. Stage amounts must sum to the approved grant."}
+                    </span>
+                  </div>
+                )}
+
+                {/* Stage Cards */}
+                {createPlanForm.installments.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span className="disb-form-label">
+                        Scheduled Stages ({createPlanForm.installments.length})
+                      </span>
+                      <span style={{ fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
+                        Each stage generates a sequential installment release and milestone obligation.
+                      </span>
+                    </div>
+
                     {createPlanForm.installments.map((inst, idx) => (
-                      <div key={idx} className="disb-stage-row">
-                        <div>
-                          <span style={{ fontSize: "0.75rem", fontWeight: 700 }}>Stage {inst.installmentNumber}</span>
+                      <div key={idx} className="disb-stage-card">
+                        <div className="disb-stage-card__header">
+                          <div className="disb-stage-card__badge">
+                            <span className="disb-stage-card__number">Stage {inst.installmentNumber}</span>
+                            {planAllocationMode === "PERCENTAGE" ? (
+                              <span className="disb-stage-card__pct-badge">
+                                {Number(inst.percentage) || 0}% of Grant ({formatCurrency(inst.amount)})
+                              </span>
+                            ) : (
+                              <span className="disb-stage-card__fixed-badge">
+                                {formatCurrency(inst.amount)} ({selectedEligibleApp && Number(selectedEligibleApp.requestedAmount) > 0 ? (((Number(inst.amount) || 0) / Number(selectedEligibleApp.requestedAmount)) * 100).toFixed(1) : 0}%)
+                              </span>
+                            )}
+                          </div>
+                          <div className="disb-stage-card__actions">
+                            {createPlanForm.installments.length > 1 && (
+                              <button
+                                type="button"
+                                className="disb-btn-icon disb-btn-icon--danger"
+                                onClick={() => removeInstallmentStage(idx)}
+                                disabled={planSubmitting}
+                                title={`Remove Stage ${inst.installmentNumber}`}
+                                aria-label={`Remove Stage ${inst.installmentNumber}`}
+                              >
+                                <Trash2 size={15} />
+                                <span>Remove Stage</span>
+                              </button>
+                            )}
+                          </div>
                         </div>
-                        <div>
-                          <input
-                            type="text"
-                            className="disb-form-input"
-                            placeholder="Stage Title"
-                            value={inst.title}
-                            onChange={(e) => handleInstallmentRowChange(idx, "title", e.target.value)}
-                            required
-                          />
-                        </div>
-                        <div>
-                          <select className="disb-form-input" value={inst.calculationType || "FIXED"} onChange={(e) => handleInstallmentRowChange(idx, "calculationType", e.target.value)} aria-label={`Stage ${inst.installmentNumber} amount type`}>
-                            <option value="FIXED">Fixed amount</option><option value="PERCENTAGE">Percentage</option>
-                          </select>
-                        </div>
-                        <div>
-                          <input
-                            type="number"
-                            className="disb-form-input"
-                            placeholder="%"
-                            value={inst.percentage}
-                            onChange={(e) => handleInstallmentRowChange(idx, "percentage", e.target.value)}
-                            min="0"
-                            max="100"
-                            disabled={inst.calculationType !== "PERCENTAGE"}
-                          />
-                        </div>
-                        <div>
-                          <input
-                            type="number"
-                            className="disb-form-input"
-                            placeholder="Amount (₹)"
-                            value={inst.amount}
-                            onChange={(e) => handleInstallmentRowChange(idx, "amount", e.target.value)}
-                            required={inst.calculationType !== "PERCENTAGE"}
-                            readOnly={inst.calculationType === "PERCENTAGE"}
-                            min="1"
-                          />
-                        </div>
-                        <div>
-                          <input type="text" className="disb-form-input" placeholder="Milestone or release condition" value={inst.condition || ""} onChange={(e) => handleInstallmentRowChange(idx, "condition", e.target.value)} />
-                        </div>
-                        <div>
-                          <input
-                            type="date"
-                            className="disb-form-input"
-                            value={inst.plannedReleaseDate || ""}
-                            onChange={(e) => handleInstallmentRowChange(idx, "plannedReleaseDate", e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          {createPlanForm.installments.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => removeInstallmentStage(idx)}
-                              style={{
-                                background: "none",
-                                border: "none",
-                                color: "#ef4444",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
+
+                        <div className="disb-stage-card__grid">
+                          {/* Title */}
+                          <div className="disb-stage-field disb-stage-field--full">
+                            <label className="disb-stage-field__label">
+                              Stage Title / Milestone Name *
+                            </label>
+                            <input
+                              type="text"
+                              className="disb-form-input"
+                              placeholder="e.g., Initial Mobilization Advance, Foundation Inspection, Project Completion"
+                              value={inst.title}
+                              onChange={(e) => handleInstallmentRowChange(idx, "title", e.target.value)}
+                              required
+                              disabled={planSubmitting}
+                            />
+                          </div>
+
+                          {/* Percentage Share */}
+                          <div className="disb-stage-field">
+                            <label className="disb-stage-field__label">
+                              Stage Percentage Share (%) *
+                            </label>
+                            <div className="disb-input-with-addon">
+                              <input
+                                type="number"
+                                className="disb-form-input"
+                                placeholder="0"
+                                value={inst.percentage}
+                                onChange={(e) => handleInstallmentRowChange(idx, "percentage", e.target.value)}
+                                min="0"
+                                max="100"
+                                step="0.01"
+                                disabled={planAllocationMode !== "PERCENTAGE" || planSubmitting}
+                                required={planAllocationMode === "PERCENTAGE"}
+                              />
+                              <span className="disb-addon">%</span>
+                            </div>
+                            <span className="disb-stage-field__help">
+                              {planAllocationMode === "PERCENTAGE"
+                                ? "Enter stage share (0 to 100%)"
+                                : "Calculated proportionally from rupee amount"}
+                            </span>
+                          </div>
+
+                          {/* Rupee Amount */}
+                          <div className="disb-stage-field">
+                            <label className="disb-stage-field__label">
+                              Installment Amount (₹) *
+                            </label>
+                            <div className="disb-input-with-addon">
+                              <span className="disb-addon">₹</span>
+                              <input
+                                type="number"
+                                className="disb-form-input"
+                                placeholder="0"
+                                value={inst.amount}
+                                onChange={(e) => handleInstallmentRowChange(idx, "amount", e.target.value)}
+                                required
+                                readOnly={planAllocationMode === "PERCENTAGE"}
+                                disabled={planSubmitting}
+                                min="1"
+                                step="1"
+                              />
+                            </div>
+                            <span className="disb-stage-field__help">
+                              {planAllocationMode === "PERCENTAGE"
+                                ? "Auto-computed from percentage"
+                                : "Enter fixed installment amount in Rupees"}
+                            </span>
+                          </div>
+
+                          {/* Planned Release Date */}
+                          <div className="disb-stage-field">
+                            <label className="disb-stage-field__label">
+                              Target Release Date
+                            </label>
+                            <input
+                              type="date"
+                              className="disb-form-input"
+                              value={inst.plannedReleaseDate || ""}
+                              onChange={(e) => handleInstallmentRowChange(idx, "plannedReleaseDate", e.target.value)}
+                              disabled={planSubmitting}
+                            />
+                            <span className="disb-stage-field__help">
+                              Estimated date when compliance is expected and release may occur
+                            </span>
+                          </div>
+
+                          {/* Milestone Obligation / Condition */}
+                          <div className="disb-stage-field">
+                            <label className="disb-stage-field__label">
+                              Release Condition / Milestone Prerequisite
+                            </label>
+                            <input
+                              type="text"
+                              className="disb-form-input"
+                              placeholder="e.g., Geo-tagged site photo uploaded and verified"
+                              value={inst.condition || ""}
+                              onChange={(e) => handleInstallmentRowChange(idx, "condition", e.target.value)}
+                              disabled={planSubmitting}
+                            />
+                            <span className="disb-stage-field__help">
+                              Compliance requirement that unlocks this installment release
+                            </span>
+                          </div>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
+                )}
 
+                {/* Administrative Notes */}
                 <div className="disb-form-group">
-                  <label className="disb-form-label">Administrative Notes</label>
+                  <label className="disb-form-label" htmlFor="plan-admin-notes">
+                    Administrative & Audit Notes
+                  </label>
                   <textarea
+                    id="plan-admin-notes"
                     className="disb-form-textarea"
                     rows="2"
-                    placeholder="Optional notes or audit references..."
+                    placeholder="Optional administrative remarks, approval meeting references, or specific release conditions..."
                     value={createPlanForm.notes}
                     onChange={(e) => setCreatePlanForm((prev) => ({ ...prev, notes: e.target.value }))}
+                    disabled={planSubmitting}
                   />
                 </div>
               </div>
+
+              {/* Pinned Modal Footer */}
               <div className="disb-modal__footer">
                 <button
                   type="button"
                   className="disb-btn disb-btn--secondary"
                   onClick={() => setShowCreatePlanModal(false)}
+                  disabled={planSubmitting}
                 >
                   Cancel
                 </button>
@@ -1643,11 +1979,14 @@ export default function DisbursementManagement() {
                   type="submit"
                   className="disb-btn disb-btn--primary"
                   disabled={
+                    planSubmitting ||
                     !createPlanForm.applicationId ||
-                    !selectedEligibleApp || totalScheduledSum !== Number(selectedEligibleApp.requestedAmount || 0)
+                    !selectedEligibleApp ||
+                    !isTotalMatching ||
+                    createPlanForm.installments.length === 0
                   }
                 >
-                  Save & Activate Plan
+                  {planSubmitting ? "Creating & Activating Plan..." : "Save & Activate Plan"}
                 </button>
               </div>
             </form>
