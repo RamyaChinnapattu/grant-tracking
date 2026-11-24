@@ -362,15 +362,15 @@ public class DisbursementService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Milestone not found."));
 
         User user = getUser(userEmail);
-        if (user.getRole() != Role.ADMIN && user.getRole() != Role.OFFICER) {
+        if (user.getRole() != Role.ADMIN && !user.isOfficer()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only officers or admins can update milestone progress.");
         }
-        if (user.getRole() == Role.OFFICER) {
-            DisbursementInstallment inst = milestone.getInstallment();
+        if (user.isOfficer()) {
+            DisbursementInstallment inst = milestone != null ? milestone.getInstallment() : null;
             DisbursementPlan plan = inst != null ? inst.getPlan() : null;
             GrantApplication app = plan != null ? plan.getApplication() : null;
             User assignedOfficer = app != null ? app.getAssignedOfficer() : null;
-            if (assignedOfficer == null || !Objects.equals(assignedOfficer.getId(), user.getId())) {
+            if (assignedOfficer != null && !Objects.equals(assignedOfficer.getId(), user.getId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This application is outside your assigned workflow.");
             }
         }
@@ -526,7 +526,7 @@ public class DisbursementService {
 
         boolean allowed = actor.getRole() == Role.ADMIN
                 || (actor.getRole() == Role.BENEFICIARY && benUser != null && Objects.equals(benUser.getId(), actor.getId()))
-                || (actor.getRole() == Role.OFFICER && assignedOfficer != null && Objects.equals(assignedOfficer.getId(), actor.getId()));
+                || (actor.isOfficer() && (assignedOfficer == null || Objects.equals(assignedOfficer.getId(), actor.getId())));
 
         if (!allowed) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this compliance document.");
@@ -543,7 +543,7 @@ public class DisbursementService {
     public MilestoneComplianceResponse verifyCompliance(
             Long complianceId, ComplianceVerifyRequest request, String officerEmail) {
         User officer = getUser(officerEmail);
-        if (officer.getRole() != Role.ADMIN && officer.getRole() != Role.OFFICER) {
+        if (officer.getRole() != Role.ADMIN && !officer.isOfficer()) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only officers or admins can verify compliance.");
         }
 
@@ -551,12 +551,12 @@ public class DisbursementService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compliance record not found."));
 
         DisbursementMilestone milestone = compliance.getMilestone();
-        if (officer.getRole() == Role.OFFICER) {
+        if (officer.isOfficer()) {
             DisbursementInstallment inst = milestone != null ? milestone.getInstallment() : null;
             DisbursementPlan plan = inst != null ? inst.getPlan() : null;
             GrantApplication app = plan != null ? plan.getApplication() : null;
             User assignedOfficer = app != null ? app.getAssignedOfficer() : null;
-            if (assignedOfficer == null || !Objects.equals(assignedOfficer.getId(), officer.getId())) {
+            if (assignedOfficer != null && !Objects.equals(assignedOfficer.getId(), officer.getId())) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This application is outside your assigned workflow.");
             }
         }

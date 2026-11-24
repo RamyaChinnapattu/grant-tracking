@@ -118,9 +118,9 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/compliance/submissions/*/document").hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
                         .requestMatchers("/api/compliance/**").authenticated()
 
-                        .requestMatchers(HttpMethod.GET, "/api/fund-analytics/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/reports/milestone-3/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/milestone-3/admin-dashboard").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/fund-analytics/**").hasAnyRole("ADMIN", "FINANCE_OFFICER")
+                        .requestMatchers(HttpMethod.GET, "/api/reports/milestone-3/**").hasAnyRole("ADMIN", "FINANCE_OFFICER")
+                        .requestMatchers(HttpMethod.GET, "/api/milestone-3/admin-dashboard").hasAnyRole("ADMIN", "FINANCE_OFFICER")
                         .requestMatchers(HttpMethod.GET, "/api/milestone-3/assigned-milestones").hasAnyRole("ADMIN", "OFFICER")
                         .requestMatchers("/api/milestone-3/**").authenticated()
                         .requestMatchers(HttpMethod.GET, "/api/utilization/mine").hasRole("BENEFICIARY")
