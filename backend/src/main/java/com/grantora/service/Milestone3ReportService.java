@@ -23,7 +23,7 @@ public class Milestone3ReportService {
     @Transactional(readOnly=true)
     public String csv(String type,String email,LocalDate from,LocalDate to,Long schemeId,String state,String district,String appStatus,String disbStatus){
         User actor=users.findByEmail(email).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"User not found."));
-        if(actor.getRole()!=Role.ADMIN)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Report export is restricted to administrators.");
+        if(actor.getRole()!=Role.ADMIN && !actor.isFinanceOfficer())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Report export is restricted to administrators and finance officers.");
         if(from!=null&&to!=null&&from.isAfter(to))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Start date must be on or before end date.");
         Map<Long,DisbursementPlan> planByApp=plans.findAllByOrderByCreatedAtDesc().stream().collect(Collectors.toMap(p->p.getApplication().getId(),p->p,(a,b)->a));
         List<GrantApplication> apps=applications.findAllByOrderByIdDesc().stream().filter(a->matches(a,planByApp.get(a.getId()),from,to,schemeId,state,district,appStatus,disbStatus)).toList();
