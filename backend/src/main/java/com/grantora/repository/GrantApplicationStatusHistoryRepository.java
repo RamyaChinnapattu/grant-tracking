@@ -9,4 +9,5 @@ public interface GrantApplicationStatusHistoryRepository
         extends JpaRepository<GrantApplicationStatusHistory, Long> {
     List<GrantApplicationStatusHistory> findByApplicationIdOrderByCreatedAtAscIdAsc(
             Long applicationId);
+    List<GrantApplicationStatusHistory> findAllByOrderByCreatedAtDesc();
 }

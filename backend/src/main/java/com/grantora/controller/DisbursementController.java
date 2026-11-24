@@ -128,7 +128,7 @@ public class DisbursementController {
     public ResponseEntity<byte[]> getComplianceDocument(
             @PathVariable Long id,
             Authentication authentication) {
-        MilestoneCompliance entity = disbursementService.getComplianceEntity(id);
+        MilestoneCompliance entity = disbursementService.getComplianceEntity(id, authentication.getName());
         byte[] data = entity.getDocumentData();
         if (data == null || data.length == 0) {
             return ResponseEntity.notFound().build();
@@ -138,11 +138,13 @@ public class DisbursementController {
         if (entity.getDocumentContentType() != null) {
             try {
                 mediaType = MediaType.parseMediaType(entity.getDocumentContentType());
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         ContentDisposition disposition = ContentDisposition.inline()
-                .filename(entity.getDocumentFileName() != null ? entity.getDocumentFileName() : "compliance_document", StandardCharsets.UTF_8)
+                .filename(entity.getDocumentFileName() != null ? entity.getDocumentFileName() : "compliance_document",
+                        StandardCharsets.UTF_8)
                 .build();
 
         return ResponseEntity.ok()

@@ -10,6 +10,10 @@ import {
 } from "lucide-react";
 import { getApplications } from "../services/grantApplicationService";
 import { getSchemes } from "../services/schemeService";
+import {
+  getFundUtilization,
+  getRegionalAnalytics,
+} from "../services/disbursementService";
 import Milestone3ReportExports from "../components/Milestone3ReportExports";
 import "../styles/DashboardHome.css";
 import "../styles/AdminDashboardHome.css";
@@ -31,6 +35,8 @@ function formatCurrency(amount) {
 function AdminReports() {
   const [applications, setApplications] = useState([]);
   const [schemes, setSchemes] = useState([]);
+  const [fundUtilization, setFundUtilization] = useState(null);
+  const [districtAnalytics, setDistrictAnalytics] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
@@ -41,12 +47,16 @@ function AdminReports() {
     setError("");
 
     try {
-      const [appsRes, schemesRes] = await Promise.all([
+      const [appsRes, schemesRes, fundRes, regRes] = await Promise.all([
         getApplications(),
         getSchemes(),
+        getFundUtilization().catch(() => ({ data: null })),
+        getRegionalAnalytics().catch(() => ({ data: [] })),
       ]);
       setApplications(appsRes.data || []);
       setSchemes(schemesRes.data || []);
+      setFundUtilization(fundRes.data || null);
+      setDistrictAnalytics(regRes.data || []);
     } catch (err) {
       console.error("Reports data fetch error:", err);
       setError(
@@ -65,6 +75,11 @@ function AdminReports() {
 
   // Scheme-wise Analytics
   const schemeAnalytics = useMemo(() => {
+    const fundMap = new Map();
+    (fundUtilization?.schemes || []).forEach((fs) => {
+      fundMap.set(fs.schemeId, fs);
+    });
+
     return schemes.map((scheme) => {
       const schemeApps = applications.filter((a) => a.schemeId === scheme.id);
       const total = schemeApps.length;
@@ -81,6 +96,11 @@ function AdminReports() {
         .filter((a) => a.status === "APPROVED")
         .reduce((sum, a) => sum + (Number(a.requestedAmount) || 0), 0);
       const approvalRate = total > 0 ? Math.round((approved / total) * 100) : 0;
+      const rejectionRate = total > 0 ? Math.round((rejected / total) * 100) : 0;
+
+      const fs = fundMap.get(scheme.id);
+      const fundsDisbursed = fs ? Number(fs.disbursedAmount || 0) : 0;
+      const allocatedFunds = fs ? Number(fs.allocatedFunds || 0) : Number(scheme.allocatedFunds || 0);
 
       return {
         id: scheme.id,
@@ -89,14 +109,17 @@ function AdminReports() {
         status: scheme.status,
         total,
         approved,
+        approvalRate,
         rejected,
+        rejectionRate,
         underReview,
         fundsRequested,
         fundsApproved,
-        approvalRate,
+        fundsDisbursed,
+        allocatedFunds,
       };
     });
-  }, [schemes, applications]);
+  }, [schemes, applications, fundUtilization]);
 
   // Region / State-wise Analytics
   const regionAnalytics = useMemo(() => {
@@ -127,6 +150,7 @@ function AdminReports() {
       ...r,
       districtCount: r.districts.size,
       approvalRate: r.total > 0 ? Math.round((r.approved / r.total) * 100) : 0,
+      rejectionRate: r.total > 0 ? Math.round((r.rejected / r.total) * 100) : 0,
     }));
   }, [applications]);
 
@@ -191,22 +215,24 @@ function AdminReports() {
                 <th>Applications</th>
                 <th>Approved</th>
                 <th>Approval Rate</th>
-                <th>Under Review</th>
                 <th>Rejected</th>
+                <th>Rejection Rate</th>
+                <th>Under Review</th>
                 <th>Funds Requested</th>
                 <th>Approved Grants</th>
+                <th>Disbursed</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center", padding: "28px" }}>
+                  <td colSpan="11" style={{ textAlign: "center", padding: "28px" }}>
                     Loading scheme reports...
                   </td>
                 </tr>
               ) : schemeAnalytics.length === 0 ? (
                 <tr>
-                  <td colSpan="9" style={{ textAlign: "center", padding: "28px" }}>
+                  <td colSpan="11" style={{ textAlign: "center", padding: "28px" }}>
                     No schemes registered.
                   </td>
                 </tr>
@@ -226,7 +252,7 @@ function AdminReports() {
                       </span>
                     </td>
                     <td>
-                      <div className="analytics-progress-wrap" style={{ minWidth: "120px" }}>
+                      <div className="analytics-progress-wrap" style={{ minWidth: "100px" }}>
                         <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>
                           {item.approvalRate}%
                         </span>
@@ -238,11 +264,25 @@ function AdminReports() {
                         </div>
                       </div>
                     </td>
+                    <td>
+                      <span style={{ color: item.rejected > 0 ? "#dc2626" : "inherit", fontWeight: item.rejected > 0 ? 600 : 400 }}>
+                        {item.rejected}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "0.82rem", color: item.rejectionRate > 0 ? "#dc2626" : "var(--color-text-muted)" }}>
+                        {item.rejectionRate}%
+                      </span>
+                    </td>
                     <td>{item.underReview}</td>
-                    <td>{item.rejected}</td>
                     <td>{formatCurrency(item.fundsRequested)}</td>
                     <td>
                       <strong>{formatCurrency(item.fundsApproved)}</strong>
+                    </td>
+                    <td>
+                      <span style={{ color: "#2563eb", fontWeight: 600 }}>
+                        {formatCurrency(item.fundsDisbursed)}
+                      </span>
                     </td>
                   </tr>
                 ))
@@ -272,20 +312,21 @@ function AdminReports() {
                 <th>Total Applications</th>
                 <th>Approved</th>
                 <th>Approval Rate</th>
-                <th>Under Review</th>
                 <th>Rejected</th>
+                <th>Rejection Rate</th>
+                <th>Under Review</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "28px" }}>
+                  <td colSpan="8" style={{ textAlign: "center", padding: "28px" }}>
                     Loading regional data...
                   </td>
                 </tr>
               ) : regionAnalytics.length === 0 ? (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: "center", padding: "28px" }}>
+                  <td colSpan="8" style={{ textAlign: "center", padding: "28px" }}>
                     No regional application data recorded yet.
                   </td>
                 </tr>
@@ -309,7 +350,7 @@ function AdminReports() {
                       </span>
                     </td>
                     <td>
-                      <div className="analytics-progress-wrap" style={{ minWidth: "120px" }}>
+                      <div className="analytics-progress-wrap" style={{ minWidth: "100px" }}>
                         <span style={{ fontSize: "0.78rem", fontWeight: 600 }}>
                           {reg.approvalRate}%
                         </span>
@@ -321,8 +362,17 @@ function AdminReports() {
                         </div>
                       </div>
                     </td>
+                    <td>
+                      <span style={{ color: reg.rejected > 0 ? "#dc2626" : "inherit", fontWeight: reg.rejected > 0 ? 600 : 400 }}>
+                        {reg.rejected}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ fontSize: "0.82rem", color: reg.rejectionRate > 0 ? "#dc2626" : "var(--color-text-muted)" }}>
+                        {reg.rejectionRate}%
+                      </span>
+                    </td>
                     <td>{reg.underReview}</td>
-                    <td>{reg.rejected}</td>
                   </tr>
                 ))
               )}
@@ -330,6 +380,69 @@ function AdminReports() {
           </table>
         </div>
       </div>
+
+      {/* District-Level Analytics Breakdown */}
+      {districtAnalytics.length > 0 && (
+        <div className="dash-section">
+          <div className="dash-section__header">
+            <div>
+              <h3 className="dash-section__title">District-Level Performance &amp; Disbursement</h3>
+              <span style={{ fontSize: "0.82rem", color: "var(--color-text-muted)" }}>
+                District-wise approvals, rejections, grant disbursements, and milestone compliance
+              </span>
+            </div>
+          </div>
+
+          <div className="dash-table-wrap">
+            <table className="dash-table">
+              <thead>
+                <tr>
+                  <th>State</th>
+                  <th>District</th>
+                  <th>Applications</th>
+                  <th>Approved</th>
+                  <th>Rejected</th>
+                  <th>Approved Funds</th>
+                  <th>Disbursed Funds</th>
+                  <th>Pending Release</th>
+                  <th>Compliance Rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {districtAnalytics.map((dist, idx) => (
+                  <tr key={`${dist.state}-${dist.district}-${idx}`}>
+                    <td>{dist.state}</td>
+                    <td><strong>{dist.district}</strong></td>
+                    <td>{dist.totalApplications}</td>
+                    <td>
+                      <span style={{ color: "#16a34a", fontWeight: 600 }}>
+                        {dist.approvedApplications}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ color: dist.rejectedApplications > 0 ? "#dc2626" : "inherit" }}>
+                        {dist.rejectedApplications}
+                      </span>
+                    </td>
+                    <td>{formatCurrency(dist.totalApprovedAmount)}</td>
+                    <td>
+                      <span style={{ color: "#2563eb", fontWeight: 600 }}>
+                        {formatCurrency(dist.totalDisbursedAmount)}
+                      </span>
+                    </td>
+                    <td>{formatCurrency(dist.pendingDisbursementAmount)}</td>
+                    <td>
+                      <span className="dash-badge dash-badge--neutral">
+                        {dist.complianceRate != null ? `${dist.complianceRate}%` : "100%"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

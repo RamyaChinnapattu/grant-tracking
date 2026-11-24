@@ -639,8 +639,13 @@ function GrantApplicationManagement() {
   };
 
   const handleSubmitDraft = async (application) => {
-    const isCorrection =
-      application.status === "NEEDS_CORRECTION";
+    if (application.status === "NEEDS_CORRECTION") {
+      handleEdit(application);
+      setActionError(
+        "Please review the officer's correction remarks, update your details or attach supporting documents in the form below, and resubmit."
+      );
+      return;
+    }
 
     const docCount = application.documents?.length || 0;
 
@@ -664,15 +669,12 @@ function GrantApplicationManagement() {
 
     setActionError("");
     setSuccessMessage("");
+    setSaving(true);
 
     try {
       await submitApplication(application.id);
 
-      setSuccessMessage(
-        isCorrection
-          ? "Corrected application resubmitted successfully."
-          : "Grant application submitted successfully."
-      );
+      setSuccessMessage("Grant application submitted successfully.");
 
       await loadApplications();
       await handleViewDetails(application.id);
@@ -682,6 +684,8 @@ function GrantApplicationManagement() {
         err.response?.data?.error ||
         "Unable to submit grant application."
       );
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -992,6 +996,20 @@ function GrantApplicationManagement() {
               : "Start an application"}
           </h3>
 
+          {editingId && editingStatus === "NEEDS_CORRECTION" && (
+            <div className="grant-applications__action-required" style={{ marginBottom: "16px" }}>
+              <div className="grant-applications__action-header">
+                <span className="grant-applications__action-badge">Action Required</span>
+                <h4>Officer Correction Remarks</h4>
+              </div>
+              <blockquote className="grant-applications__action-remarks">
+                {getLatestCorrectionRemarks(
+                  applications.find((a) => a.id === editingId) || selectedApplication
+                ) || "Please review the requested corrections, update your application details or attach supporting documents, and resubmit."}
+              </blockquote>
+            </div>
+          )}
+
           <label>
             Grant scheme
 
@@ -1091,6 +1109,31 @@ function GrantApplicationManagement() {
                 ))}
               </ul>
             </div>
+          )}
+
+          {editingId && (
+            (() => {
+              const app = applications.find((a) => a.id === editingId) || (selectedApplication?.id === editingId ? selectedApplication : null);
+              const existing = app?.documents || [];
+              if (existing.length === 0) return null;
+              return (
+                <div style={{ padding: "8px 12px", background: "var(--color-surface-lowest)", borderRadius: "6px", border: "1px solid var(--color-outline-variant)", marginTop: "6px" }}>
+                  <span style={{ fontSize: "0.82rem", fontWeight: 600, color: "var(--color-on-surface)" }}>
+                    Preserved Supporting Documents ({existing.length}):
+                  </span>
+                  <ul style={{ margin: "4px 0 0", paddingLeft: "20px", fontSize: "0.82rem" }}>
+                    {existing.map((doc, idx) => (
+                      <li key={doc.id || idx}>
+                        {doc.fileName || doc.documentType || `Document #${doc.id || idx + 1}`}
+                      </li>
+                    ))}
+                  </ul>
+                  <small style={{ color: "var(--color-on-surface-variant)", display: "block", marginTop: "4px" }}>
+                    Previously uploaded documents are preserved and attached to your application.
+                  </small>
+                </div>
+              );
+            })()
           )}
 
           {selectedScheme && (
@@ -1319,54 +1362,59 @@ function GrantApplicationManagement() {
                             Details
                           </button>
 
-                          {isBeneficiary &&
-                            [
-                              "DRAFT",
-                              "NEEDS_CORRECTION",
-                            ].includes(application.status) && (
-                              <>
-                                <button
-                                  className="grant-applications__button grant-applications__button--secondary"
-                                  type="button"
-                                  onClick={() =>
-                                    handleEdit(application)
-                                  }
-                                >
-                                  {application.status ===
-                                    "NEEDS_CORRECTION"
-                                    ? "Edit correction"
-                                    : "Edit"}
-                                </button>
+                          {isBeneficiary && application.status === "DRAFT" && (
+                            <>
+                              <button
+                                className="grant-applications__button grant-applications__button--secondary"
+                                type="button"
+                                onClick={() =>
+                                  handleEdit(application)
+                                }
+                                disabled={saving}
+                              >
+                                Edit
+                              </button>
 
-                                <button
-                                  className="grant-applications__button grant-applications__button--primary"
-                                  type="button"
-                                  onClick={() =>
-                                    handleSubmitDraft(application)
-                                  }
-                                  disabled={
-                                    editingId === application.id
-                                  }
-                                >
-                                  {application.status ===
-                                    "NEEDS_CORRECTION"
-                                    ? "Resubmit"
-                                    : "Submit"}
-                                </button>
+                              <button
+                                className="grant-applications__button grant-applications__button--primary"
+                                type="button"
+                                onClick={() =>
+                                  handleSubmitDraft(application)
+                                }
+                                disabled={
+                                  editingId === application.id || saving
+                                }
+                              >
+                                Submit
+                              </button>
 
-                                {application.status === "DRAFT" && (
-                                  <button
-                                    className="grant-applications__button grant-applications__button--secondary"
-                                    type="button"
-                                    onClick={() =>
-                                      handleDeleteDraft(application)
-                                    }
-                                  >
-                                    Delete Draft
-                                  </button>
-                                )}
-                              </>
-                            )}
+                              <button
+                                className="grant-applications__button grant-applications__button--secondary"
+                                type="button"
+                                onClick={() =>
+                                  handleDeleteDraft(application)
+                                }
+                                disabled={saving}
+                              >
+                                Delete Draft
+                              </button>
+                            </>
+                          )}
+
+                          {isBeneficiary && application.status === "NEEDS_CORRECTION" && (
+                            <button
+                              className="grant-applications__button grant-applications__button--primary"
+                              type="button"
+                              onClick={() =>
+                                handleEdit(application)
+                              }
+                              disabled={
+                                editingId === application.id || saving
+                              }
+                            >
+                              Edit and resubmit
+                            </button>
+                          )}
 
                           {isBeneficiary &&
                             application.status === "SUBMITTED" &&
@@ -1847,7 +1895,7 @@ function GrantApplicationManagement() {
                             >
                               {item.timelineType ===
                                 "verification" &&
-                                `${item.stage === "STATE" ? "FINANCE" : item.stage}: `}
+                                `${item.stage}: `}
 
                               <strong>
                                 {formatStatus(item.action)}
@@ -1867,7 +1915,7 @@ function GrantApplicationManagement() {
 
                                 {!isBeneficiary &&
                                   item.nextStage &&
-                                  ` · Next: ${item.nextStage === "STATE" ? "FINANCE" : item.nextStage}`}
+                                  ` · Next: ${item.nextStage}`}
                               </span>
 
                               {item.remarks && (

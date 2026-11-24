@@ -39,7 +39,7 @@ Grantora is a web application for managing government grant schemes and benefici
 - Admin-managed user accounts, grant schemes, eligibility rules, and verification routing rules.
 - Beneficiary profiles, scheme discovery, and grant application creation and submission.
 - Mandatory eligibility checks plus configurable, points-based scheme questions.
-- Field, District, and conditional State review stages with decision history.
+- Field, District, and Finance review stages with decision history.
 - Officer assignment based on stage, active status, and beneficiary jurisdiction.
 - Document upload and access checks for supporting evidence.
 - Admin queue for approved applications eligible for disbursement processing.
@@ -53,7 +53,7 @@ flowchart LR
     A[Admin]
     F[Field Officer]
     D[District Officer]
-    S[State Officer]
+    FIN[Finance Officer]
 
     subgraph Client[React and Vite frontend]
         UI[Role-based pages and dashboards]
@@ -65,7 +65,7 @@ flowchart LR
     A --> UI
     F --> UI
     D --> UI
-    S --> UI
+    FIN --> UI
 
     API -->|HTTP JSON / multipart, /api| SEC[Spring Security<br/>JWT filter and role rules]
     SEC --> CTRL[Spring MVC REST controllers]
@@ -128,18 +128,17 @@ flowchart TD
     DIST -->|Reject with remarks| REJ
     DIST -->|Return with remarks| CORR2[NEEDS_CORRECTION]
     CORR2 -->|Beneficiary corrects and resubmits| DIST
-    DIST -->|Approve; routing rule requires State| STATE[State Officer or Admin review]
-    DIST -->|Approve; no State review required| APPROVED[APPROVED]
-    STATE -->|Reject with remarks| REJ
-    STATE -->|Approve| APPROVED
+    DIST -->|Approve| FINANCE[Finance Officer review]
+    FINANCE -->|Reject with remarks| REJ
+    FINANCE -->|Approve| APPROVED[APPROVED]
     APPROVED --> QUEUE[Admin disbursement-eligible queue]
     QUEUE --> NO_PAY[Payment processing is not integrated]
     FIELD -.->|Overdue scan creates escalation; does not advance stage| ESC[Escalation record and Admin notification]
     DIST -.->|Overdue scan creates escalation; does not advance stage| ESC
-    STATE -.->|Overdue scan creates escalation; does not advance stage| ESC
+    FINANCE -.->|Overdue scan creates escalation; does not advance stage| ESC
 ```
 
-The normal progression is Field, then District, then State only when the configured routing rule requires it. Eligibility is checked before submission; it is not a grant award. An escalation does not approve, reject, or advance an application.
+The normal progression is Field, then District, then Finance approval. Eligibility is checked before submission; it is not a grant award. An escalation does not approve, reject, or advance an application.
 
 ## Technology Stack
 
@@ -185,15 +184,15 @@ Grantora/
 
 ## User Roles and Responsibilities
 
-The application roles are `ADMIN`, `BENEFICIARY`, and `OFFICER`. Officer level is stored separately as `FIELD`, `DISTRICT`, or `STATE`.
+The application roles are `ADMIN`, `BENEFICIARY`, and `OFFICER`. Officer level is stored separately as `FIELD`, `DISTRICT`, or `FINANCE`.
 
 | Role / level | Responsibilities supported by the application |
 |---|---|
 | Beneficiary | Manage their profile, browse schemes, create and submit eligible applications, upload documents, and view application progress. |
-| Admin | Manage users, beneficiaries, schemes, routing rules, verification assignments, State-stage final decisions, and the disbursement-eligible queue. Admin access is also available to the workflow configuration and escalation APIs. |
+| Admin | Manage users, beneficiaries, schemes, routing rules, verification assignments, Finance-stage final decisions, and the disbursement-eligible queue. Admin access is also available to the workflow configuration and escalation APIs. |
 | Field Officer | Review assigned applications at the Field stage, complete the required verification checklist, and return or reject with remarks. |
-| District Officer | Review applications after Field verification and approve, return for correction, or reject. Approval may route to State review. |
-| State Officer | Review applications assigned to the State stage and record the final approval or rejection. |
+| District Officer | Review applications after Field verification and approve, return for correction, or reject. Approval advances to Finance review. |
+| Finance Officer | Review applications after District review, examine prior verification history, and record the final financial approval or rejection. |
 
 ## Eligibility Assessment Engine
 
@@ -214,10 +213,10 @@ An eligible result only permits submission. It does not guarantee officer approv
 ## Multi-Level Verification and Approval
 
 - **Field:** reviews identity, address, documents, and application details. A `VERIFIED` decision requires all four checklist confirmations and at least one uploaded supporting document.
-- **District:** reviews the Field-stage result and may approve, reject, or request correction. The routing rule determines whether District approval advances to State review or becomes final approval.
-- **State:** when required, records the final approval or rejection. Admin final decisions are restricted to the State stage.
+- **District:** reviews the Field-stage result and may approve, reject, or request correction. District approval advances the application to Finance review.
+- **Finance:** reviews previous verification history and records the final approval or rejection. Admin final decisions are restricted to the Finance stage.
 - **Assignment:** automatic selection filters for active `OFFICER` accounts at the needed level and matching beneficiary state; Field and District assignments also match district. Admin reassignment is checked against the same stage and jurisdiction constraints. If no eligible automatic assignee exists, the application remains without an assignee; it is not routed to an unrelated officer.
-- **Routing:** Admin-managed rules match the stored eligibility score and requested amount ranges, and carry priority and whether State approval is required. Rules are checked when the application is submitted. A matching rule is not a substitute for mandatory Field or District review.
+- **Routing:** Admin-managed rules match the stored eligibility score and requested amount ranges, and carry priority. Rules are checked when the application is submitted. A matching rule is not a substitute for mandatory Field or District review.
 - **History:** decisions and assignment actions are written to application verification history; overall status changes also have application status history. Rejection and correction require remarks. A correction is resubmitted to the same workflow stage.
 
 Existing applications predating the staged workflow may not have a stage or assignee. The code does not automatically migrate or advance those records.

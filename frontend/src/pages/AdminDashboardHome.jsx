@@ -139,6 +139,10 @@ function AdminDashboardHome() {
 
   // Strict, mutually exclusive metric computations
   const totalSchemes = schemes.length;
+  const activeSchemes = useMemo(
+    () => schemes.filter((s) => s.status === "ACTIVE").length,
+    [schemes]
+  );
   const totalBeneficiaries = beneficiaries.length;
   const totalApplications = applications.length;
 
@@ -260,7 +264,7 @@ function AdminDashboardHome() {
         </div>
       )}
 
-      {/* Exactly 6 Summary Cards */}
+      {/* Summary Cards */}
       <div className="dash-stats-grid">
         <Link
           to="/admin/schemes"
@@ -275,7 +279,26 @@ function AdminDashboardHome() {
             <strong className="dash-stat-card__value">
               {loading ? "..." : totalSchemes}
             </strong>
-            <span className="dash-stat-card__subtext">Grant programs</span>
+            <span className="dash-stat-card__subtext">
+              {loading ? "..." : `${activeSchemes} active programs`}
+            </span>
+          </div>
+        </Link>
+
+        <Link
+          to="/admin/schemes"
+          className="dash-stat-card"
+          style={{ textDecoration: "none" }}
+        >
+          <div className="dash-stat-card__icon dash-stat-card__icon--success">
+            <CheckCircle2 size={22} />
+          </div>
+          <div className="dash-stat-card__data">
+            <span className="dash-stat-card__label">Active Schemes</span>
+            <strong className="dash-stat-card__value">
+              {loading ? "..." : activeSchemes}
+            </strong>
+            <span className="dash-stat-card__subtext">Open for enrollment</span>
           </div>
         </Link>
 
