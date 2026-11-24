@@ -19,20 +19,18 @@ import SchemeManagement from "./pages/SchemeManagement";
 import BeneficiarySchemes from "./pages/BeneficiarySchemes";
 import BeneficiaryNotifications from "./pages/BeneficiaryNotifications";
 import DashboardPlaceholder from "./pages/DashboardPlaceholder";
-import DisbursementManagement from "./pages/DisbursementManagement";
 import ProtectedRoute from "./components/ProtectedRoute";
 import VerificationWorkflow from "./pages/VerificationWorkflow";
 import WorkflowSettings from "./pages/WorkflowSettings";
-import BeneficiaryDisbursements from "./pages/BeneficiaryDisbursements";
-import BeneficiaryCompliance from "./pages/BeneficiaryCompliance";
 import ComplianceCenter from "./pages/ComplianceCenter";
-import FundAnalytics from "./pages/FundAnalytics";
-import BeneficiaryUtilization from "./pages/BeneficiaryUtilization";
-import UtilizationReview from "./pages/UtilizationReview";
-import AdminDisbursementDashboard from "./pages/AdminDisbursementDashboard";
 import FieldOfficerDashboard from "./pages/FieldOfficerDashboard";
 import DistrictOfficerDashboard from "./pages/DistrictOfficerDashboard";
 import FinanceOfficerDashboard from "./pages/FinanceOfficerDashboard";
+
+// Unified Consolidated Workspaces
+import AdminGrantManagement from "./pages/AdminGrantManagement";
+import OfficerReviewVerification from "./pages/OfficerReviewVerification";
+import BeneficiaryMyGrant from "./pages/BeneficiaryMyGrant";
 
 function getAuthenticatedHome() {
   const token = localStorage.getItem("token");
@@ -108,21 +106,45 @@ function App() {
               element={<VerificationWorkflow />}
               handle={{ pageTitle: "Verification & Approvals" }}
             />
-            <Route path="/admin/workflow-settings" element={<WorkflowSettings />} handle={{ pageTitle: "Workflow Settings" }} />
+            <Route
+              path="/admin/workflow-settings"
+              element={<WorkflowSettings />}
+              handle={{ pageTitle: "Workflow Settings" }}
+            />
+
+            {/* Consolidated Admin Grant Management Workspace */}
+            <Route
+              path="/admin/grant-management"
+              element={<AdminGrantManagement />}
+              handle={{ pageTitle: "Grant Management" }}
+            />
+
+            {/* Backward-compatibility redirects for fragmented legacy admin routes */}
             <Route
               path="/admin/disbursement"
-              element={<DisbursementManagement />}
-              handle={{ pageTitle: "Grant Disbursement & Compliance" }}
+              element={<Navigate to="/admin/grant-management?tab=plans" replace />}
             />
-            <Route path="/admin/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Management" }} />
-            <Route path="/admin/fund-analytics" element={<FundAnalytics />} handle={{ pageTitle: "Fund Analytics" }} />
-            <Route path="/admin/disbursement-dashboard" element={<AdminDisbursementDashboard />} handle={{ pageTitle: "Disbursement Dashboard" }} />
-            <Route path="/admin/utilization-review" element={<UtilizationReview />} handle={{ pageTitle: "Utilization Review" }} />
+            <Route
+              path="/admin/compliance"
+              element={<Navigate to="/admin/grant-management?tab=compliance" replace />}
+            />
+            <Route
+              path="/admin/fund-analytics"
+              element={<Navigate to="/admin/grant-management?tab=overview" replace />}
+            />
+            <Route
+              path="/admin/disbursement-dashboard"
+              element={<Navigate to="/admin/grant-management?tab=overview" replace />}
+            />
+            <Route
+              path="/admin/utilization-review"
+              element={<Navigate to="/admin/grant-management?tab=compliance" replace />}
+            />
             <Route
               path="/admin/reports"
-              element={<AdminReports />}
-              handle={{ pageTitle: "Reports & Analytics" }}
+              element={<Navigate to="/admin/grant-management?tab=reports" replace />}
             />
+
             <Route
               path="/admin/audit-logs"
               element={<AdminAuditLogs />}
@@ -148,9 +170,6 @@ function App() {
               element={<BeneficiarySchemes />}
               handle={{ pageTitle: "Browse Schemes" }}
             />
-            <Route path="/beneficiary/disbursements" element={<BeneficiaryDisbursements />} handle={{ pageTitle: "My Disbursement Schedule" }} />
-            <Route path="/beneficiary/compliance" element={<BeneficiaryCompliance />} handle={{ pageTitle: "My Compliance" }} />
-            <Route path="/beneficiary/utilization" element={<BeneficiaryUtilization />} handle={{ pageTitle: "My Grant Expenditure" }} />
             <Route
               path="/beneficiary/applications"
               element={<GrantApplicationManagement />}
@@ -161,6 +180,28 @@ function App() {
               element={<GrantApplicationManagement />}
               handle={{ pageTitle: "Apply for Grant" }}
             />
+
+            {/* Consolidated Beneficiary My Grant Workspace */}
+            <Route
+              path="/beneficiary/my-grant"
+              element={<BeneficiaryMyGrant />}
+              handle={{ pageTitle: "My Grant" }}
+            />
+
+            {/* Backward-compatibility redirects for fragmented legacy beneficiary routes */}
+            <Route
+              path="/beneficiary/disbursements"
+              element={<Navigate to="/beneficiary/my-grant?tab=schedule" replace />}
+            />
+            <Route
+              path="/beneficiary/compliance"
+              element={<Navigate to="/beneficiary/my-grant?tab=documents" replace />}
+            />
+            <Route
+              path="/beneficiary/utilization"
+              element={<Navigate to="/beneficiary/my-grant?tab=expenditure" replace />}
+            />
+
             <Route
               path="/beneficiary/eligibility"
               element={<BeneficiaryEligibility />}
@@ -289,8 +330,24 @@ function App() {
               element={<VerificationWorkflow />}
               handle={{ pageTitle: "My Applications" }}
             />
-            <Route path="/officer/compliance" element={<ComplianceCenter />} handle={{ pageTitle: "Compliance Review" }} />
-            <Route path="/officer/utilization" element={<UtilizationReview />} handle={{ pageTitle: "Utilization Review" }} />
+
+            {/* Consolidated Officer Review & Verification Workspace */}
+            <Route
+              path="/officer/review-verification"
+              element={<OfficerReviewVerification />}
+              handle={{ pageTitle: "Review & Verification" }}
+            />
+
+            {/* Backward-compatibility redirects for fragmented legacy officer routes */}
+            <Route
+              path="/officer/compliance"
+              element={<Navigate to="/officer/review-verification?tab=compliance" replace />}
+            />
+            <Route
+              path="/officer/utilization"
+              element={<Navigate to="/officer/review-verification?tab=expenditure" replace />}
+            />
+
             <Route
               path="/officer/history"
               element={<VerificationWorkflow historyOnly />}
@@ -303,9 +360,10 @@ function App() {
             />
             <Route
               path="/officer/notifications"
-              element={<DashboardPlaceholder title="Notifications" />}
+              element={<BeneficiaryNotifications />}
               handle={{ pageTitle: "Notifications" }}
             />
+
             {/* Backward compatibility redirects for legacy duplicate routes */}
             <Route
               path="/officer/assigned"

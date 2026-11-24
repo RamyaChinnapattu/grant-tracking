@@ -1,4 +1,3 @@
-
 package com.grantora.service;
 
 import com.grantora.entity.User;
@@ -18,10 +17,15 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuditService auditService;
 
-    public UserService(UserRepository userRepository, PasswordEncoder passwordEncoder) {
+    public UserService(
+            UserRepository userRepository,
+            PasswordEncoder passwordEncoder,
+            AuditService auditService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
+        this.auditService = auditService;
     }
 
     public List<User> getAllUsers() {
@@ -30,7 +34,7 @@ public class UserService {
 
     public User getUserById(Long id) {
         return userRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("User not found: " + id));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found: " + id));
     }
 
     public User createUser(User user) {
@@ -43,9 +47,16 @@ public class UserService {
                     "Name, email, role, and a password of at least eight characters are required");
         }
 
-        if (userRepository.existsByEmail(user.getEmail())) {
+        String normalizedEmail = user.getEmail().trim().toLowerCase();
+        if (userRepository.existsByEmail(normalizedEmail)) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT, "Email already registered");
+                    HttpStatus.CONFLICT, "Email already registered: " + normalizedEmail);
+        }
+
+        user.setEmail(normalizedEmail);
+        user.setFullName(user.getFullName().trim());
+        if (user.getPhone() != null) {
+            user.setPhone(user.getPhone().trim());
         }
 
         validateOfficerJurisdiction(user);
@@ -56,15 +67,35 @@ public class UserService {
             user.setActive(true);
         }
 
-        return userRepository.save(user);
+        User createdUser = userRepository.save(user);
+
+        auditService.recordAudit(
+                "USER_CREATED",
+                "ADMIN_MANAGEMENT",
+                "User",
+                createdUser.getId(),
+                "Created user: " + createdUser.getEmail() + " (" + createdUser.getRole()
+                        + (createdUser.getOfficerLevel() != null ? "/" + createdUser.getOfficerLevel() : "") + ")");
+
+        return createdUser;
     }
 
     public User updateUser(Long id, User updatedUser) {
         User existingUser = getUserById(id);
 
-        existingUser.setFullName(updatedUser.getFullName());
-        existingUser.setEmail(updatedUser.getEmail());
-        existingUser.setPhone(updatedUser.getPhone());
+        String newEmail = updatedUser.getEmail() != null ? updatedUser.getEmail().trim().toLowerCase() : null;
+        if (newEmail == null || newEmail.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email is required");
+        }
+
+        if (!existingUser.getEmail().equalsIgnoreCase(newEmail) && userRepository.existsByEmail(newEmail)) {
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT, "Email already registered: " + newEmail);
+        }
+
+        existingUser.setFullName(updatedUser.getFullName() != null ? updatedUser.getFullName().trim() : existingUser.getFullName());
+        existingUser.setEmail(newEmail);
+        existingUser.setPhone(updatedUser.getPhone() != null ? updatedUser.getPhone().trim() : null);
         existingUser.setRole(updatedUser.getRole());
         existingUser.setActive(updatedUser.getActive());
         existingUser.setOfficerLevel(updatedUser.getOfficerLevel());
@@ -73,11 +104,29 @@ public class UserService {
 
         validateOfficerJurisdiction(existingUser);
 
-        return userRepository.save(existingUser);
+        User savedUser = userRepository.save(existingUser);
+
+        auditService.recordAudit(
+                "USER_UPDATED",
+                "ADMIN_MANAGEMENT",
+                "User",
+                savedUser.getId(),
+                "Updated user: " + savedUser.getEmail() + " (" + savedUser.getRole()
+                        + (savedUser.getOfficerLevel() != null ? "/" + savedUser.getOfficerLevel() : "") + ")");
+
+        return savedUser;
     }
 
     public void deleteUser(Long id) {
-        userRepository.delete(getUserById(id));
+        User user = getUserById(id);
+        userRepository.delete(user);
+
+        auditService.recordAudit(
+                "USER_DELETED",
+                "ADMIN_MANAGEMENT",
+                "User",
+                id,
+                "Deleted user: " + user.getEmail());
     }
 
     private void validateOfficerJurisdiction(User user) {

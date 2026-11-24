@@ -18,6 +18,8 @@ import {
 import "../styles/BeneficiaryNotifications.css";
 
 function BeneficiaryNotifications() {
+  const role = localStorage.getItem("role");
+  const isOfficer = role === "OFFICER";
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -115,7 +117,9 @@ function BeneficiaryNotifications() {
             )}
           </div>
           <p className="beneficiary-notifications__subtitle">
-            Stay informed on verification updates, officer decisions, and next steps for your grant applications.
+            {isOfficer
+              ? "Stay informed on workflow assignments, review actions, and milestone compliance alerts."
+              : "Stay informed on verification updates, officer decisions, and next steps for your grant applications."}
           </p>
         </div>
 
@@ -192,8 +196,11 @@ function BeneficiaryNotifications() {
               : "You will receive updates here as your applications are submitted, reviewed, and approved."}
           </p>
           {filter === "all" && (
-            <Link to="/beneficiary/schemes" className="notif-btn notif-btn--primary">
-              Browse Available Schemes
+            <Link
+              to={isOfficer ? "/officer/applications" : "/beneficiary/schemes"}
+              className="notif-btn notif-btn--primary"
+            >
+              {isOfficer ? "View Assigned Applications" : "Browse Available Schemes"}
             </Link>
           )}
         </div>
@@ -233,7 +240,7 @@ function BeneficiaryNotifications() {
                   <div className="notif-card__footer">
                     {notif.applicationId && (
                       <Link
-                        to="/beneficiary/applications"
+                        to={isOfficer ? "/officer/applications" : "/beneficiary/applications"}
                         state={{ selectedApplicationId: notif.applicationId }}
                         className="notif-card__link"
                       >

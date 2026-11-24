@@ -21,6 +21,7 @@ import com.grantora.entity.GrantApplication;
 import com.grantora.entity.GrantApplicationStatus;
 import com.grantora.entity.Role;
 import com.grantora.entity.RoutingPriority;
+import com.grantora.entity.Scheme;
 import com.grantora.entity.User;
 import com.grantora.entity.VerificationDecision;
 import com.grantora.entity.VerificationRoutingRule;
@@ -145,10 +146,13 @@ public class VerificationWorkflowService {
                     VerificationStage.FIELD);
 
             GrantApplication saved = applicationRepository.save(application);
+            String schemeName = (saved.getScheme() != null && saved.getScheme().getSchemeName() != null)
+                    ? saved.getScheme().getSchemeName()
+                    : "grant";
             notifyBeneficiary(
                     saved,
                     "submitted",
-                    "Your grant application #" + saved.getId() + " for " + saved.getScheme().getSchemeName()
+                    "Your grant application #" + saved.getId() + " for " + schemeName
                             + " has been submitted for field verification.");
             return saved;
 
@@ -361,6 +365,35 @@ public class VerificationWorkflowService {
             nextOfficer = advance(application, assignedStage);
 
         } else if (stage == VerificationStage.FINANCE) {
+
+            if (decision == VerificationDecision.APPROVED) {
+                Scheme scheme = application.getScheme();
+                if (scheme != null && scheme.getMaximumGrantAmount() != null
+                        && application.getRequestedAmount() != null
+                        && application.getRequestedAmount().compareTo(scheme.getMaximumGrantAmount()) > 0) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Requested amount exceeds the maximum allowable grant for this scheme.");
+                }
+            }
+
+            // Verify prior stages were completed before granting final finance approval
+            List<ApplicationVerification> history = historyRepository
+                    .findByApplication_IdOrderByCreatedAtAsc(applicationId);
+            if (history != null && !history.isEmpty()) {
+                boolean hasFieldVerification = history.stream()
+                        .anyMatch(h -> h.getStage() == VerificationStage.FIELD
+                                && ("VERIFIED".equalsIgnoreCase(h.getAction())
+                                        || VerificationDecision.VERIFIED.name().equalsIgnoreCase(h.getAction())));
+                boolean hasDistrictApproval = history.stream()
+                        .anyMatch(h -> h.getStage() == VerificationStage.DISTRICT
+                                && ("APPROVED".equalsIgnoreCase(h.getAction())
+                                        || VerificationDecision.APPROVED.name().equalsIgnoreCase(h.getAction())));
+                if (!hasFieldVerification || !hasDistrictApproval) {
+                    throw new ResponseStatusException(
+                            HttpStatus.CONFLICT,
+                            "Cannot grant Finance approval: Field verification and District review must be completed first.");
+                }
+            }
 
             application.setTaskCompletedAt(LocalDateTime.now());
             application.setStatus(GrantApplicationStatus.APPROVED);
@@ -577,6 +610,14 @@ public class VerificationWorkflowService {
             throw conflict("This application is not awaiting verification.");
         }
 
+        if (application.getBeneficiary() != null
+                && application.getBeneficiary().getUser() != null
+                && Objects.equals(application.getBeneficiary().getUser().getId(), actor.getId())) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Officers cannot verify or approve their own grant applications.");
+        }
+
         if (admin) {
             if (application.getWorkflowStage() != VerificationStage.FINANCE) {
                 throw new ResponseStatusException(
@@ -641,16 +682,6 @@ public class VerificationWorkflowService {
         if (!allowed) {
             throw conflict(
                     "Decision is not valid for the current verification level.");
-        }
-
-        if (stage == VerificationStage.FINANCE && decision == VerificationDecision.APPROVED) {
-            Scheme scheme = application.getScheme();
-            if (scheme != null && scheme.getMaximumGrantAmount() != null
-                    && application.getRequestedAmount() != null
-                    && application.getRequestedAmount().compareTo(scheme.getMaximumGrantAmount()) > 0) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
-                        "Requested amount exceeds the maximum allowable grant for this scheme.");
-            }
         }
 
         if ((decision == VerificationDecision.REJECTED

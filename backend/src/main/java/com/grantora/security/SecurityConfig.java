@@ -40,6 +40,10 @@ public class SecurityConfig {
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
 
+                .headers(headers -> headers
+                        .frameOptions(frame -> frame.deny())
+                        .contentTypeOptions(contentType -> {}))
+
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> response.setStatus(
                                 HttpServletResponse.SC_UNAUTHORIZED)))
@@ -57,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/schemes", "/api/schemes/*").permitAll()
 
                         .requestMatchers("/api/users/**").hasRole("ADMIN")
+                        .requestMatchers("/api/audit/**").hasRole("ADMIN")
 
                         .requestMatchers("/api/applications/me").hasRole("BENEFICIARY")
                         .requestMatchers("/api/applications/admin").hasRole("ADMIN")
@@ -91,7 +96,10 @@ public class SecurityConfig {
                         .hasAnyRole("BENEFICIARY", "ADMIN", "OFFICER", "FIELD_OFFICER", "DISTRICT_OFFICER", "FINANCE_OFFICER")
                         .requestMatchers("/api/schemes/**").hasRole("ADMIN")
 
-                        .requestMatchers("/api/beneficiaries/**").authenticated()
+                        .requestMatchers(HttpMethod.GET, "/api/beneficiaries/me").hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.POST, "/api/beneficiaries").hasRole("BENEFICIARY")
+                        .requestMatchers(HttpMethod.PUT, "/api/beneficiaries/me").hasRole("BENEFICIARY")
+                        .requestMatchers("/api/beneficiaries/**").hasRole("ADMIN")
 
                         .requestMatchers("/api/verification/**").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/workflow/deadlines").hasAnyRole("ADMIN", "OFFICER", "FIELD_OFFICER", "DISTRICT_OFFICER", "FINANCE_OFFICER")
@@ -127,7 +135,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PATCH, "/api/disbursements/plans/*/deactivate").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/disbursements/plans/mine").hasRole("BENEFICIARY")
                         .requestMatchers(HttpMethod.GET, "/api/disbursements/plans/**").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.GET, "/api/disbursements/compliances", "/api/disbursements/milestones", "/api/disbursements/milestones/*/compliances", "/api/disbursements/compliance/*/document").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/compliance/*/document").hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/compliances", "/api/disbursements/milestones", "/api/disbursements/milestones/*/compliances").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.POST, "/api/disbursements/installments/*/disburse").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PUT, "/api/disbursements/reminders/config").hasRole("ADMIN")
                         .requestMatchers("/api/disbursements/eligible-applications").hasRole("ADMIN")

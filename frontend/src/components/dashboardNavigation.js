@@ -1,5 +1,4 @@
 import {
-  BarChart3,
   BadgeCheck,
   Bell,
   CircleDollarSign,
@@ -28,19 +27,11 @@ export const dashboardNavigation = {
       icon: ClipboardList,
     },
     {
-      label: "Grant Disbursement & Compliance",
-      path: "/admin/disbursement",
+      label: "Grant Management",
+      path: "/admin/grant-management",
       icon: CircleDollarSign,
     },
-    { label: "Compliance Requirements", path: "/admin/compliance", icon: BadgeCheck },
-    { label: "Fund Analytics", path: "/admin/fund-analytics", icon: BarChart3 },
-    { label: "Disbursement Dashboard", path: "/admin/disbursement-dashboard", icon: CircleDollarSign },
-    { label: "Utilization Review", path: "/admin/utilization-review", icon: BadgeCheck },
-    {
-      label: "Reports & Analytics",
-      path: "/admin/reports",
-      icon: BarChart3,
-    },
+    { label: "Audit Logs", path: "/admin/audit-logs", icon: FileClock },
     { label: "Workflow Settings", path: "/admin/workflow-settings", icon: Settings2 },
   ],
   BENEFICIARY: [
@@ -50,9 +41,6 @@ export const dashboardNavigation = {
       icon: LayoutDashboard,
     },
     { label: "Browse Schemes", path: "/beneficiary/schemes", icon: FolderKanban },
-    { label: "My Disbursement Schedule", path: "/beneficiary/disbursements", icon: CircleDollarSign },
-    { label: "My Compliance", path: "/beneficiary/compliance", icon: BadgeCheck },
-    { label: "My Grant Expenditure", path: "/beneficiary/utilization", icon: CircleDollarSign },
     {
       label: "My Applications",
       path: "/beneficiary/applications",
@@ -63,6 +51,7 @@ export const dashboardNavigation = {
       path: "/beneficiary/apply",
       icon: FilePlus2,
     },
+    { label: "My Grant", path: "/beneficiary/my-grant", icon: CircleDollarSign },
     { label: "My Profile", path: "/beneficiary/profile", icon: UserRound },
     {
       label: "Notifications",
@@ -78,14 +67,17 @@ export const dashboardNavigation = {
       icon: ClipboardList,
     },
     {
+      label: "Review & Verification",
+      path: "/officer/review-verification",
+      icon: BadgeCheck,
+    },
+    {
       label: "Verification History",
       path: "/officer/history",
       icon: FileClock,
     },
-    { label: "Compliance Review", path: "/officer/compliance", icon: BadgeCheck },
-    { label: "Utilization Review", path: "/officer/utilization", icon: CircleDollarSign },
-    { label: "Profile", path: "/officer/profile", icon: UserRound },
     { label: "Notifications", path: "/officer/notifications", icon: Bell },
+    { label: "Profile", path: "/officer/profile", icon: UserRound },
   ],
   FIELD_OFFICER: [
     { label: "Dashboard", path: "/field-officer-dashboard", icon: LayoutDashboard },

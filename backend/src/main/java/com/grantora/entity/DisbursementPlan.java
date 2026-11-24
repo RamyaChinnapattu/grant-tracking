@@ -118,4 +118,12 @@ public class DisbursementPlan {
     public void addAuditEntry(DisbursementPlanAudit entry) {
         auditHistory.add(entry);
     }
+
+    public List<DisbursementPlanAudit> getAuditHistory() {
+        return auditHistory;
+    }
+
+    public void setAuditHistory(List<DisbursementPlanAudit> auditHistory) {
+        this.auditHistory = auditHistory;
+    }
 }

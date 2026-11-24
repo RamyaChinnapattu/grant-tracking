@@ -70,6 +70,25 @@ public class WorkflowAutomationService {
 
         for (GrantApplication a : apps.findAllByOrderByIdDesc()) {
 
+            // Detect unassigned applications in active verification workflow
+            if (a.getWorkflowStage() != null && a.getAssignedOfficer() == null
+                    && a.getStatus() != GrantApplicationStatus.DRAFT
+                    && a.getStatus() != GrantApplicationStatus.APPROVED
+                    && a.getStatus() != GrantApplicationStatus.REJECTED
+                    && a.getStatus() != GrantApplicationStatus.WITHDRAWN) {
+                for (User u : users.findAll()) {
+                    if (u.getRole() == Role.ADMIN) {
+                        notify(
+                                u,
+                                "unassigned:" + a.getId() + ":" + a.getWorkflowStage(),
+                                "Application #" + a.getId() + " is awaiting " + a.getWorkflowStage()
+                                        + " review but has no assigned officer. Action required: Assign officer.",
+                                a.getId());
+                    }
+                }
+                continue;
+            }
+
             if (a.getWorkflowStage() == null
                     || a.getAssignedOfficer() == null
                     || a.getTaskDueAt() == null

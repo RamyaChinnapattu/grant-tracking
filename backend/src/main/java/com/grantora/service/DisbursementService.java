@@ -88,6 +88,32 @@ public class DisbursementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid approved grant amount.");
         }
 
+        Scheme scheme = application.getScheme();
+        if (scheme != null) {
+            Scheme lockedScheme = scheme.getId() != null
+                    ? schemeRepository.findByIdForUpdate(scheme.getId()).orElse(scheme)
+                    : scheme;
+            if (lockedScheme.getMaximumGrantAmount() != null && approvedAmount.compareTo(lockedScheme.getMaximumGrantAmount()) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        String.format("Approved grant amount (₹%s) exceeds scheme maximum grant limit of ₹%s.",
+                                approvedAmount.toPlainString(), lockedScheme.getMaximumGrantAmount().toPlainString()));
+            }
+            if (lockedScheme.getAllocatedFunds() != null) {
+                List<DisbursementPlan> existingPlans = planRepository.findByScheme_Id(lockedScheme.getId());
+                BigDecimal totalCommitted = existingPlans.stream()
+                        .filter(p -> p.getPlanStatus() != DisbursementPlanStatus.CANCELLED)
+                        .map(DisbursementPlan::getTotalApprovedAmount)
+                        .filter(Objects::nonNull)
+                        .reduce(BigDecimal.ZERO, BigDecimal::add);
+                BigDecimal availableBudget = lockedScheme.getAllocatedFunds().subtract(totalCommitted);
+                if (approvedAmount.compareTo(availableBudget) > 0) {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT,
+                            String.format("Approved grant amount (₹%s) exceeds available scheme budget (₹%s remaining out of ₹%s total).",
+                                    approvedAmount.toPlainString(), availableBudget.toPlainString(), lockedScheme.getAllocatedFunds().toPlainString()));
+                }
+            }
+        }
+
         // Validate installments
         BigDecimal sumAmounts = BigDecimal.ZERO;
         for (InstallmentRequest instReq : request.installments()) {
@@ -109,6 +135,13 @@ public class DisbursementService {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Installment sequence numbers must be positive and unique.");
             }
             if (item.percentage() != null) { hasPercentage = true; sumPercentages = sumPercentages.add(item.percentage()); }
+        }
+        int totalStages = request.installments().size();
+        for (int seq = 1; seq <= totalStages; seq++) {
+            if (!sequences.contains(seq)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Installment sequence numbers must be consecutive starting from 1 to " + totalStages + ".");
+            }
         }
         if (hasPercentage && request.installments().stream().anyMatch(item -> item.percentage() == null)) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "A plan must use one installment calculation method throughout.");
@@ -332,9 +365,15 @@ public class DisbursementService {
         if (user.getRole() != Role.ADMIN && user.getRole() != Role.OFFICER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only officers or admins can update milestone progress.");
         }
-        if(user.getRole()==Role.OFFICER && (milestone.getInstallment().getPlan().getApplication().getAssignedOfficer()==null
-                || !Objects.equals(milestone.getInstallment().getPlan().getApplication().getAssignedOfficer().getId(),user.getId())))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"This application is outside your assigned workflow.");
+        if (user.getRole() == Role.OFFICER) {
+            DisbursementInstallment inst = milestone.getInstallment();
+            DisbursementPlan plan = inst != null ? inst.getPlan() : null;
+            GrantApplication app = plan != null ? plan.getApplication() : null;
+            User assignedOfficer = app != null ? app.getAssignedOfficer() : null;
+            if (assignedOfficer == null || !Objects.equals(assignedOfficer.getId(), user.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This application is outside your assigned workflow.");
+            }
+        }
 
         if (request.progressPercentage() != null) {
             milestone.setProgressPercentage(request.progressPercentage());
@@ -389,17 +428,51 @@ public class DisbursementService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Milestone not found."));
 
         User user = getUser(userEmail);
+        GrantApplication app = milestone.getInstallment() != null && milestone.getInstallment().getPlan() != null
+                ? milestone.getInstallment().getPlan().getApplication() : null;
+        User appBeneficiaryUser = app != null && app.getBeneficiary() != null
+                ? app.getBeneficiary().getUser() : null;
 
-        MilestoneCompliance compliance = new MilestoneCompliance();
-        compliance.setMilestone(milestone);
-        compliance.setRequirementTitle(request.requirementTitle() != null && !request.requirementTitle().isBlank()
+        if (user.getRole() == Role.BENEFICIARY) {
+            if (appBeneficiaryUser == null || !Objects.equals(appBeneficiaryUser.getId(), user.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You can submit evidence only for your own grant applications.");
+            }
+        } else if (user.getRole() != Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the assigned beneficiary or an administrator can submit compliance evidence.");
+        }
+
+        String reqTitle = request.requirementTitle() != null && !request.requirementTitle().isBlank()
                 ? request.requirementTitle().trim()
-                : "Proof of Compliance");
-        compliance.setDescription(request.description());
+                : "Proof of Compliance";
+
+        // Find existing compliance requirement for this milestone or create a new one
+        MilestoneCompliance compliance = milestone.getCompliances().stream()
+                .filter(c -> c.getRequirementTitle().equalsIgnoreCase(reqTitle)
+                        || milestone.getCompliances().size() == 1)
+                .findFirst()
+                .orElse(null);
+
+        if (compliance == null) {
+            compliance = new MilestoneCompliance();
+            compliance.setMilestone(milestone);
+            compliance.setRequirementTitle(reqTitle);
+            milestone.addCompliance(compliance);
+        } else {
+            if (compliance.getStatus() == ComplianceStatus.VERIFIED
+                    || compliance.getStatus() == ComplianceStatus.APPROVED
+                    || compliance.getStatus() == ComplianceStatus.WAIVED) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "This compliance requirement is already approved/closed and cannot accept new submissions.");
+            }
+        }
+
+        compliance.setDescription(request.description() != null ? request.description() : compliance.getDescription());
         compliance.setSubmissionNotes(request.submissionNotes());
         compliance.setStatus(ComplianceStatus.SUBMITTED);
         compliance.setSubmittedAt(LocalDateTime.now());
         compliance.setSubmittedBy(user);
+        compliance.setVerifiedBy(null);
+        compliance.setVerifiedAt(null);
+        compliance.setVerificationRemarks(null);
 
         if (file != null && !file.isEmpty()) {
             validateComplianceDocument(file);
@@ -416,27 +489,49 @@ public class DisbursementService {
         ComplianceReviewHistory history = new ComplianceReviewHistory();
         history.setActor(user); history.setAction("SUBMITTED"); history.setRemarks(request.submissionNotes());
         history.setDocumentFileName(compliance.getDocumentFileName()); compliance.addHistory(history);
-        MilestoneCompliance saved = complianceRepository.save(compliance);
 
-        // If milestone was marked non-compliant due to missing submission, re-evaluate
-        if (milestone.getNonCompliant() && "Compliance evidence overdue".equalsIgnoreCase(milestone.getNonComplianceReason())) {
+        // If milestone was marked non-compliant due to missing submission or rejection, re-evaluate on resubmission
+        if (milestone.getNonCompliant() && milestone.getNonComplianceReason() != null) {
             milestone.setNonCompliant(false);
             milestone.setNonComplianceReason(null);
             milestoneRepository.save(milestone);
         }
 
+        MilestoneCompliance saved = complianceRepository.save(compliance);
         return toComplianceResponse(saved);
     }
 
     @Transactional(readOnly = true)
     public byte[] getComplianceDocumentBytes(Long complianceId) {
-        MilestoneCompliance compliance = complianceRepository.findById(complianceId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compliance record not found."));
-
+        MilestoneCompliance compliance = getComplianceEntity(complianceId);
         if (compliance.getDocumentData() == null || compliance.getDocumentData().length == 0) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "No document attached to this compliance record.");
         }
         return compliance.getDocumentData();
+    }
+
+    @Transactional(readOnly = true)
+    public MilestoneCompliance getComplianceEntity(Long complianceId, String userEmail) {
+        MilestoneCompliance compliance = complianceRepository.findById(complianceId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compliance record not found."));
+
+        User actor = getUser(userEmail);
+        DisbursementMilestone milestone = compliance.getMilestone();
+        DisbursementInstallment inst = milestone != null ? milestone.getInstallment() : null;
+        DisbursementPlan plan = inst != null ? inst.getPlan() : null;
+        GrantApplication app = plan != null ? plan.getApplication() : null;
+
+        User benUser = app != null && app.getBeneficiary() != null ? app.getBeneficiary().getUser() : null;
+        User assignedOfficer = app != null ? app.getAssignedOfficer() : null;
+
+        boolean allowed = actor.getRole() == Role.ADMIN
+                || (actor.getRole() == Role.BENEFICIARY && benUser != null && Objects.equals(benUser.getId(), actor.getId()))
+                || (actor.getRole() == Role.OFFICER && assignedOfficer != null && Objects.equals(assignedOfficer.getId(), actor.getId()));
+
+        if (!allowed) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this compliance document.");
+        }
+        return compliance;
     }
 
     @Transactional(readOnly = true)
@@ -456,15 +551,24 @@ public class DisbursementService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Compliance record not found."));
 
         DisbursementMilestone milestone = compliance.getMilestone();
-        if(officer.getRole()==Role.OFFICER && (milestone.getInstallment().getPlan().getApplication().getAssignedOfficer()==null
-                || !Objects.equals(milestone.getInstallment().getPlan().getApplication().getAssignedOfficer().getId(),officer.getId())))
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN,"This application is outside your assigned workflow.");
+        if (officer.getRole() == Role.OFFICER) {
+            DisbursementInstallment inst = milestone != null ? milestone.getInstallment() : null;
+            DisbursementPlan plan = inst != null ? inst.getPlan() : null;
+            GrantApplication app = plan != null ? plan.getApplication() : null;
+            User assignedOfficer = app != null ? app.getAssignedOfficer() : null;
+            if (assignedOfficer == null || !Objects.equals(assignedOfficer.getId(), officer.getId())) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This application is outside your assigned workflow.");
+            }
+        }
 
         compliance.setVerifiedBy(officer);
         compliance.setVerifiedAt(LocalDateTime.now());
         compliance.setVerificationRemarks(request.remarks());
 
         if (Boolean.TRUE.equals(request.approved())) {
+            if (compliance.getDocumentData() == null || compliance.getDocumentData().length == 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot approve compliance evidence without an uploaded supporting document.");
+            }
             compliance.setStatus(ComplianceStatus.VERIFIED);
 
             // Check if all compliances of milestone are now VERIFIED
@@ -479,12 +583,26 @@ public class DisbursementService {
                 milestone.setStatus(MilestoneStatus.COMPLETED);
                 milestone.setProgressPercentage(100);
                 milestone.setCompletedAt(LocalDateTime.now());
+            } else {
+                long totalReq = milestone.getCompliances().stream().filter(MilestoneCompliance::isRequired).count();
+                long doneReq = milestone.getCompliances().stream().filter(c ->
+                        c.isRequired() && (c.getId().equals(compliance.getId()) || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.APPROVED || c.getStatus() == ComplianceStatus.WAIVED)
+                ).count();
+                int progress = totalReq > 0 ? (int) ((doneReq * 100) / totalReq) : 50;
+                milestone.setProgressPercentage(progress);
+                if (milestone.getStatus() == MilestoneStatus.PLANNED) {
+                    milestone.setStatus(MilestoneStatus.PENDING);
+                }
             }
         } else {
             // Flag as rejected and mark milestone non-compliant
             compliance.setStatus(ComplianceStatus.REJECTED);
             milestone.setNonCompliant(true);
             milestone.setNonComplianceReason("Compliance rejected: " + (request.remarks() != null ? request.remarks() : "Evidence does not satisfy criteria"));
+            if (milestone.getStatus() == MilestoneStatus.COMPLETED) {
+                milestone.setStatus(MilestoneStatus.PENDING);
+                milestone.setProgressPercentage(50);
+            }
 
             // Alert admin and officer
             for (User admin : userRepository.findAll()) {
@@ -520,16 +638,55 @@ public class DisbursementService {
                     "Only authorized administrators can disburse funds.");
         }
 
-        DisbursementInstallment installment = installmentRepository.findById(installmentId)
+        DisbursementInstallment installment = installmentRepository.findByIdForUpdate(installmentId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Installment not found."));
+
+        DisbursementPlan plan = installment.getPlan();
+        if (plan == null) {
+            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Installment is not associated with a disbursement plan.");
+        }
+
+        if (plan.getPlanStatus() != DisbursementPlanStatus.ACTIVE) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot disburse installment: disbursement plan is " + plan.getPlanStatus());
+        }
+
+        if (plan.getApplication() != null && plan.getApplication().getStatus() != GrantApplicationStatus.APPROVED) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Application has not received final Finance Officer approval.");
+        }
 
         if (installment.getStatus() == InstallmentStatus.DISBURSED) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Installment has already been disbursed. Duplicate payment release is prohibited.");
         }
 
-        // FINANCIAL SAFETY: Ensure all milestone compliances are VERIFIED
+        // Installment sequence enforcement: prior installments must already be DISBURSED
+        if (installment.getInstallmentNumber() != null && installment.getInstallmentNumber() > 1) {
+            boolean priorUndisbursed = plan.getInstallments().stream()
+                    .filter(inst -> inst.getInstallmentNumber() < installment.getInstallmentNumber())
+                    .anyMatch(inst -> inst.getStatus() != InstallmentStatus.DISBURSED);
+            if (priorUndisbursed) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Previous installments must be disbursed before releasing installment #" + installment.getInstallmentNumber());
+            }
+        }
+
+        // Over-disbursement cap check
+        BigDecimal newTotalDisbursed = plan.getTotalDisbursedAmount().add(installment.getAmount());
+        if (newTotalDisbursed.compareTo(plan.getTotalApprovedAmount()) > 0) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    String.format("Disbursement amount exceeds total approved grant amount of ₹%s.",
+                            plan.getTotalApprovedAmount().toPlainString()));
+        }
+
+        // FINANCIAL SAFETY: Ensure all milestone compliances are VERIFIED and milestones are COMPLETED with 100% progress
         for (DisbursementMilestone m : installment.getMilestones()) {
+            if (m.getStatus() != MilestoneStatus.COMPLETED || (m.getProgressPercentage() != null && m.getProgressPercentage() < 100)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        String.format("Cannot release disbursement: Milestone '%s' is not completed (current status: %s, progress: %d%%). All milestones must be COMPLETED with 100%% progress before release.",
+                                m.getTitle(), m.getStatus(), m.getProgressPercentage() != null ? m.getProgressPercentage() : 0));
+            }
             if (m.getNonCompliant()) {
                 throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                         String.format("Cannot release disbursement: Milestone '%s' is flagged as non-compliant (%s).",
@@ -549,18 +706,30 @@ public class DisbursementService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "A valid payment transaction reference / UTR is strictly required to record disbursement.");
         }
+        String paymentRef = request.paymentReference().trim();
+        if (installmentRepository.existsByPaymentReference(paymentRef)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    String.format("Payment transaction reference '%s' has already been recorded for another disbursement.", paymentRef));
+        }
 
         installment.setStatus(InstallmentStatus.DISBURSED);
         installment.setActualDisbursementDate(LocalDateTime.now());
-        installment.setPaymentReference(request.paymentReference().trim());
+        installment.setPaymentReference(paymentRef);
         installment.setPaymentMethod(request.paymentMethod() != null ? request.paymentMethod().trim() : "DIRECT_BENEFIT_TRANSFER");
         installment.setDisbursedBy(admin);
         installment.setDisbursementRemarks(request.remarks());
 
         // Update plan disbursed totals
-        DisbursementPlan plan = installment.getPlan();
-        BigDecimal newTotalDisbursed = plan.getTotalDisbursedAmount().add(installment.getAmount());
         plan.setTotalDisbursedAmount(newTotalDisbursed);
+        plan.addAuditEntry(new DisbursementPlanAudit(
+                plan,
+                admin,
+                "DISBURSED",
+                String.format("Disbursed installment #%d (₹%s) with payment reference: %s",
+                        installment.getInstallmentNumber(),
+                        installment.getAmount().toPlainString(),
+                        installment.getPaymentReference())
+        ));
 
         // Check if all installments are disbursed
         boolean allDisbursed = plan.getInstallments().stream()
@@ -650,12 +819,15 @@ public class DisbursementService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalScheduled = allInstallments.stream()
+                .filter(inst -> (inst.getPlan() == null || inst.getPlan().getPlanStatus() != DisbursementPlanStatus.CANCELLED)
+                        && inst.getStatus() != InstallmentStatus.CANCELLED)
                 .map(DisbursementInstallment::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         BigDecimal totalDisbursed = allInstallments.stream()
-                .filter(inst -> inst.getStatus() == InstallmentStatus.DISBURSED)
+                .filter(inst -> inst.getStatus() == InstallmentStatus.DISBURSED
+                        && (inst.getPlan() == null || inst.getPlan().getPlanStatus() != DisbursementPlanStatus.CANCELLED))
                 .map(DisbursementInstallment::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -664,13 +836,7 @@ public class DisbursementService {
         List<SchemeFundUtilizationResponse> schemeBreakdowns = new ArrayList<>();
 
         for (Scheme s : allSchemes) {
-            BigDecimal schemeAllocated = s.getAllocatedFunds();
-            if (schemeAllocated == null || schemeAllocated.compareTo(BigDecimal.ZERO) <= 0) {
-                // If not set, calculate default based on maximum grant cap * estimated capacity or default ₹10,000,000
-                schemeAllocated = s.getMaximumGrantAmount() != null
-                        ? s.getMaximumGrantAmount().multiply(BigDecimal.valueOf(50))
-                        : BigDecimal.valueOf(10000000);
-            }
+            BigDecimal schemeAllocated = s.getAllocatedFunds() != null ? s.getAllocatedFunds() : BigDecimal.ZERO;
             totalAllocated = totalAllocated.add(schemeAllocated);
 
             List<GrantApplication> sApps = approvedApps.stream()
@@ -683,11 +849,12 @@ public class DisbursementService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             List<DisbursementPlan> sPlans = allPlans.stream()
-                    .filter(p -> p.getScheme().getId().equals(s.getId()))
+                    .filter(p -> p.getScheme().getId().equals(s.getId()) && p.getPlanStatus() != DisbursementPlanStatus.CANCELLED)
                     .collect(Collectors.toList());
 
             BigDecimal sScheduled = sPlans.stream()
                     .flatMap(p -> p.getInstallments().stream())
+                    .filter(i -> i.getStatus() != InstallmentStatus.CANCELLED)
                     .map(DisbursementInstallment::getAmount)
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -699,7 +866,7 @@ public class DisbursementService {
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            BigDecimal sRemaining = schemeAllocated.subtract(sDisbursed);
+            BigDecimal sRemaining = schemeAllocated.subtract(sApproved).max(BigDecimal.ZERO);
             BigDecimal sUtilizationPct = schemeAllocated.compareTo(BigDecimal.ZERO) > 0
                     ? sDisbursed.multiply(BigDecimal.valueOf(100)).divide(schemeAllocated, 2, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;
@@ -719,7 +886,7 @@ public class DisbursementService {
         }
 
         BigDecimal remainingAllocated = totalAllocated.subtract(totalDisbursed);
-        BigDecimal remainingApproved = totalApproved.subtract(totalDisbursed);
+        BigDecimal remainingApproved = totalApproved.subtract(totalDisbursed).max(BigDecimal.ZERO);
 
         BigDecimal overallUtilization = totalAllocated.compareTo(BigDecimal.ZERO) > 0
                 ? totalDisbursed.multiply(BigDecimal.valueOf(100)).divide(totalAllocated, 2, RoundingMode.HALF_UP)
@@ -796,6 +963,10 @@ public class DisbursementService {
                         .collect(Collectors.toList());
                 long approvedCount = approved.size();
 
+                long rejectedCount = apps.stream()
+                        .filter(a -> a.getStatus() == GrantApplicationStatus.REJECTED)
+                        .count();
+
                 BigDecimal approvedAmount = approved.stream()
                         .map(GrantApplication::getRequestedAmount)
                         .filter(Objects::nonNull)
@@ -804,7 +975,7 @@ public class DisbursementService {
                 Set<Long> appIds = apps.stream().map(GrantApplication::getId).collect(Collectors.toSet());
 
                 BigDecimal disbursedAmount = allPlans.stream()
-                        .filter(p -> appIds.contains(p.getApplication().getId()))
+                        .filter(p -> p.getPlanStatus() != DisbursementPlanStatus.CANCELLED && appIds.contains(p.getApplication().getId()))
                         .map(DisbursementPlan::getTotalDisbursedAmount)
                         .filter(Objects::nonNull)
                         .reduce(BigDecimal.ZERO, BigDecimal::add);
@@ -815,7 +986,8 @@ public class DisbursementService {
                 }
 
                 List<DisbursementMilestone> regMilestones = allMilestones.stream()
-                        .filter(m -> appIds.contains(m.getInstallment().getPlan().getApplication().getId()))
+                        .filter(m -> m.getInstallment() != null && m.getInstallment().getPlan() != null
+                                && appIds.contains(m.getInstallment().getPlan().getApplication().getId()))
                         .collect(Collectors.toList());
 
                 long totalMilestones = regMilestones.size();
@@ -837,6 +1009,7 @@ public class DisbursementService {
                         district,
                         totalApps,
                         approvedCount,
+                        rejectedCount,
                         approvedAmount,
                         disbursedAmount,
                         pendingDisbursed,
@@ -863,14 +1036,18 @@ public class DisbursementService {
         Beneficiary ben = app != null ? app.getBeneficiary() : null;
         Scheme scheme = plan.getScheme();
 
-        BigDecimal scheduledTotal = plan.getInstallments().stream()
+        List<DisbursementInstallment> installments = plan.getInstallments() == null ? Collections.emptyList() : plan.getInstallments();
+
+        BigDecimal scheduledTotal = installments.stream()
                 .map(DisbursementInstallment::getAmount)
                 .filter(Objects::nonNull)
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-        BigDecimal remaining = plan.getTotalApprovedAmount().subtract(plan.getTotalDisbursedAmount());
+        BigDecimal approved = plan.getTotalApprovedAmount() != null ? plan.getTotalApprovedAmount() : BigDecimal.ZERO;
+        BigDecimal disbursed = plan.getTotalDisbursedAmount() != null ? plan.getTotalDisbursedAmount() : BigDecimal.ZERO;
+        BigDecimal remaining = approved.subtract(disbursed);
 
-        List<DisbursementInstallmentResponse> instResponses = plan.getInstallments().stream()
+        List<DisbursementInstallmentResponse> instResponses = installments.stream()
                 .map(this::toInstallmentResponse)
                 .collect(Collectors.toList());
 
@@ -884,8 +1061,8 @@ public class DisbursementService {
                 ben != null && ben.getUser() != null ? ben.getUser().getFullName() : "Beneficiary",
                 ben != null ? ben.getState() : null,
                 ben != null ? ben.getDistrict() : null,
-                plan.getTotalApprovedAmount(),
-                plan.getTotalDisbursedAmount(),
+                approved,
+                disbursed,
                 scheduledTotal,
                 remaining,
                 plan.getPlanStatus(),
@@ -898,12 +1075,14 @@ public class DisbursementService {
     }
 
     private DisbursementInstallmentResponse toInstallmentResponse(DisbursementInstallment inst) {
-        List<DisbursementMilestoneResponse> milestoneResponses = inst.getMilestones().stream()
+        List<DisbursementMilestone> milestones = inst.getMilestones() == null ? Collections.emptyList() : inst.getMilestones();
+
+        List<DisbursementMilestoneResponse> milestoneResponses = milestones.stream()
                 .map(this::toMilestoneResponse)
                 .collect(Collectors.toList());
 
-        boolean allVerified = !inst.getMilestones().isEmpty() && inst.getMilestones().stream().allMatch(m ->
-                !m.getNonCompliant() && m.getCompliances().stream().allMatch(c -> !c.isRequired()
+        boolean allVerified = !milestones.isEmpty() && milestones.stream().allMatch(m ->
+                !Boolean.TRUE.equals(m.getNonCompliant()) && (m.getCompliances() == null ? Collections.<MilestoneCompliance>emptyList() : m.getCompliances()).stream().allMatch(c -> !c.isRequired()
                         || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.APPROVED
                         || c.getStatus() == ComplianceStatus.WAIVED)
         );
@@ -933,7 +1112,9 @@ public class DisbursementService {
         GrantApplication app = plan != null ? plan.getApplication() : null;
         Beneficiary ben = app != null ? app.getBeneficiary() : null;
 
-        List<MilestoneComplianceResponse> compResponses = m.getCompliances().stream()
+        List<MilestoneCompliance> compliances = m.getCompliances() == null ? Collections.emptyList() : m.getCompliances();
+
+        List<MilestoneComplianceResponse> compResponses = compliances.stream()
                 .map(this::toComplianceResponse)
                 .collect(Collectors.toList());
 
