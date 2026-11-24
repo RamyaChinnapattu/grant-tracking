@@ -1,0 +1,727 @@
+/* Officer Dedicated Dashboards CSS */
+
+.officer-dash {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 6px 0 40px;
+  color: var(--color-on-surface);
+}
+
+/* Header */
+.officer-dash__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 24px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 14px;
+  background: var(--color-surface-lowest);
+  box-shadow: 0 4px 18px var(--color-shadow);
+}
+
+.officer-dash__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.officer-dash__eyebrow--field {
+  color: #0284c7;
+}
+
+.officer-dash__eyebrow--district {
+  color: #d97706;
+}
+
+.officer-dash__eyebrow--finance {
+  color: #16a34a;
+}
+
+.officer-dash__header h1 {
+  margin: 6px 0 6px;
+  font-size: 1.65rem;
+  font-weight: 750;
+  color: var(--color-on-surface);
+}
+
+.officer-dash__header p {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  max-width: 760px;
+  line-height: 1.5;
+}
+
+.officer-dash__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.officer-dash__refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-lowest);
+  color: var(--color-primary);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.officer-dash__refresh-btn:hover:not(:disabled) {
+  background: var(--color-surface-high);
+  border-color: var(--color-primary);
+}
+
+/* Stat Cards */
+.officer-dash__kpis {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+
+.officer-dash__kpi-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-lowest);
+  box-shadow: 0 2px 10px var(--color-shadow);
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.officer-dash__kpi-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-primary);
+}
+
+.officer-dash__kpi-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+}
+
+.officer-dash__kpi-icon--blue {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.officer-dash__kpi-icon--amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.officer-dash__kpi-icon--emerald {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.officer-dash__kpi-icon--rose {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.officer-dash__kpi-icon--violet {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+.officer-dash__kpi-icon--slate {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.officer-dash__kpi-data {
+  display: flex;
+  flex-direction: column;
+}
+
+.officer-dash__kpi-value {
+  font-size: 1.55rem;
+  font-weight: 800;
+  line-height: 1.1;
+  color: var(--color-on-surface);
+}
+
+.officer-dash__kpi-label {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+/* Main Section */
+.officer-dash__section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 14px;
+  background: var(--color-surface-lowest);
+  box-shadow: 0 4px 16px var(--color-shadow);
+}
+
+.officer-dash__toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.officer-dash__search-box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface);
+  flex: 1;
+  max-width: 420px;
+}
+
+.officer-dash__search-box input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 100%;
+  font-size: 0.88rem;
+  color: var(--color-on-surface);
+}
+
+.officer-dash__filters {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.officer-dash__select {
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface);
+  font-size: 0.84rem;
+  color: var(--color-on-surface);
+  outline: none;
+}
+
+/* Table */
+.officer-dash__table-wrapper {
+  overflow-x: auto;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 10px;
+}
+
+.officer-dash__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  text-align: left;
+}
+
+.officer-dash__table th {
+  background: var(--color-surface-high);
+  color: var(--color-text-muted);
+  padding: 12px 14px;
+  font-weight: 700;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--color-outline-variant);
+  white-space: nowrap;
+}
+
+.officer-dash__table td {
+  padding: 14px;
+  border-bottom: 1px solid var(--color-outline-variant);
+  vertical-align: middle;
+}
+
+.officer-dash__table tbody tr:hover {
+  background: var(--color-surface-low);
+}
+
+.officer-dash__app-id {
+  font-weight: 700;
+  color: var(--color-primary);
+}
+
+/* Badges */
+.officer-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.officer-badge--blue {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.officer-badge--amber {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.officer-badge--emerald {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.officer-badge--rose {
+  background: #ffe4e6;
+  color: #be123c;
+}
+
+.officer-badge--slate {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.officer-badge--purple {
+  background: #f3e8ff;
+  color: #7e22ce;
+}
+
+/* Score Pill */
+.officer-dash__score-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-weight: 750;
+  font-size: 0.8rem;
+}
+
+.officer-dash__score-pill--high {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.officer-dash__score-pill--low {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+/* Action Button */
+.officer-dash__btn-review {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 7px;
+  border: 1px solid var(--color-primary);
+  background: transparent;
+  color: var(--color-primary);
+  font-size: 0.84rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.officer-dash__btn-review:hover {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+/* Detail Modal */
+.officer-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+}
+
+.officer-modal {
+  width: 100%;
+  max-width: 980px;
+  max-height: 90vh;
+  background: var(--color-surface-lowest);
+  border-radius: 16px;
+  border: 1px solid var(--color-outline-variant);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.officer-modal__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-low);
+}
+
+.officer-modal__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 750;
+}
+
+.officer-modal__close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  display: grid;
+  place-items: center;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.officer-modal__close-btn:hover {
+  background: var(--color-surface-high);
+  color: var(--color-on-surface);
+}
+
+.officer-modal__tabs {
+  display: flex;
+  gap: 8px;
+  padding: 0 24px;
+  border-bottom: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-low);
+  overflow-x: auto;
+}
+
+.officer-modal__tab {
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  font-size: 0.88rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.officer-modal__tab--active {
+  color: var(--color-primary);
+  border-bottom-color: var(--color-primary);
+}
+
+.officer-modal__body {
+  padding: 24px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+/* Info Grids */
+.officer-info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+  background: var(--color-surface);
+  padding: 16px;
+  border-radius: 10px;
+  border: 1px solid var(--color-outline-variant);
+}
+
+.officer-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.officer-info-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.officer-info-value {
+  font-size: 0.94rem;
+  font-weight: 600;
+  color: var(--color-on-surface);
+}
+
+/* Documents List */
+.officer-doc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.officer-doc-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface);
+}
+
+.officer-doc-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.officer-doc-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-lowest);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.officer-doc-btn:hover {
+  background: var(--color-primary-fixed);
+}
+
+/* Checklist Card */
+.officer-checklist-card {
+  padding: 18px;
+  border-radius: 10px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.officer-checklist-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-on-surface);
+}
+
+.officer-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.officer-checkbox-label input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  cursor: pointer;
+}
+
+/* Verification Remarks Area */
+.officer-remarks-area {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.officer-remarks-area label {
+  font-size: 0.85rem;
+  font-weight: 650;
+  color: var(--color-on-surface);
+}
+
+.officer-remarks-area textarea {
+  width: 100%;
+  min-height: 90px;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-lowest);
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  resize: vertical;
+}
+
+.officer-remarks-area textarea:focus {
+  border-color: var(--color-primary);
+}
+
+/* Actions Bar */
+.officer-modal__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--color-outline-variant);
+  background: var(--color-surface-low);
+  flex-wrap: wrap;
+}
+
+.officer-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 18px;
+  border-radius: 8px;
+  border: none;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.officer-btn--primary {
+  background: var(--color-primary);
+  color: #ffffff;
+}
+
+.officer-btn--primary:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.officer-btn--warning {
+  background: #f59e0b;
+  color: #ffffff;
+}
+
+.officer-btn--warning:hover:not(:disabled) {
+  background: #d97706;
+}
+
+.officer-btn--danger {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+.officer-btn--danger:hover:not(:disabled) {
+  background: #dc2626;
+}
+
+.officer-btn--secondary {
+  background: var(--color-surface);
+  border: 1px solid var(--color-outline-variant);
+  color: var(--color-on-surface);
+}
+
+.officer-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* History Timeline */
+.officer-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+  padding-left: 20px;
+}
+
+.officer-timeline::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  width: 2px;
+  background: var(--color-outline-variant);
+}
+
+.officer-timeline-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.officer-timeline-item::before {
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: 5px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-primary);
+}
+
+.officer-timeline-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.officer-timeline-remarks {
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--color-outline-variant);
+}
+
+/* Empty & Error */
+.officer-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--color-text-muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.officer-alert {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: 0.88rem;
+}
+
+.officer-alert--error {
+  background: var(--color-error-container);
+  color: var(--color-error-text);
+  border: 1px solid var(--color-error-border);
+}
+
+.officer-alert--success {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}

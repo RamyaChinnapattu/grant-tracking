@@ -22,6 +22,10 @@ import DashboardPlaceholder from "./pages/DashboardPlaceholder";
 import ProtectedRoute from "./components/ProtectedRoute";
 import VerificationWorkflow from "./pages/VerificationWorkflow";
 import WorkflowSettings from "./pages/WorkflowSettings";
+import ComplianceCenter from "./pages/ComplianceCenter";
+import FieldOfficerDashboard from "./pages/FieldOfficerDashboard";
+import DistrictOfficerDashboard from "./pages/DistrictOfficerDashboard";
+import FinanceOfficerDashboard from "./pages/FinanceOfficerDashboard";
 
 // Unified Consolidated Workspaces
 import AdminGrantManagement from "./pages/AdminGrantManagement";
@@ -212,6 +216,104 @@ function App() {
               path="/beneficiary/notifications"
               element={<BeneficiaryNotifications />}
               handle={{ pageTitle: "Notifications" }}
+            />
+          </Route>
+        </Route>
+
+        {/* Dedicated Field Officer Workspace */}
+        <Route element={<ProtectedRoute allowedRoles={["FIELD_OFFICER"]} />}>
+          <Route element={<DashboardLayout role="FIELD_OFFICER" />}>
+            <Route
+              path="/field-officer-dashboard"
+              element={<FieldOfficerDashboard />}
+              handle={{ pageTitle: "Field Officer Dashboard" }}
+            />
+            <Route
+              path="/field-officer/applications"
+              element={<VerificationWorkflow />}
+              handle={{ pageTitle: "Field Verification Queue" }}
+            />
+            <Route
+              path="/field-officer/history"
+              element={<VerificationWorkflow historyOnly />}
+              handle={{ pageTitle: "Verification History" }}
+            />
+            <Route
+              path="/field-officer/compliance"
+              element={<ComplianceCenter />}
+              handle={{ pageTitle: "Compliance Review" }}
+            />
+            <Route
+              path="/field-officer/profile"
+              element={<DashboardPlaceholder title="Profile" />}
+              handle={{ pageTitle: "Profile" }}
+            />
+          </Route>
+        </Route>
+
+        {/* Dedicated District Officer Workspace */}
+        <Route element={<ProtectedRoute allowedRoles={["DISTRICT_OFFICER"]} />}>
+          <Route element={<DashboardLayout role="DISTRICT_OFFICER" />}>
+            <Route
+              path="/district-officer-dashboard"
+              element={<DistrictOfficerDashboard />}
+              handle={{ pageTitle: "District Officer Dashboard" }}
+            />
+            <Route
+              path="/district-officer/applications"
+              element={<VerificationWorkflow />}
+              handle={{ pageTitle: "District Review Queue" }}
+            />
+            <Route
+              path="/district-officer/history"
+              element={<VerificationWorkflow historyOnly />}
+              handle={{ pageTitle: "Verification History" }}
+            />
+            <Route
+              path="/district-officer/compliance"
+              element={<ComplianceCenter />}
+              handle={{ pageTitle: "Compliance Review" }}
+            />
+            <Route
+              path="/district-officer/profile"
+              element={<DashboardPlaceholder title="Profile" />}
+              handle={{ pageTitle: "Profile" }}
+            />
+          </Route>
+        </Route>
+
+        {/* Dedicated Finance Officer Workspace */}
+        <Route element={<ProtectedRoute allowedRoles={["FINANCE_OFFICER"]} />}>
+          <Route element={<DashboardLayout role="FINANCE_OFFICER" />}>
+            <Route
+              path="/finance-officer-dashboard"
+              element={<FinanceOfficerDashboard />}
+              handle={{ pageTitle: "Finance Officer Dashboard" }}
+            />
+            <Route
+              path="/finance-officer/applications"
+              element={<VerificationWorkflow />}
+              handle={{ pageTitle: "Financial Approval Queue" }}
+            />
+            <Route
+              path="/finance-officer/history"
+              element={<VerificationWorkflow historyOnly />}
+              handle={{ pageTitle: "Verification History" }}
+            />
+            <Route
+              path="/finance-officer/schemes"
+              element={<SchemeManagement />}
+              handle={{ pageTitle: "Scheme Allocations & Budgets" }}
+            />
+            <Route
+              path="/finance-officer/compliance"
+              element={<ComplianceCenter />}
+              handle={{ pageTitle: "Compliance Review" }}
+            />
+            <Route
+              path="/finance-officer/profile"
+              element={<DashboardPlaceholder title="Profile" />}
+              handle={{ pageTitle: "Profile" }}
             />
           </Route>
         </Route>

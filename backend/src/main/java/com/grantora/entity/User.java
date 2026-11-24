@@ -33,7 +33,7 @@ public class User {
     private String jurisdictionDistrict;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 30)
     private Role role;
 
     private Boolean active = true;
@@ -113,6 +113,29 @@ public class User {
 
     public void setRole(Role role) {
         this.role = role;
+        if (role == Role.FIELD_OFFICER && (officerLevel == null || officerLevel.isBlank())) {
+            this.officerLevel = "FIELD";
+        } else if (role == Role.DISTRICT_OFFICER && (officerLevel == null || officerLevel.isBlank())) {
+            this.officerLevel = "DISTRICT";
+        } else if (role == Role.FINANCE_OFFICER && (officerLevel == null || officerLevel.isBlank())) {
+            this.officerLevel = "FINANCE";
+        }
+    }
+
+    public boolean isOfficer() {
+        return role != null && role.isOfficer();
+    }
+
+    public boolean isFieldOfficer() {
+        return role == Role.FIELD_OFFICER || (role == Role.OFFICER && "FIELD".equalsIgnoreCase(officerLevel));
+    }
+
+    public boolean isDistrictOfficer() {
+        return role == Role.DISTRICT_OFFICER || (role == Role.OFFICER && "DISTRICT".equalsIgnoreCase(officerLevel));
+    }
+
+    public boolean isFinanceOfficer() {
+        return role == Role.FINANCE_OFFICER || (role == Role.OFFICER && "FINANCE".equalsIgnoreCase(officerLevel));
     }
 
     public Boolean getActive() {

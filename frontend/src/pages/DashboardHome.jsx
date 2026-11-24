@@ -25,6 +25,9 @@ import { getMyApplications } from "../services/grantApplicationService";
 import { getNotifications } from "../services/notificationService";
 import AdminDashboardHome from "./AdminDashboardHome";
 import OfficerMilestone3Dashboard from "./OfficerMilestone3Dashboard";
+import FieldOfficerDashboard from "./FieldOfficerDashboard";
+import DistrictOfficerDashboard from "./DistrictOfficerDashboard";
+import FinanceOfficerDashboard from "./FinanceOfficerDashboard";
 import "../styles/DashboardHome.css";
 
 function BeneficiaryDashboardHome() {
@@ -460,6 +463,18 @@ function DashboardHome({ role }) {
 
   if (role === "BENEFICIARY") {
     return <BeneficiaryDashboardHome />;
+  }
+
+  if (role === "FIELD_OFFICER") {
+    return <FieldOfficerDashboard />;
+  }
+
+  if (role === "DISTRICT_OFFICER") {
+    return <DistrictOfficerDashboard />;
+  }
+
+  if (role === "FINANCE_OFFICER") {
+    return <FinanceOfficerDashboard />;
   }
 
   if (role === "OFFICER") {

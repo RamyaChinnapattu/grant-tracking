@@ -55,6 +55,15 @@ function Login() {
         case "ADMIN":
           navigate("/admin-dashboard");
           break;
+        case "FIELD_OFFICER":
+          navigate("/field-officer-dashboard");
+          break;
+        case "DISTRICT_OFFICER":
+          navigate("/district-officer-dashboard");
+          break;
+        case "FINANCE_OFFICER":
+          navigate("/finance-officer-dashboard");
+          break;
         case "OFFICER":
           navigate("/officer-dashboard");
           break;

@@ -130,7 +130,7 @@ public class UserService {
     }
 
     private void validateOfficerJurisdiction(User user) {
-        if (user.getRole() != Role.OFFICER) {
+        if (!user.isOfficer()) {
             user.setOfficerLevel(null);
             user.setJurisdictionState(null);
             user.setJurisdictionDistrict(null);
