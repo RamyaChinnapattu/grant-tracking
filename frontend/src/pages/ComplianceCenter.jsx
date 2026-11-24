@@ -1,0 +1,498 @@
+import { useCallback, useEffect, useState } from "react";
+import { Check, Download, RefreshCw, ShieldAlert } from "lucide-react";
+import api from "../services/api";
+import {
+  createComplianceRequirement,
+  deactivateComplianceRequirement,
+  getComplianceRequirements,
+  getComplianceReviewQueue,
+  getNonComplianceCases,
+  reviewCompliance,
+  getComplianceDocument,
+  updateNonComplianceCase,
+} from "../services/complianceService";
+import { getAllMilestones } from "../services/disbursementService";
+import "../styles/Compliance.css";
+
+const initial = {
+  schemeId: "",
+  milestoneId: "",
+  applicationId: "",
+  title: "",
+  description: "",
+  required: true,
+  submissionDeadline: "",
+  allowedFormats: "pdf,png,jpg,jpeg",
+  maxFileSizeBytes: 10485760,
+};
+
+const dateLabel = (v) => (v ? new Date(v).toLocaleString("en-IN") : "—");
+
+export default function ComplianceCenter() {
+  const admin = localStorage.getItem("role") === "ADMIN";
+  const [requirements, setRequirements] = useState([]);
+  const [queue, setQueue] = useState([]);
+  const [cases, setCases] = useState([]);
+  const [schemes, setSchemes] = useState([]);
+  const [milestones, setMilestones] = useState([]);
+  const [form, setForm] = useState(initial);
+  const [decision, setDecision] = useState({});
+  const [remarks, setRemarks] = useState({});
+  const [caseStatus, setCaseStatus] = useState({});
+  const [caseRemarks, setCaseRemarks] = useState({});
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [submittingId, setSubmittingId] = useState(null);
+
+  const load = useCallback(async () => {
+    setBusy(true);
+    setError("");
+    try {
+      const tasks = [getComplianceReviewQueue(), getNonComplianceCases()];
+      if (admin) {
+        tasks.push(getComplianceRequirements(), api.get("/schemes"), getAllMilestones());
+      }
+      const r = await Promise.all(tasks);
+      setQueue(r[0].data || []);
+      setCases(r[1].data || []);
+      if (admin) {
+        setRequirements(r[2].data || []);
+        setSchemes(r[3].data || []);
+        setMilestones(r[4].data || []);
+      }
+    } catch (e) {
+      setError(e.response?.data?.message || "Could not load compliance records.");
+    } finally {
+      setBusy(false);
+    }
+  }, [admin]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const create = async (e) => {
+    e.preventDefault();
+    setSubmittingId("create");
+    setError("");
+    try {
+      await createComplianceRequirement({
+        ...form,
+        schemeId: Number(form.schemeId),
+        milestoneId: form.milestoneId ? Number(form.milestoneId) : null,
+        applicationId: form.applicationId ? Number(form.applicationId) : null,
+        maxFileSizeBytes: Number(form.maxFileSizeBytes),
+      });
+      setNotice("Compliance requirement configured and applied to matching grant milestones.");
+      setForm(initial);
+      await load();
+    } catch (err) {
+      setError(err.response?.data?.message || "Could not save the requirement.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const decide = async (item) => {
+    const selectedDecision = decision[item.id] || "APPROVED";
+    const remarkText = (remarks[item.id] || "").trim();
+
+    if ((selectedDecision === "CORRECTION_REQUIRED" || selectedDecision === "REJECTED") && !remarkText) {
+      setError(`Remarks are required when selecting ${selectedDecision.replace("_", " ").toLowerCase()}.`);
+      return;
+    }
+
+    setSubmittingId(`decide-${item.id}`);
+    setError("");
+    try {
+      await reviewCompliance(item.id, {
+        decision: selectedDecision,
+        remarks: remarkText,
+      });
+      setNotice("Compliance review saved.");
+      await load();
+    } catch (e) {
+      setError(e.response?.data?.message || "Review could not be saved.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const download = async (item) => {
+    setSubmittingId(`dl-${item.id}`);
+    try {
+      const { data } = await getComplianceDocument(item.id);
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = item.documentFileName || `compliance-${item.id}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(e.response?.data?.message || "Document could not be downloaded.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const updateCase = async (id) => {
+    setSubmittingId(`case-${id}`);
+    setError("");
+    try {
+      await updateNonComplianceCase(id, {
+        status: caseStatus[id] || "UNDER_REVIEW",
+        remarks: caseRemarks[id] || "",
+      });
+      setNotice("Non-compliance case updated.");
+      await load();
+    } catch (e) {
+      setError(e.response?.data?.message || "Case update failed.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  const deactivate = async (id) => {
+    setSubmittingId(`deact-${id}`);
+    setError("");
+    try {
+      await deactivateComplianceRequirement(id);
+      setNotice("Requirement deactivated for new and future matching obligations.");
+      await load();
+    } catch (e) {
+      setError(e.response?.data?.message || "Could not deactivate requirement.");
+    } finally {
+      setSubmittingId(null);
+    }
+  };
+
+  return (
+    <main className="compliance-page">
+      <header className="compliance-heading">
+        <div>
+          <p className="compliance-eyebrow">Grant obligations</p>
+          <h1>{admin ? "Compliance configuration & review" : "Compliance review"}</h1>
+          <p>Review documents and manage overdue obligation cases. Compliance decisions do not change grant approval.</p>
+        </div>
+        <button className="compliance-button secondary" onClick={load} disabled={busy || submittingId !== null}>
+          <RefreshCw size={16} />Refresh
+        </button>
+      </header>
+
+      {error && <div role="alert" className="compliance-alert">{error}</div>}
+      {notice && <div className="compliance-notice">{notice}</div>}
+
+      {admin && (
+        <section className="compliance-card">
+          <h2>Configure a requirement</h2>
+          <p>Requirements can apply to all matching milestones in a scheme, one application, or one milestone.</p>
+          <form className="compliance-config" onSubmit={create}>
+            <label>
+              Scheme
+              <select
+                required
+                value={form.schemeId}
+                onChange={(e) => setForm({ ...form, schemeId: e.target.value, milestoneId: "" })}
+                disabled={submittingId === "create"}
+              >
+                <option value="">Select scheme</option>
+                {schemes.map((s) => (
+                  <option key={s.id} value={s.id}>{s.schemeName}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Milestone (optional)
+              <select
+                value={form.milestoneId}
+                onChange={(e) => setForm({ ...form, milestoneId: e.target.value })}
+                disabled={submittingId === "create"}
+              >
+                <option value="">All matching milestones</option>
+                {milestones
+                  .filter((m) => !form.schemeId || schemes.find((s) => String(s.id) === form.schemeId)?.schemeName === m.schemeName)
+                  .map((m) => (
+                    <option key={m.id} value={m.id}>App #{m.applicationId} · {m.title}</option>
+                  ))}
+              </select>
+            </label>
+            <label>
+              Application ID (optional)
+              <input
+                type="number"
+                min="1"
+                value={form.applicationId}
+                onChange={(e) => setForm({ ...form, applicationId: e.target.value })}
+                placeholder="Limit to one application"
+                disabled={submittingId === "create"}
+              />
+            </label>
+            <label>
+              Requirement title
+              <input
+                required
+                maxLength="150"
+                value={form.title}
+                onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="e.g. Utilization certificate"
+                disabled={submittingId === "create"}
+              />
+            </label>
+            <label className="wide">
+              Description / instructions
+              <textarea
+                value={form.description}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                rows="2"
+                disabled={submittingId === "create"}
+              />
+            </label>
+            <label>
+              Submission deadline
+              <input
+                type="date"
+                required
+                value={form.submissionDeadline}
+                onChange={(e) => setForm({ ...form, submissionDeadline: e.target.value })}
+                disabled={submittingId === "create"}
+              />
+            </label>
+            <label>
+              Allowed formats
+              <input
+                required
+                value={form.allowedFormats}
+                onChange={(e) => setForm({ ...form, allowedFormats: e.target.value })}
+                disabled={submittingId === "create"}
+              />
+              <small>Comma-separated: pdf, png, jpg, jpeg, doc, docx, xls, xlsx</small>
+            </label>
+            <label>
+              Maximum file size (MB)
+              <input
+                type="number"
+                min="1"
+                max="10"
+                value={Math.round(form.maxFileSizeBytes / 1048576)}
+                onChange={(e) => setForm({ ...form, maxFileSizeBytes: Number(e.target.value) * 1048576 })}
+                disabled={submittingId === "create"}
+              />
+            </label>
+            <label className="compliance-check">
+              <input
+                type="checkbox"
+                checked={form.required}
+                onChange={(e) => setForm({ ...form, required: e.target.checked })}
+                disabled={submittingId === "create"}
+              />
+              {" "}Mandatory requirement
+            </label>
+            <button className="compliance-button" disabled={submittingId === "create" || busy}>
+              {submittingId === "create" ? "Configuring..." : "Configure requirement"}
+            </button>
+          </form>
+
+          <div className="compliance-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Requirement</th>
+                  <th>Scope</th>
+                  <th>Deadline</th>
+                  <th>Required</th>
+                  <th>Formats / max</th>
+                  <th>State</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {requirements.map((r) => (
+                  <tr key={r.id}>
+                    <td>
+                      <strong>{r.title}</strong>
+                      <small>{r.description}</small>
+                    </td>
+                    <td>
+                      {r.schemeName}
+                      {r.applicationId ? ` · App #${r.applicationId}` : ""}
+                      {r.milestoneId ? ` · Milestone #${r.milestoneId}` : ""}
+                    </td>
+                    <td>{r.submissionDeadline || "—"}</td>
+                    <td>{r.required ? "Required" : "Optional"}</td>
+                    <td>{r.allowedFormats} · {Math.round(r.maxFileSizeBytes / 1048576)} MB</td>
+                    <td>{r.active ? "Active" : "Inactive"}</td>
+                    <td>
+                      {r.active && (
+                        <button
+                          className="compliance-button quiet"
+                          disabled={submittingId === `deact-${r.id}` || busy}
+                          onClick={() => deactivate(r.id)}
+                        >
+                          {submittingId === `deact-${r.id}` ? "Deactivating..." : "Deactivate"}
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      <section className="compliance-card">
+        <div className="compliance-section-heading">
+          <div>
+            <h2>Submitted documents</h2>
+            <p>Officer decisions are recorded; uploads are never treated as verified automatically.</p>
+          </div>
+        </div>
+        {queue.length === 0 ? (
+          <p>No submissions are waiting for review.</p>
+        ) : (
+          <div className="compliance-review-list">
+            {queue.map((item) => (
+              <article className="compliance-review" key={item.id}>
+                <div className="compliance-card-head">
+                  <div>
+                    <h3>{item.requirementTitle}</h3>
+                    <p>{item.schemeName} · App #{item.applicationId} · {item.beneficiaryName} · {item.milestoneTitle}</p>
+                  </div>
+                  <span className={`compliance-status status-${item.status.toLowerCase()}`}>
+                    {item.status.replaceAll("_", " ")}
+                  </span>
+                </div>
+                <p>{item.description}</p>
+                <div className="compliance-meta">
+                  <span>Deadline: {item.submissionDeadline || "—"}</span>
+                  <span>Submitted: {dateLabel(item.submittedAt)}</span>
+                  <span>{item.documentFileName || "No document"}</span>
+                </div>
+                <div className="compliance-action-row">
+                  {item.hasDocument && (
+                    <button
+                      className="compliance-button secondary"
+                      disabled={submittingId === `dl-${item.id}`}
+                      onClick={() => download(item)}
+                    >
+                      <Download size={16} />
+                      {submittingId === `dl-${item.id}` ? "Opening..." : "Open document"}
+                    </button>
+                  )}
+                  <select
+                    value={decision[item.id] || "APPROVED"}
+                    onChange={(e) => setDecision({ ...decision, [item.id]: e.target.value })}
+                    disabled={submittingId === `decide-${item.id}`}
+                  >
+                    <option value="APPROVED">Approve</option>
+                    <option value="CORRECTION_REQUIRED">Request correction</option>
+                    <option value="REJECTED">Reject</option>
+                  </select>
+                  <input
+                    aria-label="Review remarks"
+                    placeholder="Remarks (required for correction or rejection)"
+                    value={remarks[item.id] || ""}
+                    onChange={(e) => setRemarks({ ...remarks, [item.id]: e.target.value })}
+                    disabled={submittingId === `decide-${item.id}`}
+                  />
+                  <button
+                    className="compliance-button"
+                    disabled={submittingId === `decide-${item.id}` || busy}
+                    onClick={() => decide(item)}
+                  >
+                    <Check size={16} />
+                    {submittingId === `decide-${item.id}` ? "Saving..." : "Save review"}
+                  </button>
+                </div>
+                {item.reviewHistory?.length > 0 && (
+                  <details>
+                    <summary>Review history ({item.reviewHistory.length})</summary>
+                    {item.reviewHistory.map((h, i) => (
+                      <p key={i}>
+                        {h.action} · {h.actorName || "System"} · {dateLabel(h.occurredAt)} {h.remarks}
+                      </p>
+                    ))}
+                  </details>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="compliance-card">
+        <div className="compliance-section-heading">
+          <div>
+            <h2><ShieldAlert size={19} /> Non-compliance cases</h2>
+            <p>Cases require authorized resolution and do not cancel grants or automatically hold installments.</p>
+          </div>
+        </div>
+        {cases.length === 0 ? (
+          <p>No non-compliance cases.</p>
+        ) : (
+          <div className="compliance-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>Beneficiary / application</th>
+                  <th>Detected</th>
+                  <th>Severity</th>
+                  <th>Status</th>
+                  <th>Remarks / resolution</th>
+                </tr>
+              </thead>
+              <tbody>
+                {cases.map((c) => (
+                  <tr key={c.id}>
+                    <td>
+                      {c.reason}
+                      <small>{c.milestoneTitle}</small>
+                    </td>
+                    <td>{c.beneficiaryName} · #{c.applicationId}</td>
+                    <td>{dateLabel(c.detectedAt)}</td>
+                    <td>{c.severity}</td>
+                    <td>{c.status}</td>
+                    <td>
+                      <div className="compliance-action-row">
+                        <select
+                          value={caseStatus[c.id] || c.status}
+                          onChange={(e) => setCaseStatus({ ...caseStatus, [c.id]: e.target.value })}
+                          disabled={submittingId === `case-${c.id}`}
+                        >
+                          <option>OPEN</option>
+                          <option>UNDER_REVIEW</option>
+                          <option>RESOLVED</option>
+                          <option>WAIVED</option>
+                        </select>
+                        <input
+                          placeholder="Officer remarks"
+                          value={caseRemarks[c.id] ?? c.officerRemarks ?? ""}
+                          onChange={(e) => setCaseRemarks({ ...caseRemarks, [c.id]: e.target.value })}
+                          disabled={submittingId === `case-${c.id}`}
+                        />
+                        <button
+                          className="compliance-button"
+                          disabled={submittingId === `case-${c.id}` || busy}
+                          onClick={() => updateCase(c.id)}
+                        >
+                          {submittingId === `case-${c.id}` ? "Updating..." : "Update"}
+                        </button>
+                      </div>
+                      {c.history?.map((h, i) => (
+                        <small key={i}>
+                          {h.status} · {h.actorName || "System"} · {h.remarks}
+                        </small>
+                      ))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}

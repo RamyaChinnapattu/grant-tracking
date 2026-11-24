@@ -1,0 +1,83 @@
+.beneficiary-page {
+  max-width: 850px;
+  margin: 40px auto;
+  padding: 30px;
+  background: var(--color-surface-lowest);
+  color: var(--color-on-surface);
+  border-radius: 16px;
+  box-shadow: 0 8px 25px var(--color-shadow);
+}
+
+.beneficiary-page h1 {
+  color: var(--color-primary) !important;
+  font-size: 2.5rem;
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+.beneficiary-page p {
+  color: var(--color-text-muted) !important;
+  text-align: center;
+}
+
+.beneficiary-page label {
+  color: var(--color-on-surface-variant) !important;
+  font-weight: 600;
+  text-align: left;
+}
+
+.beneficiary-page input,
+.beneficiary-page textarea,
+.beneficiary-page select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  background: var(--color-surface-lowest) !important;
+  color: var(--color-on-surface) !important;
+  border: 1px solid var(--color-outline-variant) !important;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.beneficiary-page input:focus,
+.beneficiary-page textarea:focus,
+.beneficiary-page select:focus {
+  outline: none;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px var(--color-primary-fixed);
+}
+
+.beneficiary-page button {
+  padding: 12px;
+  background: var(--color-primary) !important;
+  color: var(--color-on-primary) !important;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.beneficiary-page button:hover {
+  background: var(--color-primary-container) !important;
+}
+
+.beneficiary-page button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.beneficiary-success {
+  padding: 12px;
+  margin: 15px 0;
+  background: var(--color-success-container);
+  color: var(--color-success);
+  border-radius: 8px;
+}
+
+.beneficiary-error {
+  padding: 12px;
+  margin: 15px 0;
+  background: var(--color-error-container);
+  color: var(--color-error-text);
+  border-radius: 8px;
+}

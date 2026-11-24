@@ -1,0 +1,516 @@
+/* AdminGrantManagement.css - Unified Grant Management Workspace */
+
+.admin-grant-mgmt {
+  padding: 1.5rem 2rem 3rem;
+  max-width: 1400px;
+  margin: 0 auto;
+  color: var(--text-primary, #1e293b);
+}
+
+.mgmt-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.mgmt-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0 0 0.25rem 0;
+}
+
+.mgmt-header p {
+  color: #64748b;
+  font-size: 0.95rem;
+  margin: 0;
+}
+
+.mgmt-header__actions {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+/* Tabs Navigation */
+.mgmt-tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 1.5rem;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.mgmt-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #64748b;
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.mgmt-tab-btn:hover {
+  color: #1e40af;
+  background-color: #f8fafc;
+  border-radius: 6px 6px 0 0;
+}
+
+.mgmt-tab-btn.active {
+  color: #1d4ed8;
+  border-bottom-color: #1d4ed8;
+  background-color: #eff6ff;
+  border-radius: 6px 6px 0 0;
+}
+
+.mgmt-badge {
+  display: inline-block;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  border-radius: 9999px;
+  background-color: #e2e8f0;
+  color: #334155;
+}
+
+.mgmt-tab-btn.active .mgmt-badge {
+  background-color: #dbeafe;
+  color: #1e40af;
+}
+
+/* Common UI Elements */
+.mgmt-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.mgmt-btn.primary {
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.mgmt-btn.primary:hover:not(:disabled) {
+  background: #1e40af;
+}
+
+.mgmt-btn.secondary {
+  background: #ffffff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+.mgmt-btn.secondary:hover:not(:disabled) {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.mgmt-btn.success {
+  background: #059669;
+  color: #ffffff;
+}
+
+.mgmt-btn.success:hover:not(:disabled) {
+  background: #047857;
+}
+
+.mgmt-btn.danger {
+  background: #dc2626;
+  color: #ffffff;
+}
+
+.mgmt-btn.danger:hover:not(:disabled) {
+  background: #b91c1c;
+}
+
+.mgmt-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Alert Boxes */
+.mgmt-alert {
+  padding: 0.875rem 1.25rem;
+  border-radius: 8px;
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.mgmt-alert.error {
+  background-color: #fef2f2;
+  color: #991b1b;
+  border: 1px solid #fecaca;
+}
+
+.mgmt-alert.success {
+  background-color: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.mgmt-alert.info {
+  background-color: #eff6ff;
+  color: #1e40af;
+  border: 1px solid #bfdbfe;
+}
+
+/* Overview KPIs */
+.mgmt-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.mgmt-kpi-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.25rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mgmt-kpi-card span {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #64748b;
+  margin-bottom: 0.5rem;
+}
+
+.mgmt-kpi-card strong {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.mgmt-kpi-card small {
+  display: block;
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-top: 0.25rem;
+}
+
+/* Quick Action Banner */
+.mgmt-quick-actions {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.mgmt-quick-actions h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: #1e293b;
+}
+
+.mgmt-quick-actions__buttons {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+/* Cards & Tables */
+.mgmt-card {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.mgmt-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.mgmt-card-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.mgmt-table-wrap {
+  overflow-x: auto;
+}
+
+.mgmt-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+  text-align: left;
+}
+
+.mgmt-table th {
+  background: #f8fafc;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 1px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.mgmt-table td {
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid #f1f5f9;
+  color: #1e293b;
+  vertical-align: middle;
+}
+
+.mgmt-table tr:hover td {
+  background-color: #f8fafc;
+}
+
+/* Status Badges */
+.mgmt-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.65rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.mgmt-status-badge.status-completed,
+.mgmt-status-badge.status-disbursed,
+.mgmt-status-badge.status-approved,
+.mgmt-status-badge.status-verified {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.mgmt-status-badge.status-planned,
+.mgmt-status-badge.status-active,
+.mgmt-status-badge.status-ready,
+.mgmt-status-badge.status-ready_for_release {
+  background: #dbeafe;
+  color: #1d4ed8;
+}
+
+.mgmt-status-badge.status-pending,
+.mgmt-status-badge.status-submitted,
+.mgmt-status-badge.status-under_review {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.mgmt-status-badge.status-rejected,
+.mgmt-status-badge.status-cancelled,
+.mgmt-status-badge.status-non_compliant {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.mgmt-status-badge.status-waived {
+  background: #ede9fe;
+  color: #6d28d9;
+}
+
+/* Filter controls */
+.mgmt-filters-bar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.mgmt-search-input {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.4rem 0.75rem;
+  gap: 0.5rem;
+  flex: 1;
+  min-width: 250px;
+}
+
+.mgmt-search-input input {
+  border: none;
+  outline: none;
+  width: 100%;
+  font-size: 0.875rem;
+  color: #1e293b;
+}
+
+.mgmt-select {
+  padding: 0.45rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+/* Modal styling */
+.mgmt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.mgmt-modal {
+  background: #ffffff;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 750px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.mgmt-modal.large {
+  max-width: 950px;
+}
+
+.mgmt-modal form {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mgmt-modal__header {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mgmt-modal__header h2 {
+  margin: 0;
+  font-size: 1.25rem;
+  color: #0f172a;
+}
+
+.mgmt-modal__body {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.mgmt-modal__footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  background: #f8fafc;
+  flex-shrink: 0;
+}
+
+.mgmt-form-group {
+  margin-bottom: 1.25rem;
+}
+
+.mgmt-form-group label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.35rem;
+}
+
+.mgmt-form-group input,
+.mgmt-form-group select,
+.mgmt-form-group textarea {
+  width: 100%;
+  padding: 0.6rem 0.85rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  color: #1e293b;
+  box-sizing: border-box;
+}
+
+.mgmt-form-group input:focus,
+.mgmt-form-group select:focus,
+.mgmt-form-group textarea:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.mgmt-progress-bar {
+  height: 8px;
+  background: #e2e8f0;
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+.mgmt-progress-fill {
+  height: 100%;
+  background: #2563eb;
+  border-radius: 9999px;
+  transition: width 0.3s ease;
+}
+
+.mgmt-progress-fill.success {
+  background: #16a34a;
+}
+
+.mgmt-progress-fill.warning {
+  background: #f59e0b;
+}
+
+@media (max-width: 768px) {
+  .admin-grant-mgmt {
+    padding: 1rem;
+  }
+  .mgmt-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+}

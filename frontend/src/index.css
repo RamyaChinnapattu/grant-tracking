@@ -1,0 +1,92 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --color-primary: #00288e;
+  --color-primary-container: #1e40af;
+  --color-on-primary: #ffffff;
+  --color-primary-fixed: #dde1ff;
+  --color-surface: #f8f9ff;
+  --color-surface-dim: #cbdbf5;
+  --color-surface-lowest: #ffffff;
+  --color-surface-low: #eff4ff;
+  --color-surface-container: #e5eeff;
+  --color-surface-high: #dce9ff;
+  --color-surface-highest: #d3e4fe;
+  --color-on-surface: #0b1c30;
+  --color-on-surface-variant: #444653;
+  --color-text-muted: #5c647a;
+  --color-outline: #757684;
+  --color-outline-variant: #c4c5d5;
+  --color-secondary: #565e74;
+  --color-secondary-container: #dae2fd;
+  --color-secondary-text: #3f465c;
+  --color-tertiary: #003d28;
+  --color-success: #002114;
+  --color-success-strong: #00563a;
+  --color-success-container: #85f8c4;
+  --color-error: #ba1a1a;
+  --color-error-text: #93000a;
+  --color-error-container: #ffdad6;
+  --color-warning-container: #dae2fd;
+  --color-warning-text: #3f465c;
+  --color-shadow: rgba(11, 28, 48, 0.08);
+
+  --navy: var(--color-primary);
+  --blue: var(--color-primary);
+  --light: var(--color-surface-low);
+  --white: var(--color-surface-lowest);
+  --dark: var(--color-on-surface);
+  --muted: var(--color-text-muted);
+  --border: var(--color-outline-variant);
+  --green: var(--color-success-strong);
+  --font: "Inter", sans-serif;
+
+  font-family: var(--font);
+  font-size: 16px;
+  line-height: 1.5;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: var(--color-on-surface);
+  background: var(--color-surface);
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: var(--color-surface);
+  color: var(--color-on-surface);
+  font-family: var(--font);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  color: inherit;
+}
+
+a {
+  color: var(--color-primary);
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+::selection {
+  background: var(--color-primary-fixed);
+  color: var(--color-on-surface);
+}

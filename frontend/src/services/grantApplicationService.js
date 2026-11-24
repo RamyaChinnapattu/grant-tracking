@@ -1,0 +1,72 @@
+
+import api from "./api";
+
+const API_URL = "/applications";
+
+export const getApplications = () => api.get(API_URL);
+
+export const getAdminApplications = (params) =>
+  api.get(`${API_URL}/admin`, { params });
+
+export const getMyApplications = () => api.get(`${API_URL}/me`);
+
+export const getApplicationById = (id) => api.get(`${API_URL}/${id}`);
+
+export const createApplication = (data) => api.post(API_URL, data);
+
+export const updateApplication = (id, data) =>
+  api.put(`${API_URL}/${id}`, data);
+
+export const submitApplication = (id) =>
+  api.post(`${API_URL}/${id}/submit`);
+
+export const withdrawApplication = (id) =>
+  api.post(`${API_URL}/${id}/withdraw`);
+
+export const deleteDraftApplication = (id) =>
+  api.delete(`${API_URL}/${id}`);
+
+export const updateApplicationStatus = (id, status) =>
+  api.patch(`${API_URL}/${id}/status`, { status });
+
+export const getVerificationQueue = () =>
+  api.get(`${API_URL}/verification/assigned`);
+
+export const getVerificationHistory = () =>
+  api.get(`${API_URL}/verification/history`);
+
+export const submitVerificationDecision = (id, data) => {
+  const payload = {
+    ...data,
+    identityVerified: data?.identityVerified === true,
+    addressVerified: data?.addressVerified === true,
+    documentsVerified: data?.documentsVerified === true,
+    applicationDetailsVerified:
+      data?.applicationDetailsVerified === true,
+  };
+
+  return api.post(`${API_URL}/${id}/decision`, payload);
+};
+
+export const escalateApplication = (id) =>
+  api.post(`${API_URL}/${id}/escalate`);
+
+export const assignApplicationOfficer = (id, officerId) =>
+  api.post(`${API_URL}/${id}/assignment`, { officerId });
+
+export const getDisbursementEligibleApplications = (params) =>
+  api.get(`${API_URL}/disbursement/eligible`, { params });
+
+export const uploadApplicationDocument = (id, file) => {
+  const body = new FormData();
+  body.append("file", file);
+
+  return api.post(`${API_URL}/${id}/documents`, body, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+};
+
+export const downloadApplicationDocument = (applicationId, documentId) =>
+  api.get(`${API_URL}/${applicationId}/documents/${documentId}`, {
+    responseType: "blob",
+  });
