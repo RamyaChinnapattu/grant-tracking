@@ -23,7 +23,7 @@ public class FundAnalyticsService {
     @Transactional(readOnly=true)
     public FundAnalyticsResponse summarize(FundAnalyticsFilter f,String email){
         User actor=users.findByEmail(email).orElseThrow(()->new ResponseStatusException(HttpStatus.NOT_FOUND,"User not found."));
-        if(actor.getRole()!=Role.ADMIN)throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Admin analytics access required.");
+        if(actor.getRole()!=Role.ADMIN && !actor.isFinanceOfficer())throw new ResponseStatusException(HttpStatus.FORBIDDEN,"Admin or Finance Officer analytics access required.");
         if(f.from()!=null&&f.to()!=null&&f.from().isAfter(f.to()))throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"Start date must be on or before end date.");
         List<GrantApplication> all=applications.findAllByOrderByIdDesc();
         List<DisbursementPlan> allPlans=plans.findAllByOrderByCreatedAtDesc();
