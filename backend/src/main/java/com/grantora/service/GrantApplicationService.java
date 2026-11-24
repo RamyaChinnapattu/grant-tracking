@@ -89,7 +89,7 @@ public class GrantApplicationService {
                         applications = applicationRepository.findAllByOrderByIdDesc();
                 } else {
                         User user = getUser(email);
-                        if (user.getRole() != Role.OFFICER) {
+                        if (!user.isOfficer()) {
                                 throw new ResponseStatusException(
                                                 HttpStatus.FORBIDDEN, "Only reviewers can view the review queue.");
                         }

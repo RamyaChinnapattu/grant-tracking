@@ -1,4 +1,5 @@
 import { Navigate, Outlet } from "react-router-dom";
+import { dashboardHomePaths } from "./dashboardNavigation";
 
 function ProtectedRoute({ allowedRoles }) {
   const token = localStorage.getItem("token");
@@ -9,7 +10,7 @@ function ProtectedRoute({ allowedRoles }) {
   }
 
   if (allowedRoles && !allowedRoles.includes(role)) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to={dashboardHomePaths[role] || "/login"} replace />;
   }
 
   return <Outlet />;

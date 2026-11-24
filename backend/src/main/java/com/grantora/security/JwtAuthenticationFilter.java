@@ -81,15 +81,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         && Boolean.TRUE.equals(user.getActive())
                         && jwtService.isTokenValid(token, email)) {
 
-                    var authorities = List.of(
-                            new SimpleGrantedAuthority(
-                                    "ROLE_" + user.getRole().name()));
+                    java.util.List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+                    authorities.add(new SimpleGrantedAuthority(
+                            "ROLE_" + user.getRole().name()));
+
+                    if (user.isFieldOfficer()) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_FIELD_OFFICER"));
+                        authorities.add(new SimpleGrantedAuthority("ROLE_OFFICER"));
+                    } else if (user.isDistrictOfficer()) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_DISTRICT_OFFICER"));
+                        authorities.add(new SimpleGrantedAuthority("ROLE_OFFICER"));
+                    } else if (user.isFinanceOfficer()) {
+                        authorities.add(new SimpleGrantedAuthority("ROLE_FINANCE_OFFICER"));
+                        authorities.add(new SimpleGrantedAuthority("ROLE_OFFICER"));
+                    }
 
                     var authentication =
                             new UsernamePasswordAuthenticationToken(
                                     user.getEmail(),
                                     null,
-                                    authorities);
+                                    authorities.stream().distinct().toList());
 
                     SecurityContextHolder.getContext()
                             .setAuthentication(authentication);

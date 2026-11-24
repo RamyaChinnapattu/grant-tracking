@@ -87,16 +87,44 @@ export const dashboardNavigation = {
     { label: "Profile", path: "/officer/profile", icon: UserRound },
     { label: "Notifications", path: "/officer/notifications", icon: Bell },
   ],
+  FIELD_OFFICER: [
+    { label: "Dashboard", path: "/field-officer-dashboard", icon: LayoutDashboard },
+    { label: "Field Verification Queue", path: "/field-officer/applications", icon: ClipboardList },
+    { label: "Verification History", path: "/field-officer/history", icon: FileClock },
+    { label: "Compliance Review", path: "/field-officer/compliance", icon: BadgeCheck },
+    { label: "Profile", path: "/field-officer/profile", icon: UserRound },
+  ],
+  DISTRICT_OFFICER: [
+    { label: "Dashboard", path: "/district-officer-dashboard", icon: LayoutDashboard },
+    { label: "District Review Queue", path: "/district-officer/applications", icon: ClipboardList },
+    { label: "Verification History", path: "/district-officer/history", icon: FileClock },
+    { label: "Compliance Review", path: "/district-officer/compliance", icon: BadgeCheck },
+    { label: "Profile", path: "/district-officer/profile", icon: UserRound },
+  ],
+  FINANCE_OFFICER: [
+    { label: "Dashboard", path: "/finance-officer-dashboard", icon: LayoutDashboard },
+    { label: "Financial Approval Queue", path: "/finance-officer/applications", icon: ClipboardList },
+    { label: "Verification History", path: "/finance-officer/history", icon: FileClock },
+    { label: "Scheme Allocations & Budgets", path: "/finance-officer/schemes", icon: FolderKanban },
+    { label: "Compliance Review", path: "/finance-officer/compliance", icon: BadgeCheck },
+    { label: "Profile", path: "/finance-officer/profile", icon: UserRound },
+  ],
 };
 
 export const roleLabels = {
   ADMIN: "Administrator",
   BENEFICIARY: "Beneficiary",
   OFFICER: "Officer",
+  FIELD_OFFICER: "Field Officer",
+  DISTRICT_OFFICER: "District Officer",
+  FINANCE_OFFICER: "Finance Officer",
 };
 
 export const dashboardHomePaths = {
   ADMIN: "/admin-dashboard",
   BENEFICIARY: "/beneficiary-dashboard",
+  FIELD_OFFICER: "/field-officer-dashboard",
+  DISTRICT_OFFICER: "/district-officer-dashboard",
+  FINANCE_OFFICER: "/finance-officer-dashboard",
   OFFICER: "/officer-dashboard",
 };

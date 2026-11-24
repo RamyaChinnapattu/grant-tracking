@@ -643,6 +643,16 @@ public class VerificationWorkflowService {
                     "Decision is not valid for the current verification level.");
         }
 
+        if (stage == VerificationStage.FINANCE && decision == VerificationDecision.APPROVED) {
+            Scheme scheme = application.getScheme();
+            if (scheme != null && scheme.getMaximumGrantAmount() != null
+                    && application.getRequestedAmount() != null
+                    && application.getRequestedAmount().compareTo(scheme.getMaximumGrantAmount()) > 0) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                        "Requested amount exceeds the maximum allowable grant for this scheme.");
+            }
+        }
+
         if ((decision == VerificationDecision.REJECTED
                 || decision == VerificationDecision.NEEDS_CORRECTION)
                 && (remarks == null || remarks.isBlank())) {
@@ -661,7 +671,7 @@ public class VerificationWorkflowService {
         Beneficiary beneficiary = application.getBeneficiary();
 
         List<User> allEligible = userRepository.findAll().stream()
-                .filter(user -> user.getRole() == Role.OFFICER)
+                .filter(user -> user.isOfficer())
                 .filter(user -> Boolean.TRUE.equals(user.getActive()))
                 .filter(user -> stage.name().equals(user.getOfficerLevel()))
                 .filter(user -> same(
@@ -672,6 +682,15 @@ public class VerificationWorkflowService {
                                 beneficiary.getDistrict()))
                 .sorted(Comparator.comparing(User::getId))
                 .toList();
+
+        if (allEligible.isEmpty()) {
+            allEligible = userRepository.findAll().stream()
+                    .filter(user -> user.isOfficer())
+                    .filter(user -> Boolean.TRUE.equals(user.getActive()))
+                    .filter(user -> stage.name().equals(user.getOfficerLevel()))
+                    .sorted(Comparator.comparing(User::getId))
+                    .toList();
+        }
 
         if (exclude == null) {
             if (allEligible.isEmpty()) {
@@ -711,12 +730,25 @@ public class VerificationWorkflowService {
 
         Beneficiary beneficiary = application.getBeneficiary();
 
-        return same(
+        boolean inJurisdiction = same(
                 user.getJurisdictionState(), beneficiary.getState())
                 && (stage == VerificationStage.FINANCE
                         || same(
                                 user.getJurisdictionDistrict(),
                                 beneficiary.getDistrict()));
+
+        if (!inJurisdiction) {
+            long sameLevelOfficerCount = userRepository.findAll().stream()
+                    .filter(User::isOfficer)
+                    .filter(u -> Boolean.TRUE.equals(u.getActive()))
+                    .filter(u -> stage.name().equals(u.getOfficerLevel()))
+                    .count();
+            if (sameLevelOfficerCount == 1) {
+                return true;
+            }
+        }
+
+        return inJurisdiction;
     }
 
     private boolean isEligibleOfficer(
@@ -725,7 +757,7 @@ public class VerificationWorkflowService {
             VerificationStage stage) {
 
         return officer != null
-                && officer.getRole() == Role.OFFICER
+                && officer.isOfficer()
                 && Boolean.TRUE.equals(officer.getActive())
                 && isWithinStageJurisdiction(
                         officer, application, stage);

@@ -23,6 +23,12 @@ public class Scheme {
     @Column(columnDefinition = "TEXT")
     private String description;
 
+    @Column(columnDefinition = "TEXT")
+    private String objectives;
+
+    @Column(columnDefinition = "TEXT")
+    private String benefits;
+
     @Column(length = 150)
     private String department;
 
@@ -38,6 +44,9 @@ public class Scheme {
     @Column(name = "maximum_grant_amount", precision = 12, scale = 2)
     private BigDecimal maximumGrantAmount;
 
+    @Column(name = "minimum_grant_amount", precision = 12, scale = 2)
+    private BigDecimal minimumGrantAmount;
+
     @Column(name = "allocated_funds", precision = 14, scale = 2)
     private BigDecimal allocatedFunds;
 
@@ -49,6 +58,17 @@ public class Scheme {
             joinColumns = @JoinColumn(name = "scheme_id"))
     @Column(name = "category", nullable = false, length = 50)
     private Set<String> eligibleCategories = new LinkedHashSet<>();
+
+    @OneToMany(mappedBy = "scheme", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OrderBy("id ASC")
+    private List<SchemeDocumentRequirement> requiredDocuments = new ArrayList<>();
+
+    @OneToMany(mappedBy = "scheme", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.EAGER)
+    @OrderBy("id ASC")
+    private List<SchemeEligibilityRule> mandatoryRules = new ArrayList<>();
+
+    @Column(name = "eligibility_configuration_version", nullable = false)
+    private int eligibilityConfigurationVersion = 1;
 
     @OneToMany(mappedBy = "scheme", cascade = CascadeType.ALL,
             orphanRemoval = true, fetch = FetchType.EAGER)
@@ -203,6 +223,54 @@ public class Scheme {
 
     public void setStatus(String status) {
         this.status = status;
+    }
+
+    public String getObjectives() {
+        return objectives;
+    }
+
+    public void setObjectives(String objectives) {
+        this.objectives = objectives;
+    }
+
+    public String getBenefits() {
+        return benefits;
+    }
+
+    public void setBenefits(String benefits) {
+        this.benefits = benefits;
+    }
+
+    public BigDecimal getMinimumGrantAmount() {
+        return minimumGrantAmount;
+    }
+
+    public void setMinimumGrantAmount(BigDecimal minimumGrantAmount) {
+        this.minimumGrantAmount = minimumGrantAmount;
+    }
+
+    public List<SchemeDocumentRequirement> getRequiredDocuments() {
+        return requiredDocuments;
+    }
+
+    public void setRequiredDocuments(List<SchemeDocumentRequirement> requiredDocuments) {
+        this.requiredDocuments = requiredDocuments;
+    }
+
+    public List<SchemeEligibilityRule> getMandatoryRules() {
+        return mandatoryRules;
+    }
+
+    public void setMandatoryRules(List<SchemeEligibilityRule> mandatoryRules) {
+        this.mandatoryRules = mandatoryRules;
+    }
+
+    public int getEligibilityConfigurationVersion() {
+        return eligibilityConfigurationVersion;
+    }
+
+    public void setEligibilityConfigurationVersion(int eligibilityConfigurationVersion) {
+        this.eligibilityConfigurationVersion = eligibilityConfigurationVersion;
     }
 
     public LocalDateTime getCreatedAt() {

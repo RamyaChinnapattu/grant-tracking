@@ -28,7 +28,7 @@ public class SchemeController {
 
     @GetMapping
     public List<Scheme> getAllSchemes(Authentication authentication) {
-        if (authentication != null && hasAdminRole(authentication)) {
+        if (authentication != null && hasAdminOrOfficerRole(authentication)) {
             return schemeService.getAllSchemes();
         }
         return schemeService.getPublicSchemes();
@@ -36,7 +36,7 @@ public class SchemeController {
 
     @GetMapping("/{id}")
     public Scheme getSchemeById(@PathVariable Long id, Authentication authentication) {
-        if (authentication != null && hasAdminRole(authentication)) {
+        if (authentication != null && hasAdminOrOfficerRole(authentication)) {
             return schemeService.getSchemeById(id);
         }
         return schemeService.getPublicSchemeById(id);
@@ -114,5 +114,12 @@ public class SchemeController {
                 && authentication.getAuthorities().stream()
                         .map(GrantedAuthority::getAuthority)
                         .anyMatch("ROLE_ADMIN"::equals);
+    }
+
+    private boolean hasAdminOrOfficerRole(Authentication authentication) {
+        return authentication != null
+                && authentication.getAuthorities().stream()
+                        .map(GrantedAuthority::getAuthority)
+                        .anyMatch(auth -> "ROLE_ADMIN".equals(auth) || "ROLE_OFFICER".equals(auth));
     }
 }
