@@ -7,8 +7,12 @@ import com.grantora.entity.GrantApplication;
 import com.grantora.entity.Scheme;
 import com.grantora.entity.SchemeEligibilityQuestion;
 import com.grantora.repository.BeneficiaryRepository;
+import com.grantora.repository.ComplianceRequirementRepository;
+import com.grantora.repository.DisbursementPlanRepository;
 import com.grantora.repository.GrantApplicationRepository;
 import com.grantora.repository.SchemeRepository;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -36,6 +40,15 @@ public class SchemeService {
     private final EligibilityScoringService eligibilityScoringService;
     private final GrantApplicationRepository grantApplicationRepository;
     private final AuditService auditService;
+
+    @Autowired(required = false)
+    private DisbursementPlanRepository disbursementPlanRepository;
+
+    @Autowired(required = false)
+    private ComplianceRequirementRepository complianceRequirementRepository;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public SchemeService(SchemeRepository schemeRepository) {
         this(schemeRepository, null, null, null, null);
@@ -427,11 +440,38 @@ public class SchemeService {
     @Transactional
     public void deleteScheme(Long id) {
         Scheme scheme = getSchemeById(id);
+        List<String> dependencies = new ArrayList<>();
         if (grantApplicationRepository != null && grantApplicationRepository.existsByScheme_Id(id)) {
+            dependencies.add("grant applications");
+        }
+        if (disbursementPlanRepository != null && !disbursementPlanRepository.findByScheme_Id(id).isEmpty()) {
+            dependencies.add("disbursement plans");
+        }
+        if (complianceRequirementRepository != null && complianceRequirementRepository.existsByScheme_Id(id)) {
+            dependencies.add("compliance requirements");
+        }
+        if (entityManager != null) {
+            Long docReqCount = entityManager
+                    .createQuery("SELECT COUNT(r) FROM SchemeDocumentRequirement r WHERE r.scheme.id = :id", Long.class)
+                    .setParameter("id", id)
+                    .getSingleResult();
+            if (docReqCount != null && docReqCount > 0) {
+                dependencies.add("document requirements");
+            }
+            Long ruleCount = entityManager
+                    .createQuery("SELECT COUNT(r) FROM SchemeEligibilityRule r WHERE r.scheme.id = :id", Long.class)
+                    .setParameter("id", id)
+                    .getSingleResult();
+            if (ruleCount != null && ruleCount > 0) {
+                dependencies.add("eligibility rules");
+            }
+        }
+        if (!dependencies.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Cannot delete scheme \"" + scheme.getSchemeName()
-                            + "\" because grant applications are associated with it. Deactivate the scheme instead.");
+                            + "\" because " + String.join(", ", dependencies)
+                            + " are associated with it. Deactivate the scheme instead.");
         }
         schemeRepository.delete(scheme);
     }

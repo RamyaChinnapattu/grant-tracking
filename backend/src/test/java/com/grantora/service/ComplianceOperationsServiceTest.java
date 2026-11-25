@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 import org.springframework.test.util.ReflectionTestUtils;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
@@ -62,7 +63,7 @@ class ComplianceOperationsServiceTest {
         when(milestoneRepo.findById(31L)).thenReturn(Optional.of(compliance.getMilestone()));when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
         when(requirementRepo.save(any())).thenAnswer(inv->{ComplianceRequirement r=inv.getArgument(0);r.setId(8L);return r;});
         when(planRepo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of());
-        var response=service.createRequirement(new ComplianceRequirementRequest(20L,31L,null,"Progress report","Submit progress",true,LocalDate.now().plusDays(5),"pdf,png",1048576L),admin.getEmail());
+        var response=service.createRequirement(new ComplianceRequirementRequest(20L,31L,null,null,"Progress report","Submit progress",true,LocalDate.now().plusDays(5),"pdf,png",1048576L),admin.getEmail());
         assertEquals("Progress report",response.title());assertEquals("pdf,png",response.allowedFormats());verify(requirementRepo).save(any());
     }
 
@@ -378,9 +379,10 @@ class ComplianceOperationsServiceTest {
     }
 
     @Test
-    void syncCleansUpUnsubmittedDefaultPlaceholderWhenAdminRequirementExists() {
+    void syncHidesUnsubmittedDefaultPlaceholderWithoutDeletingDatabaseRow() {
         DisbursementMilestone milestone = compliance.getMilestone();
         DisbursementInstallment installment = milestone.getInstallment();
+        installment.setInstallmentNumber(1);
         DisbursementPlan plan = installment.getPlan();
         plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
         plan.addInstallment(installment);
@@ -389,6 +391,7 @@ class ComplianceOperationsServiceTest {
         ComplianceRequirement adminReq = new ComplianceRequirement();
         adminReq.setId(77L);
         adminReq.setScheme(scheme);
+        adminReq.setTargetStage(1);
         adminReq.setTitle("fgrf");
         adminReq.setRequired(true);
         adminReq.setActive(true);
@@ -414,13 +417,13 @@ class ComplianceOperationsServiceTest {
         when(planRepo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(plan));
         when(complianceRepo.existsByRequirement_IdAndMilestone_Id(77L, 31L)).thenReturn(true);
         when(complianceRepo.findByMilestone_Id(31L)).thenReturn(List.of(defaultPlaceholder, adminItem));
-        when(nonComplianceRepo.findByCompliance_Id(99L)).thenReturn(Optional.empty());
-        when(complianceRepo.findAll()).thenReturn(List.of(adminItem));
+        when(complianceRepo.findAll()).thenReturn(List.of(defaultPlaceholder, adminItem));
 
         var mine = service.getMine(beneficiaryUser.getEmail());
-        verify(complianceRepo).delete(defaultPlaceholder);
+        verify(complianceRepo, never()).delete(any());
         assertEquals(1, mine.size());
         assertEquals("fgrf", mine.get(0).requirementTitle());
+        assertTrue(mine.get(0).uploadAllowed());
     }
 
     @Test
@@ -473,7 +476,7 @@ class ComplianceOperationsServiceTest {
         when(userRepo.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
         when(schemeRepo.findById(20L)).thenReturn(Optional.of(scheme));
         assertThrows(ResponseStatusException.class, () -> service.createRequirement(
-                new ComplianceRequirementRequest(20L, null, null, "Req", "Desc", true, null, "pdf", 0L),
+                new ComplianceRequirementRequest(20L, null, null, 1, "Req", "Desc", true, null, "pdf", 0L),
                 admin.getEmail()));
 
         DisbursementMilestone milestone = compliance.getMilestone();
@@ -486,5 +489,161 @@ class ComplianceOperationsServiceTest {
         assertNotEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
         assertTrue(milestone.getNonCompliant());
         assertEquals(0, milestone.getProgressPercentage());
+    }
+
+    @Test
+    void stageSpecificRequirementAppliesOnlyToSelectedStageAndDeactivationRestoresDefault() {
+        DisbursementPlan plan = compliance.getMilestone().getInstallment().getPlan();
+        plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+        plan.getInstallments().clear();
+
+        DisbursementInstallment inst1 = new DisbursementInstallment();
+        inst1.setId(11L);
+        inst1.setPlan(plan);
+        inst1.setInstallmentNumber(1);
+        DisbursementMilestone m1 = new DisbursementMilestone();
+        m1.setId(101L);
+        m1.setInstallment(inst1);
+        m1.setTitle("Stage 1 Milestone");
+        inst1.addMilestone(m1);
+
+        DisbursementInstallment inst2 = new DisbursementInstallment();
+        inst2.setId(12L);
+        inst2.setPlan(plan);
+        inst2.setInstallmentNumber(2);
+        DisbursementMilestone m2 = new DisbursementMilestone();
+        m2.setId(102L);
+        m2.setInstallment(inst2);
+        m2.setTitle("Stage 2 Milestone");
+        inst2.addMilestone(m2);
+
+        DisbursementInstallment inst3 = new DisbursementInstallment();
+        inst3.setId(13L);
+        inst3.setPlan(plan);
+        inst3.setInstallmentNumber(3);
+        DisbursementMilestone m3 = new DisbursementMilestone();
+        m3.setId(103L);
+        m3.setInstallment(inst3);
+        m3.setTitle("Stage 3 Milestone");
+        inst3.addMilestone(m3);
+
+        plan.addInstallment(inst1);
+        plan.addInstallment(inst2);
+        plan.addInstallment(inst3);
+
+        when(userRepo.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(schemeRepo.findById(20L)).thenReturn(Optional.of(scheme));
+        when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
+        when(requirementRepo.save(any())).thenAnswer(inv -> {
+            ComplianceRequirement r = inv.getArgument(0);
+            r.setId(90L);
+            return r;
+        });
+        when(planRepo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(plan));
+        when(complianceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Scheme-level requirement without targetStage must be rejected
+        assertThrows(ResponseStatusException.class, () -> service.createRequirement(
+                new ComplianceRequirementRequest(20L, null, null, null, "No Stage", "Desc", true, null, "pdf", 1048576L),
+                admin.getEmail()));
+
+        // Create Stage 1 requirement -> applies only to Stage 1 (m1), not m2 or m3
+        var created = service.createRequirement(
+                new ComplianceRequirementRequest(20L, null, null, 1, "Land Picture", "Stage 1 photo", true, null, "pdf,png", 1048576L),
+                admin.getEmail());
+        assertEquals(1, created.targetStage());
+        assertEquals(1, m1.getCompliances().size());
+        assertEquals("Land Picture", m1.getCompliances().get(0).getRequirementTitle());
+        assertTrue(m2.getCompliances().isEmpty());
+        assertTrue(m3.getCompliances().isEmpty());
+
+        // Deactivate Stage 1 requirement -> removes from beneficiary upload list without creating a default placeholder
+        ComplianceRequirement stored = m1.getCompliances().get(0).getRequirement();
+        when(requirementRepo.findById(90L)).thenReturn(Optional.of(stored));
+        when(complianceRepo.findAll()).thenAnswer(inv -> new ArrayList<>(m1.getCompliances()));
+        when(complianceRepo.findByMilestone_Id(101L)).thenAnswer(inv -> new ArrayList<>(m1.getCompliances()));
+
+        var deactivated = service.deactivateRequirement(90L, admin.getEmail());
+        assertFalse(deactivated.active());
+        assertEquals(1, m1.getCompliances().size());
+        assertFalse(m1.getCompliances().stream().anyMatch(c ->
+                c.getRequirement() == null
+                        && "Stage 1 Utilization Certificate & Invoices".equals(c.getRequirementTitle())));
+        assertNotEquals(MilestoneStatus.COMPLETED, m1.getStatus());
+
+        User benUser = plan.getApplication().getBeneficiary().getUser();
+        when(userRepo.findByEmail(benUser.getEmail())).thenReturn(Optional.of(benUser));
+        when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
+        var beneficiaryItems = service.getMine(benUser.getEmail());
+        assertTrue(beneficiaryItems.isEmpty());
+    }
+
+    @Test
+    void submitRejectsUnconfiguredAndInactiveRequirements() {
+        when(userRepo.findByEmail(beneficiaryUser.getEmail())).thenReturn(Optional.of(beneficiaryUser));
+
+        MilestoneCompliance unconfiguredDefault = new MilestoneCompliance();
+        unconfiguredDefault.setId(55L);
+        unconfiguredDefault.setMilestone(compliance.getMilestone());
+        unconfiguredDefault.setRequirement(null);
+        unconfiguredDefault.setRequirementTitle("Stage 2 Utilization Certificate & Invoices");
+        unconfiguredDefault.setStatus(ComplianceStatus.PENDING);
+
+        when(complianceRepo.findById(55L)).thenReturn(Optional.of(unconfiguredDefault));
+        var file = new org.springframework.mock.web.MockMultipartFile("file", "doc.pdf", "application/pdf", "%PDF-1.4\ntest".getBytes());
+
+        ResponseStatusException exNull = assertThrows(ResponseStatusException.class,
+                () -> service.submit(55L, "notes", file, beneficiaryUser.getEmail()));
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, exNull.getStatusCode());
+
+        ComplianceRequirement inactiveReq = new ComplianceRequirement();
+        inactiveReq.setId(77L);
+        inactiveReq.setActive(false);
+        compliance.setStatus(ComplianceStatus.PENDING);
+        compliance.setRequirement(inactiveReq);
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        ResponseStatusException exInactive = assertThrows(ResponseStatusException.class,
+                () -> service.submit(41L, "notes", file, beneficiaryUser.getEmail()));
+        assertEquals(org.springframework.http.HttpStatus.CONFLICT, exInactive.getStatusCode());
+    }
+
+    @Test
+    void getMinePreservesSubmittedHistoryEvenAfterRequirementIsDeactivated() {
+        ComplianceRequirement inactiveReq = new ComplianceRequirement();
+        inactiveReq.setId(77L);
+        inactiveReq.setScheme(scheme);
+        inactiveReq.setTargetStage(1);
+        inactiveReq.setTitle("land");
+        inactiveReq.setActive(false);
+
+        compliance.setRequirement(inactiveReq);
+        compliance.setRequirementTitle("land");
+        compliance.setStatus(ComplianceStatus.SUBMITTED);
+        compliance.setDocumentData("%PDF-1.4\nland".getBytes());
+        compliance.setDocumentFileName("land.pdf");
+        compliance.setSubmittedAt(java.time.LocalDateTime.now());
+        ComplianceReviewHistory entry = new ComplianceReviewHistory();
+        entry.setAction("SUBMITTED");
+        entry.setActor(beneficiaryUser);
+        entry.setDocumentFileName("land.pdf");
+        compliance.addHistory(entry);
+
+        DisbursementMilestone milestone = compliance.getMilestone();
+        DisbursementPlan plan = milestone.getInstallment().getPlan();
+        plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+        plan.addInstallment(milestone.getInstallment());
+        milestone.getInstallment().addMilestone(milestone);
+
+        when(userRepo.findByEmail(beneficiaryUser.getEmail())).thenReturn(Optional.of(beneficiaryUser));
+        when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
+        when(planRepo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(plan));
+        when(complianceRepo.findAll()).thenReturn(List.of(compliance));
+
+        var mine = service.getMine(beneficiaryUser.getEmail());
+        assertEquals(1, mine.size());
+        assertEquals(41L, mine.get(0).id());
+        assertTrue(mine.get(0).hasDocument());
+        assertFalse(mine.get(0).uploadAllowed());
+        assertEquals(1, mine.get(0).reviewHistory().size());
     }
 }

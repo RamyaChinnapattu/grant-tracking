@@ -56,18 +56,32 @@ public class ComplianceOperationsService {
             if(app.getStatus()!=GrantApplicationStatus.APPROVED) throw bad("Compliance requirements can only be scoped to an approved application.");
             requirement.setApplication(app);
         }
+        if(req.targetStage()!=null && (req.targetStage()<1 || req.targetStage()>3)) {
+            throw bad("Target stage must be 1, 2, or 3.");
+        }
         if(req.milestoneId()!=null){
             DisbursementMilestone milestone=milestones.findById(req.milestoneId()).orElseThrow(()->notFound("Milestone not found."));
             Long mSchemeId = milestone.getInstallment() != null && milestone.getInstallment().getPlan() != null && milestone.getInstallment().getPlan().getScheme() != null ? milestone.getInstallment().getPlan().getScheme().getId() : null;
             if(!Objects.equals(mSchemeId,scheme.getId())) throw bad("Milestone does not belong to the selected scheme.");
             Long mAppId = milestone.getInstallment() != null && milestone.getInstallment().getPlan() != null && milestone.getInstallment().getPlan().getApplication() != null ? milestone.getInstallment().getPlan().getApplication().getId() : null;
             if(req.applicationId()!=null && !Objects.equals(mAppId,req.applicationId())) throw bad("Milestone does not belong to the selected application.");
+            Integer mStage = milestone.getInstallment() != null ? milestone.getInstallment().getInstallmentNumber() : null;
+            if(req.targetStage()!=null && mStage!=null && !Objects.equals(req.targetStage(), mStage)) {
+                throw bad("Selected target stage does not match the milestone's installment stage.");
+            }
             requirement.setMilestone(milestone);
+            requirement.setTargetStage(req.targetStage()!=null ? req.targetStage() : mStage);
+        } else {
+            if(req.targetStage()==null || req.targetStage()<1 || req.targetStage()>3) {
+                throw bad("Target stage (Stage 1, Stage 2, or Stage 3) is required for scheme compliance requirements.");
+            }
+            requirement.setTargetStage(req.targetStage());
         }
         boolean duplicate=requirements.findByActiveTrue().stream().anyMatch(existing ->
                 Objects.equals(existing.getScheme() != null ? existing.getScheme().getId() : null, scheme.getId())
                 && Objects.equals(existing.getMilestone()==null?null:existing.getMilestone().getId(),req.milestoneId())
                 && Objects.equals(existing.getApplication()==null?null:existing.getApplication().getId(),req.applicationId())
+                && Objects.equals(existing.getTargetStage(), requirement.getTargetStage())
                 && existing.getTitle() != null && existing.getTitle().equalsIgnoreCase(req.title().trim()));
         if(duplicate) throw new ResponseStatusException(HttpStatus.CONFLICT,"An active requirement with this title already exists for this scope.");
         ComplianceRequirement saved=requirements.save(requirement);
@@ -87,12 +101,29 @@ public class ComplianceOperationsService {
         ComplianceRequirement item=requirements.findById(id).orElseThrow(()->notFound("Compliance requirement not found."));
         item.setActive(false);
         ComplianceRequirement saved = requirements.save(item);
+        Set<DisbursementMilestone> affectedMilestones = new LinkedHashSet<>();
         compliances.findAll().stream()
                 .filter(c -> c.getRequirement() != null && Objects.equals(c.getRequirement().getId(), saved.getId()))
                 .map(MilestoneCompliance::getMilestone)
                 .filter(Objects::nonNull)
-                .distinct()
-                .forEach(m -> recalculateMilestoneState(m, null));
+                .forEach(affectedMilestones::add);
+        if (saved.getTargetStage() != null && saved.getScheme() != null) {
+            for (DisbursementPlan p : plans.findAllByOrderByCreatedAtDesc()) {
+                if (p == null || p.getPlanStatus() == DisbursementPlanStatus.CANCELLED) continue;
+                if (p.getScheme() == null || !Objects.equals(p.getScheme().getId(), saved.getScheme().getId())) continue;
+                if (saved.getApplication() != null && (p.getApplication() == null || !Objects.equals(p.getApplication().getId(), saved.getApplication().getId()))) continue;
+                if (p.getInstallments() == null) continue;
+                for (DisbursementInstallment inst : p.getInstallments()) {
+                    if (inst == null || !Objects.equals(inst.getInstallmentNumber(), saved.getTargetStage()) || inst.getMilestones() == null) continue;
+                    for (DisbursementMilestone m : inst.getMilestones()) {
+                        if (m != null) affectedMilestones.add(m);
+                    }
+                }
+            }
+        }
+        for (DisbursementMilestone m : affectedMilestones) {
+            recalculateMilestoneState(m, null);
+        }
         return toRequirement(saved);
     }
 
@@ -108,15 +139,25 @@ public class ComplianceOperationsService {
 
     private boolean isVisibleToBeneficiary(MilestoneCompliance c) {
         if (c == null) return false;
-        if (c.getRequirement() != null && !c.getRequirement().isActive()) {
-            ComplianceStatus st = c.getStatus();
-            return st == ComplianceStatus.SUBMITTED
-                    || st == ComplianceStatus.UNDER_REVIEW
-                    || st == ComplianceStatus.APPROVED
-                    || st == ComplianceStatus.VERIFIED
-                    || st == ComplianceStatus.WAIVED;
+        if (hasSubmittedOrReviewedHistory(c)) {
+            return true;
         }
-        return true;
+        return c.getRequirement() != null
+                && c.getRequirement().isActive()
+                && (c.getRequirement().getTargetStage() != null || c.getRequirement().getMilestone() != null);
+    }
+
+    private boolean hasSubmittedOrReviewedHistory(MilestoneCompliance c) {
+        if (c == null) return false;
+        if (c.getDocumentData() != null && c.getDocumentData().length > 0) return true;
+        if (c.getSubmittedAt() != null) return true;
+        if (c.getReviewHistory() != null && !c.getReviewHistory().isEmpty()) return true;
+        ComplianceStatus st = c.getStatus();
+        return st == ComplianceStatus.SUBMITTED
+                || st == ComplianceStatus.UNDER_REVIEW
+                || st == ComplianceStatus.APPROVED
+                || st == ComplianceStatus.VERIFIED
+                || st == ComplianceStatus.WAIVED;
     }
 
     @Transactional
@@ -134,7 +175,9 @@ public class ComplianceOperationsService {
         User actor=user(email,Role.BENEFICIARY);
         MilestoneCompliance item=compliances.findById(id).orElseThrow(()->notFound("Compliance requirement not found."));
         if(!beneficiary(item).map(b->Objects.equals(b.getId(),actor.getId())).orElse(false)) throw denied("You can submit documents only for your own grant requirements.");
-        if(item.getRequirement() != null && !item.getRequirement().isActive())
+        if(item.getRequirement() == null)
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"No compliance requirement is configured by Admin for this stage.");
+        if(!item.getRequirement().isActive())
             throw new ResponseStatusException(HttpStatus.CONFLICT,"This compliance requirement is inactive and no longer accepts submissions.");
         if(item.getStatus()!=ComplianceStatus.PENDING && item.getStatus()!=ComplianceStatus.OVERDUE && item.getStatus()!=ComplianceStatus.REJECTED && item.getStatus()!=ComplianceStatus.CORRECTION_REQUIRED)
             throw new ResponseStatusException(HttpStatus.CONFLICT,"This requirement is not accepting a submission or replacement.");
@@ -325,9 +368,16 @@ public class ComplianceOperationsService {
         return Map.of("scannedAt",LocalDateTime.now(),"remindersRecorded",notified,"overdueDetected",overdue);
     }
 
-    private void syncRequirements() { for(ComplianceRequirement r:requirements.findByActiveTrue()) materialize(r); }
+    private void syncRequirements() {
+        for (ComplianceRequirement r : requirements.findByActiveTrue()) {
+            materialize(r);
+        }
+    }
+
     private void materialize(ComplianceRequirement r) {
         if (r == null || r.getScheme() == null) return;
+        // Legacy requirements with targetStage == null and milestone == null are left unchanged and never broadcast across all stages.
+        if (r.getMilestone() == null && r.getTargetStage() == null) return;
         for(DisbursementPlan p:plans.findAllByOrderByCreatedAtDesc()) {
             if(p == null || p.getPlanStatus()==DisbursementPlanStatus.CANCELLED) continue;
             if(p.getScheme() == null || !Objects.equals(p.getScheme().getId(),r.getScheme().getId())) continue;
@@ -335,6 +385,7 @@ public class ComplianceOperationsService {
             if(p.getInstallments() == null) continue;
             for(DisbursementInstallment i:p.getInstallments()) {
                 if(i == null || i.getMilestones() == null) continue;
+                if(r.getMilestone()==null && r.getTargetStage()!=null && !Objects.equals(i.getInstallmentNumber(), r.getTargetStage())) continue;
                 for(DisbursementMilestone m:i.getMilestones()) {
                     if(m == null) continue;
                     if(r.getMilestone()!=null && !Objects.equals(r.getMilestone().getId(),m.getId())) continue;
@@ -348,21 +399,62 @@ public class ComplianceOperationsService {
                         c.setSubmissionDeadline(r.getSubmissionDeadline() != null ? r.getSubmissionDeadline() : m.getDueDate());
                         c.setStatus(ComplianceStatus.PENDING);
                         MilestoneCompliance saved = compliances.save(c);
-                        if (saved != null && m.getCompliances() != null && m.getCompliances().stream().noneMatch(existing -> Objects.equals(existing.getId(), saved.getId()))) {
+                        if (saved != null && m.getCompliances() != null && m.getCompliances().stream().noneMatch(existing -> existing == saved || (saved.getId() != null && Objects.equals(existing.getId(), saved.getId())))) {
                             m.getCompliances().add(saved);
                         }
                     }
-                    cleanupDefaultPlaceholders(m);
+                    recalculateMilestoneState(m, null);
                 }
             }
         }
+    }
+
+    private void ensureDefaultRequirementIfNeeded(DisbursementMilestone m) {
+        if (m == null) return;
+        List<MilestoneCompliance> current = getMilestoneCompliances(m, null);
+        boolean hasActiveAdminReq = current.stream()
+                .anyMatch(c -> c.getRequirement() != null && c.getRequirement().isActive());
+        if (hasActiveAdminReq) return;
+
+        boolean hasDefaultReq = current.stream().anyMatch(c -> c.getRequirement() == null);
+        if (hasDefaultReq) return;
+
+        Integer stageNum = m.getInstallment() != null ? m.getInstallment().getInstallmentNumber() : null;
+        MilestoneCompliance restored = new MilestoneCompliance();
+        restored.setMilestone(m);
+        restored.setRequirement(null);
+        restored.setRequirementTitle(stageNum != null
+                ? "Stage " + stageNum + " Utilization Certificate & Invoices"
+                : "Milestone Completion Certificate");
+        restored.setDescription(defaultStageDescription(stageNum));
+        restored.setRequired(true);
+        restored.setSubmissionDeadline(m.getDueDate());
+        restored.setStatus(ComplianceStatus.PENDING);
+        MilestoneCompliance saved = compliances.save(restored);
+        if (saved != null && m.getCompliances() != null && m.getCompliances().stream().noneMatch(existing -> existing == saved || (saved.getId() != null && Objects.equals(existing.getId(), saved.getId())))) {
+            m.getCompliances().add(saved);
+        }
+    }
+
+    private String defaultStageDescription(Integer stageNumber) {
+        if (stageNumber == null) {
+            return "Default compliance requirement (Admin-specific requirement not active): Submit milestone completion proof.";
+        }
+        return switch (stageNumber) {
+            case 1 -> "Default Stage 1 compliance (no Admin-configured Stage 1 requirement active): Submit initial utilization certificate, advance acknowledgment, and baseline invoices.";
+            case 2 -> "Default Stage 2 compliance (no Admin-configured Stage 2 requirement active): Submit mid-milestone progress report, interim utilization certificate, and supporting invoices.";
+            case 3 -> "Default Stage 3 compliance (no Admin-configured Stage 3 requirement active): Submit final completion certificate, consolidated utilization certificate, and audited invoices.";
+            default -> "Default Stage " + stageNumber + " compliance (no Admin-configured requirement active): Submit expenditure verification documents and progress report.";
+        };
     }
 
     private void cleanupDefaultPlaceholders(DisbursementMilestone m) {
         if (m == null) return;
         List<MilestoneCompliance> milestoneCompliances = getMilestoneCompliances(m, null);
         boolean hasActiveAdminReq = milestoneCompliances.stream()
-                .anyMatch(c -> c.getRequirement() != null && c.getRequirement().isActive());
+                .anyMatch(c -> c.getRequirement() != null
+                        && c.getRequirement().isActive()
+                        && (c.getRequirement().getTargetStage() != null || c.getRequirement().getMilestone() != null));
         if (!hasActiveAdminReq) return;
 
         List<MilestoneCompliance> placeholders = milestoneCompliances.stream()
@@ -415,14 +507,26 @@ public class ComplianceOperationsService {
     }
 
     private boolean isActiveObligation(MilestoneCompliance c) {
-        return c != null && (c.getRequirement() == null || c.getRequirement().isActive());
+        if (c == null) return false;
+        if (c.getRequirement() != null) {
+            return c.getRequirement().isActive();
+        }
+        return !isUnsubmittedDefaultPlaceholder(c);
     }
 
     private void recalculateMilestoneState(DisbursementMilestone m, MilestoneCompliance updatedItem) {
         List<MilestoneCompliance> milestoneCompliances = getMilestoneCompliances(m, updatedItem).stream()
                 .filter(this::isActiveObligation)
                 .toList();
-        if (milestoneCompliances.isEmpty()) return;
+        if (milestoneCompliances.isEmpty()) {
+            if (m.getStatus() == MilestoneStatus.COMPLETED) {
+                m.setStatus(MilestoneStatus.PENDING);
+                m.setProgressPercentage(0);
+                m.setCompletedAt(null);
+                milestones.save(m);
+            }
+            return;
+        }
 
         boolean hasRejected = updatedItem != null
                 && (updatedItem.getStatus() == ComplianceStatus.REJECTED || updatedItem.getStatus() == ComplianceStatus.CORRECTION_REQUIRED);
@@ -527,6 +631,7 @@ public class ComplianceOperationsService {
                 r.getScheme() != null ? r.getScheme().getSchemeName() : "Unknown Scheme",
                 r.getMilestone()==null?null:r.getMilestone().getId(),
                 r.getApplication()==null?null:r.getApplication().getId(),
+                r.getTargetStage(),
                 r.getTitle(),
                 r.getDescription(),
                 r.isRequired(),
@@ -578,7 +683,11 @@ public class ComplianceOperationsService {
                 c != null ? c.getVerificationRemarks() : null,
                 c == null || c.getReviewHistory() == null ? Collections.emptyList() : c.getReviewHistory().stream()
                         .map(h -> new ComplianceHistoryResponse(h.getAction(), h.getActor() == null ? null : h.getActor().getFullName(), h.getRemarks(), h.getDocumentFileName(), h.getOccurredAt()))
-                        .toList()
+                        .toList(),
+                c != null && c.getRequirement() != null && c.getRequirement().getTargetStage() != null
+                        ? c.getRequirement().getTargetStage()
+                        : (installment != null ? installment.getInstallmentNumber() : null),
+                c != null && c.getRequirement() != null && c.getRequirement().isActive()
         );
     }
 

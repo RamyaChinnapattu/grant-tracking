@@ -161,10 +161,12 @@ export default function BeneficiaryMyGrant() {
     };
   }, [plans, errorPlans]);
 
-  // Pending compliance documents count
+  // Pending actionable compliance documents count
   const pendingDocsCount = useMemo(() => {
-    return complianceList.filter((c) =>
-      ["PENDING", "OVERDUE", "CORRECTION_REQUIRED", "REJECTED"].includes(c.status)
+    return complianceList.filter(
+      (c) =>
+        c.uploadAllowed !== false &&
+        ["PENDING", "OVERDUE", "CORRECTION_REQUIRED", "REJECTED"].includes(c.status)
     ).length;
   }, [complianceList]);
 
@@ -187,6 +189,11 @@ export default function BeneficiaryMyGrant() {
 
   // Submit compliance document
   const handleComplianceSubmit = async (item) => {
+    if (item.uploadAllowed === false) {
+      setError("No active compliance requirement is configured by Admin for this stage.");
+      return;
+    }
+
     const file = uploadFiles[item.id];
     if (!file) {
       setError("Please choose a file to upload.");
@@ -545,27 +552,41 @@ export default function BeneficiaryMyGrant() {
                   <RefreshCw size={14} /> Retry Loading Documents
                 </button>
               </div>
-            ) : complianceList.length === 0 ? (
+            ) : plans.length === 0 && complianceList.length === 0 ? (
               <div style={{ textAlign: "center", padding: "2.5rem", color: "#64748b" }}>
                 <CheckCircle2 size={36} style={{ marginBottom: "0.5rem", opacity: 0.5 }} />
-                <p>No compliance requirements are currently attached to your grant plans.</p>
+                <p>No compliance requirement configured by Admin for this stage.</p>
               </div>
             ) : (
-              <div>
-                {complianceList.map((item) => {
-                  const isActionable = [
-                    "PENDING",
-                    "OVERDUE",
-                    "REJECTED",
-                    "CORRECTION_REQUIRED",
-                  ].includes(item.status);
+              (() => {
+                const renderedIds = new Set();
+                const renderDocCard = (item) => {
+                  renderedIds.add(item.id);
+                  const canUpload = item.uploadAllowed !== false;
+                  const isActionable =
+                    canUpload &&
+                    ["PENDING", "OVERDUE", "REJECTED", "CORRECTION_REQUIRED"].includes(item.status);
                   const isBusy = submittingDocId === item.id;
 
                   return (
                     <article className="ben-doc-card" key={item.id}>
                       <div className="ben-doc-header">
                         <div>
-                          <h3>{item.requirementTitle}</h3>
+                          <h3>
+                            {item.requirementTitle}
+                            {!canUpload && (
+                              <span
+                                style={{
+                                  marginLeft: "0.5rem",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 500,
+                                  color: "#64748b",
+                                }}
+                              >
+                                (Historical submission — read-only)
+                              </span>
+                            )}
+                          </h3>
                           <div style={{ fontSize: "0.85rem", color: "#64748b", marginTop: "0.2rem" }}>
                             {item.schemeName} · Application #{item.applicationId} · {item.milestoneTitle}
                           </div>
@@ -754,6 +775,22 @@ export default function BeneficiaryMyGrant() {
                         </details>
                       )}
 
+                      {!canUpload && (
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "6px",
+                            padding: "0.55rem 0.85rem",
+                            marginTop: "0.5rem",
+                            fontSize: "0.82rem",
+                            color: "#475569",
+                          }}
+                        >
+                          No active compliance requirement configured by Admin for new uploads. Existing submission history is preserved above.
+                        </div>
+                      )}
+
                       {/* Upload Box for Actionable Submissions */}
                       {isActionable && (
                         <div className="ben-upload-box">
@@ -833,8 +870,91 @@ export default function BeneficiaryMyGrant() {
                       )}
                     </article>
                   );
-                })}
-              </div>
+                };
+
+                return (
+                  <div>
+                    {plans.map((plan) => {
+                      const sortedInstallments = [...(plan.installments || [])].sort(
+                        (a, b) => (a.installmentNumber || 0) - (b.installmentNumber || 0)
+                      );
+                      return (
+                        <div key={plan.id} style={{ marginBottom: "1.5rem" }}>
+                          <div
+                            style={{
+                              fontSize: "0.95rem",
+                              fontWeight: 700,
+                              color: "#1e293b",
+                              marginBottom: "0.75rem",
+                              paddingBottom: "0.4rem",
+                              borderBottom: "1px solid #e2e8f0",
+                            }}
+                          >
+                            {plan.schemeName} · Application #{plan.applicationId}
+                          </div>
+
+                          {sortedInstallments.map((inst) => {
+                            const stageItems = complianceList.filter(
+                              (item) =>
+                                item.installmentId === inst.id ||
+                                (item.installmentId == null &&
+                                  item.applicationId === plan.applicationId &&
+                                  item.targetStage === inst.installmentNumber)
+                            );
+
+                            if (stageItems.length === 0) {
+                              return (
+                                <div
+                                  key={`empty-stage-${inst.id}`}
+                                  style={{
+                                    background: "#f8fafc",
+                                    border: "1px dashed #cbd5e1",
+                                    borderRadius: "8px",
+                                    padding: "0.9rem 1rem",
+                                    marginBottom: "0.75rem",
+                                    fontSize: "0.875rem",
+                                    color: "#475569",
+                                    display: "flex",
+                                    justifyContent: "space-between",
+                                    alignItems: "center",
+                                    gap: "0.5rem",
+                                    flexWrap: "wrap",
+                                  }}
+                                >
+                                  <div>
+                                    <strong style={{ color: "#0f172a" }}>
+                                      Stage {inst.installmentNumber}
+                                      {inst.title ? ` (${inst.title})` : ""}:
+                                    </strong>{" "}
+                                    No compliance requirement configured by Admin for this stage.
+                                  </div>
+                                  <span
+                                    style={{
+                                      fontSize: "0.75rem",
+                                      color: "#64748b",
+                                      background: "#e2e8f0",
+                                      padding: "0.15rem 0.5rem",
+                                      borderRadius: "999px",
+                                    }}
+                                  >
+                                    Not configured
+                                  </span>
+                                </div>
+                              );
+                            }
+
+                            return stageItems.map((item) => renderDocCard(item));
+                          })}
+                        </div>
+                      );
+                    })}
+
+                    {complianceList
+                      .filter((item) => !renderedIds.has(item.id))
+                      .map((item) => renderDocCard(item))}
+                  </div>
+                );
+              })()
             )}
           </div>
         </section>

@@ -7,6 +7,7 @@ public record ComplianceRequirementRequest(
     @NotNull(message = "Target scheme is required") Long schemeId,
     Long milestoneId,
     Long applicationId,
+    @Min(value = 1, message = "Target stage must be 1, 2, or 3") @Max(value = 3, message = "Target stage must be 1, 2, or 3") Integer targetStage,
     @NotBlank(message = "Requirement title is required") @Size(max=150, message = "Requirement title must not exceed 150 characters") String title,
     String description,
     boolean required,

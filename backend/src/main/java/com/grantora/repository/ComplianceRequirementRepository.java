@@ -5,4 +5,5 @@ import java.util.List;
 public interface ComplianceRequirementRepository extends JpaRepository<ComplianceRequirement, Long> {
     List<ComplianceRequirement> findAllByOrderByCreatedAtDesc();
     List<ComplianceRequirement> findByActiveTrue();
+    boolean existsByScheme_Id(Long schemeId);
 }

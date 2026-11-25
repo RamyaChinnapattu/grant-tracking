@@ -8,4 +8,5 @@ public record ComplianceItemResponse(Long id, Long requirementId, Long milestone
         String description, boolean required, LocalDate submissionDeadline, String allowedFormats, long maxFileSizeBytes,
         ComplianceStatus status, String documentFileName, String documentContentType, Long documentFileSize,
         boolean hasDocument, LocalDateTime submittedAt, String submittedByName, String verifiedByName,
-        LocalDateTime verifiedAt, String verificationRemarks, List<ComplianceHistoryResponse> reviewHistory) {}
+        LocalDateTime verifiedAt, String verificationRemarks, List<ComplianceHistoryResponse> reviewHistory,
+        Integer targetStage, boolean uploadAllowed) {}

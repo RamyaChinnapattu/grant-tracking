@@ -66,10 +66,10 @@ function formatDate(dt) {
     return isNaN(d.getTime())
       ? "—"
       : d.toLocaleDateString("en-IN", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        });
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
   } catch {
     return "—";
   }
@@ -152,6 +152,7 @@ export default function AdminGrantManagement() {
   // Form states for Requirement Creation
   const [newReqForm, setNewReqForm] = useState({
     schemeId: "",
+    targetStage: "",
     milestoneId: "",
     title: "",
     description: "",
@@ -434,6 +435,11 @@ export default function AdminGrantManagement() {
       setError("Target Scheme is required. Please select a scheme.");
       return;
     }
+    const stageNum = Number(newReqForm.targetStage);
+    if (!newReqForm.targetStage || ![1, 2, 3].includes(stageNum)) {
+      setError("Target Stage is required. Please choose Stage 1, Stage 2, or Stage 3.");
+      return;
+    }
     if (!newReqForm.title || !newReqForm.title.trim()) {
       setError("Requirement Title is required.");
       return;
@@ -459,6 +465,7 @@ export default function AdminGrantManagement() {
     try {
       await createComplianceRequirement({
         schemeId: Number(newReqForm.schemeId),
+        targetStage: stageNum,
         title: newReqForm.title.trim(),
         description: newReqForm.description ? newReqForm.description.trim() : "",
         required: Boolean(newReqForm.required),
@@ -467,10 +474,11 @@ export default function AdminGrantManagement() {
         maxFileSizeBytes: maxBytes,
         milestoneId: newReqForm.milestoneId ? Number(newReqForm.milestoneId) : null,
       });
-      setSuccessMsg("Compliance requirement configured and attached to scheme.");
+      setSuccessMsg(`Compliance requirement configured for Stage ${stageNum}.`);
       setShowAddReqModal(false);
       setNewReqForm({
         schemeId: "",
+        targetStage: "",
         milestoneId: "",
         title: "",
         description: "",
@@ -648,10 +656,9 @@ export default function AdminGrantManagement() {
         );
       });
 
-      if (!allMilestonesReady || !inst.allVerified) {
+      if (!allMilestonesReady || !inst.allCompliancesVerified) {
         return { isReady: false, reason: "Milestones / Compliance incomplete" };
       }
-
       return { isReady: true, reason: "Ready for release" };
     },
     [allInstallments]
@@ -668,10 +675,10 @@ export default function AdminGrantManagement() {
       fundUtilization?.totalAllocatedFunds != null
         ? Number(fundUtilization.totalAllocatedFunds)
         : schemes.reduce(
-            (sum, s) =>
-              sum + (Number(s.allocatedFunds || s.totalBudget || s.budget) || 0),
-            0
-          );
+          (sum, s) =>
+            sum + (Number(s.allocatedFunds || s.totalBudget || s.budget) || 0),
+          0
+        );
 
     const totalCommitted =
       fundUtilization?.totalApprovedAmount != null
@@ -687,8 +694,8 @@ export default function AdminGrantManagement() {
       fundUtilization?.totalDisbursedAmount != null
         ? Number(fundUtilization.totalDisbursedAmount)
         : fundUtilization?.totalReleasedAmount != null
-        ? Number(fundUtilization.totalReleasedAmount)
-        : plans.reduce((sum, p) => sum + (Number(p.totalDisbursedAmount) || 0), 0);
+          ? Number(fundUtilization.totalReleasedAmount)
+          : plans.reduce((sum, p) => sum + (Number(p.totalDisbursedAmount) || 0), 0);
 
     const remainingBudget =
       fundUtilization?.remainingAllocatedAmount != null
@@ -948,18 +955,18 @@ export default function AdminGrantManagement() {
                       const budget = isBudgetConfigured ? Number(rawBudget) : 0;
                       const committed = Number(
                         schemeFund?.approvedAmount ??
-                          schemePlans.reduce(
-                            (sum, p) => sum + (Number(p.totalApprovedAmount) || 0),
-                            0
-                          )
+                        schemePlans.reduce(
+                          (sum, p) => sum + (Number(p.totalApprovedAmount) || 0),
+                          0
+                        )
                       );
                       const released = Number(
                         schemeFund?.disbursedAmount ??
-                          schemeFund?.releasedAmount ??
-                          schemePlans.reduce(
-                            (sum, p) => sum + (Number(p.totalDisbursedAmount) || 0),
-                            0
-                          )
+                        schemeFund?.releasedAmount ??
+                        schemePlans.reduce(
+                          (sum, p) => sum + (Number(p.totalDisbursedAmount) || 0),
+                          0
+                        )
                       );
                       const pct = committed > 0 ? Math.min(100, (released / committed) * 100) : 0;
 
@@ -984,9 +991,8 @@ export default function AdminGrantManagement() {
                             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                               <div className="mgmt-progress-bar" style={{ flex: 1 }}>
                                 <div
-                                  className={`mgmt-progress-fill ${
-                                    pct >= 85 ? "success" : pct >= 50 ? "warning" : ""
-                                  }`}
+                                  className={`mgmt-progress-fill ${pct >= 85 ? "success" : pct >= 50 ? "warning" : ""
+                                    }`}
                                   style={{ width: `${pct}%` }}
                                 />
                               </div>
@@ -1143,11 +1149,11 @@ export default function AdminGrantManagement() {
                         <td>
                           {formatCurrency(
                             plan.remainingAmount ??
-                              Math.max(
-                                0,
-                                Number(plan.totalApprovedAmount || 0) -
-                                  Number(plan.totalDisbursedAmount || 0)
-                              )
+                            Math.max(
+                              0,
+                              Number(plan.totalApprovedAmount || 0) -
+                              Number(plan.totalDisbursedAmount || 0)
+                            )
                           )}
                         </td>
                         <td>
@@ -1246,6 +1252,7 @@ export default function AdminGrantManagement() {
                       <tr>
                         <th>Requirement</th>
                         <th>Scheme</th>
+                        <th>Target Stage</th>
                         <th>Mandatory</th>
                         <th>Allowed Formats</th>
                         <th>Max Size</th>
@@ -1266,6 +1273,22 @@ export default function AdminGrantManagement() {
                           </td>
                           <td>{req.schemeName || `Scheme #${req.schemeId}`}</td>
                           <td>
+                            {req.targetStage != null ? (
+                              <span
+                                className="mgmt-status-badge"
+                                style={{ background: "#eff6ff", color: "#1d4ed8" }}
+                              >
+                                Stage {req.targetStage}
+                              </span>
+                            ) : req.milestoneId ? (
+                              <span>Milestone #{req.milestoneId}</span>
+                            ) : (
+                              <span style={{ color: "#64748b", fontSize: "0.8rem" }}>
+                                Legacy (Unscoped)
+                              </span>
+                            )}
+                          </td>
+                          <td>
                             {req.required ? (
                               <span style={{ color: "#dc2626", fontWeight: 600 }}>Required</span>
                             ) : (
@@ -1276,9 +1299,8 @@ export default function AdminGrantManagement() {
                           <td>{formatFileSize(req.maxFileSizeBytes)}</td>
                           <td>
                             <span
-                              className={`mgmt-status-badge status-${
-                                req.active ? "approved" : "cancelled"
-                              }`}
+                              className={`mgmt-status-badge status-${req.active ? "approved" : "cancelled"
+                                }`}
                             >
                               {req.active ? "ACTIVE" : "INACTIVE"}
                             </span>
@@ -1585,8 +1607,8 @@ export default function AdminGrantManagement() {
                                     m.progressPercentage != null
                                       ? Number(m.progressPercentage)
                                       : m.status === "COMPLETED"
-                                      ? 100
-                                      : 0;
+                                        ? 100
+                                        : 0;
                                   return (
                                     <div key={m.id} style={{ fontSize: "0.8rem" }}>
                                       <span
@@ -1751,9 +1773,8 @@ export default function AdminGrantManagement() {
                   <div style={{ display: "flex", gap: "0.5rem" }}>
                     <button
                       type="button"
-                      className={`mgmt-btn ${
-                        planAllocationMode === "PERCENTAGE" ? "primary" : "secondary"
-                      }`}
+                      className={`mgmt-btn ${planAllocationMode === "PERCENTAGE" ? "primary" : "secondary"
+                        }`}
                       style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}
                       onClick={() => setPlanAllocationMode("PERCENTAGE")}
                     >
@@ -1761,9 +1782,8 @@ export default function AdminGrantManagement() {
                     </button>
                     <button
                       type="button"
-                      className={`mgmt-btn ${
-                        planAllocationMode === "FIXED" ? "primary" : "secondary"
-                      }`}
+                      className={`mgmt-btn ${planAllocationMode === "FIXED" ? "primary" : "secondary"
+                        }`}
                       style={{ padding: "0.3rem 0.6rem", fontSize: "0.75rem" }}
                       onClick={() => setPlanAllocationMode("FIXED")}
                     >
@@ -1889,9 +1909,8 @@ export default function AdminGrantManagement() {
                 <div
                   style={{
                     background: installmentAllocationSummary.isValid ? "#f0fdf4" : "#fef2f2",
-                    border: `1px solid ${
-                      installmentAllocationSummary.isValid ? "#bbf7d0" : "#fecaca"
-                    }`,
+                    border: `1px solid ${installmentAllocationSummary.isValid ? "#bbf7d0" : "#fecaca"
+                      }`,
                     borderRadius: "6px",
                     padding: "0.75rem 1rem",
                     marginBottom: "1rem",
@@ -1919,9 +1938,8 @@ export default function AdminGrantManagement() {
                   {!installmentAllocationSummary.isValid && (
                     <div style={{ color: "#dc2626", marginTop: "0.25rem", fontWeight: 600 }}>
                       {planAllocationMode === "PERCENTAGE"
-                        ? `Difference: ${installmentAllocationSummary.diff > 0 ? "+" : ""}${
-                            installmentAllocationSummary.diff
-                          }% remaining to allocate.`
+                        ? `Difference: ${installmentAllocationSummary.diff > 0 ? "+" : ""}${installmentAllocationSummary.diff
+                        }% remaining to allocate.`
                         : `Difference: ${formatCurrency(installmentAllocationSummary.diff)}.`}
                     </div>
                   )}
@@ -2251,6 +2269,22 @@ export default function AdminGrantManagement() {
                 </div>
 
                 <div className="mgmt-form-group">
+                  <label>Target Stage *</label>
+                  <select
+                    required
+                    value={newReqForm.targetStage}
+                    onChange={(e) =>
+                      setNewReqForm({ ...newReqForm, targetStage: e.target.value })
+                    }
+                  >
+                    <option value="">-- Choose target stage --</option>
+                    <option value="1">Stage 1</option>
+                    <option value="2">Stage 2</option>
+                    <option value="3">Stage 3</option>
+                  </select>
+                </div>
+
+                <div className="mgmt-form-group">
                   <label>Requirement Title *</label>
                   <input
                     type="text"
@@ -2287,6 +2321,17 @@ export default function AdminGrantManagement() {
                     />
                     Mandatory for milestone completion and payment release
                   </label>
+                </div>
+
+                <div className="mgmt-form-group">
+                  <label>Submission Deadline (Optional)</label>
+                  <input
+                    type="date"
+                    value={newReqForm.submissionDeadline}
+                    onChange={(e) =>
+                      setNewReqForm({ ...newReqForm, submissionDeadline: e.target.value })
+                    }
+                  />
                 </div>
 
                 <div

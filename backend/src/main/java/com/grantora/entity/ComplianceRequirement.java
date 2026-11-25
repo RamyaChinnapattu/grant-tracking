@@ -17,6 +17,8 @@ public class ComplianceRequirement {
     private DisbursementMilestone milestone;
     @ManyToOne(fetch = FetchType.LAZY) @JoinColumn(name = "application_id")
     private GrantApplication application;
+    @Column(name = "target_stage")
+    private Integer targetStage;
     @Column(nullable = false, length = 150) private String title;
     @Column(columnDefinition = "TEXT") private String description;
     @Column(nullable = false) private boolean required = true;
@@ -32,6 +34,7 @@ public class ComplianceRequirement {
     public Scheme getScheme(){return scheme;} public void setScheme(Scheme v){scheme=v;}
     public DisbursementMilestone getMilestone(){return milestone;} public void setMilestone(DisbursementMilestone v){milestone=v;}
     public GrantApplication getApplication(){return application;} public void setApplication(GrantApplication v){application=v;}
+    public Integer getTargetStage(){return targetStage;} public void setTargetStage(Integer v){targetStage=v;}
     public String getTitle(){return title;} public void setTitle(String v){title=v;}
     public String getDescription(){return description;} public void setDescription(String v){description=v;}
     public boolean isRequired(){return required;} public void setRequired(boolean v){required=v;}

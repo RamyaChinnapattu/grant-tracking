@@ -397,6 +397,71 @@ class SchemeLifecycleAndDataIntegrityTest {
     }
 
     @Test
+    void deleteScheme_withDisbursementPlansOrComplianceRequirements_returnsConflict() {
+        com.grantora.repository.DisbursementPlanRepository planRepo =
+                org.mockito.Mockito.mock(com.grantora.repository.DisbursementPlanRepository.class);
+        com.grantora.repository.ComplianceRequirementRepository reqRepo =
+                org.mockito.Mockito.mock(com.grantora.repository.ComplianceRequirementRepository.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(schemeService, "disbursementPlanRepository", planRepo);
+        org.springframework.test.util.ReflectionTestUtils.setField(schemeService, "complianceRequirementRepository", reqRepo);
+
+        org.mockito.Mockito.when(planRepo.findByScheme_Id(1L))
+                .thenReturn(List.of(new com.grantora.entity.DisbursementPlan()));
+
+        ResponseStatusException planEx = assertThrows(
+                ResponseStatusException.class,
+                () -> schemeService.deleteScheme(1L)
+        );
+        assertEquals(HttpStatus.CONFLICT, planEx.getStatusCode());
+        assertTrue(planEx.getReason().contains("disbursement plan"));
+        assertFalse(deleteCalled.get());
+
+        org.mockito.Mockito.when(planRepo.findByScheme_Id(1L)).thenReturn(List.of());
+        org.mockito.Mockito.when(reqRepo.existsByScheme_Id(1L)).thenReturn(true);
+
+        ResponseStatusException reqEx = assertThrows(
+                ResponseStatusException.class,
+                () -> schemeService.deleteScheme(1L)
+        );
+        assertEquals(HttpStatus.CONFLICT, reqEx.getStatusCode());
+        assertTrue(reqEx.getReason().contains("compliance requirement"));
+        assertFalse(deleteCalled.get());
+    }
+
+    @Test
+    void deleteScheme_withDocumentRequirementsOrEligibilityRules_returnsConflict() {
+        jakarta.persistence.EntityManager em = org.mockito.Mockito.mock(jakarta.persistence.EntityManager.class);
+        @SuppressWarnings("unchecked")
+        jakarta.persistence.TypedQuery<Long> docQuery = org.mockito.Mockito.mock(jakarta.persistence.TypedQuery.class);
+        @SuppressWarnings("unchecked")
+        jakarta.persistence.TypedQuery<Long> ruleQuery = org.mockito.Mockito.mock(jakarta.persistence.TypedQuery.class);
+        org.springframework.test.util.ReflectionTestUtils.setField(schemeService, "entityManager", em);
+
+        org.mockito.Mockito.when(em.createQuery(
+                org.mockito.ArgumentMatchers.contains("SchemeDocumentRequirement"),
+                org.mockito.ArgumentMatchers.eq(Long.class)))
+                .thenReturn(docQuery);
+        org.mockito.Mockito.when(docQuery.setParameter("id", 1L)).thenReturn(docQuery);
+        org.mockito.Mockito.when(docQuery.getSingleResult()).thenReturn(2L);
+
+        org.mockito.Mockito.when(em.createQuery(
+                org.mockito.ArgumentMatchers.contains("SchemeEligibilityRule"),
+                org.mockito.ArgumentMatchers.eq(Long.class)))
+                .thenReturn(ruleQuery);
+        org.mockito.Mockito.when(ruleQuery.setParameter("id", 1L)).thenReturn(ruleQuery);
+        org.mockito.Mockito.when(ruleQuery.getSingleResult()).thenReturn(1L);
+
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> schemeService.deleteScheme(1L)
+        );
+        assertEquals(HttpStatus.CONFLICT, ex.getStatusCode());
+        assertTrue(ex.getReason().contains("document requirement"));
+        assertTrue(ex.getReason().contains("eligibility rule"));
+        assertFalse(deleteCalled.get());
+    }
+
+    @Test
     void endDateEarlierThanStartDate_isRejected() {
         Scheme scheme = copyOf(existingScheme);
         scheme.setApplicationStartDate(LocalDate.of(2026, 6, 1));
