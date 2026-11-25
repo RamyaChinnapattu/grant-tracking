@@ -44,6 +44,9 @@ public class Scheme {
     @Column(name = "eligibility_threshold", precision = 5, scale = 2)
     private BigDecimal eligibilityThreshold = BigDecimal.valueOf(70);
 
+    @Column(name = "eligibility_configuration_version", nullable = false)
+    private Integer eligibilityConfigurationVersion = 1;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "scheme_eligible_categories",
             joinColumns = @JoinColumn(name = "scheme_id"))
@@ -148,6 +151,21 @@ public class Scheme {
 
     public void setEligibilityThreshold(BigDecimal eligibilityThreshold) {
         this.eligibilityThreshold = eligibilityThreshold;
+    }
+
+    public Integer getEligibilityConfigurationVersion() {
+        return eligibilityConfigurationVersion;
+    }
+
+    public void setEligibilityConfigurationVersion(Integer eligibilityConfigurationVersion) {
+        this.eligibilityConfigurationVersion = eligibilityConfigurationVersion;
+    }
+
+    @PrePersist
+    void ensureDefaultsBeforePersist() {
+        if (eligibilityConfigurationVersion == null || eligibilityConfigurationVersion <= 0) {
+            eligibilityConfigurationVersion = 1;
+        }
     }
 
     public Set<String> getEligibleCategories() {

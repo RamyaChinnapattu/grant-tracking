@@ -695,12 +695,21 @@ export default function AdminGrantManagement() {
         ? Number(fundUtilization.remainingAllocatedAmount)
         : Math.max(0, totalAllocated - totalCommitted);
 
+    const unconfiguredSchemesCount = schemes.filter((s) => {
+      const schemeFund = (fundUtilization?.schemes || []).find(
+        (fs) => String(fs.schemeId) === String(s.id)
+      );
+      const rawBudget = schemeFund ? schemeFund.allocatedFunds : s.allocatedFunds;
+      return rawBudget == null;
+    }).length;
+
     return {
       totalAllocated,
       totalCommitted,
       totalScheduled,
       totalDisbursed,
       remainingBudget,
+      unconfiguredSchemesCount,
     };
   }, [fundUtilization, schemes, plans]);
 
@@ -822,7 +831,11 @@ export default function AdminGrantManagement() {
               <strong>
                 {formatCurrency(financialTotals.totalAllocated)}
               </strong>
-              <small>Configured scheme allocations</small>
+              <small>
+                {financialTotals.unconfiguredSchemesCount > 0
+                  ? `Configured schemes (${financialTotals.unconfiguredSchemesCount} not configured)`
+                  : "Configured scheme allocations"}
+              </small>
             </article>
 
             <article className="mgmt-kpi-card">
@@ -930,13 +943,9 @@ export default function AdminGrantManagement() {
                         (fs) => String(fs.schemeId) === String(s.id)
                       );
                       const schemePlans = plans.filter((p) => String(p.schemeId) === String(s.id));
-                      const budget = Number(
-                        schemeFund?.allocatedFunds ??
-                          s.allocatedFunds ??
-                          s.totalBudget ??
-                          s.budget ??
-                          0
-                      );
+                      const rawBudget = schemeFund ? schemeFund.allocatedFunds : s.allocatedFunds;
+                      const isBudgetConfigured = rawBudget != null;
+                      const budget = isBudgetConfigured ? Number(rawBudget) : 0;
                       const committed = Number(
                         schemeFund?.approvedAmount ??
                           schemePlans.reduce(
@@ -960,7 +969,15 @@ export default function AdminGrantManagement() {
                             <strong>{s.schemeName}</strong>
                           </td>
                           <td>{s.department || "General"}</td>
-                          <td>{formatCurrency(budget)}</td>
+                          <td>
+                            {isBudgetConfigured ? (
+                              formatCurrency(budget)
+                            ) : (
+                              <span style={{ color: "#d97706", fontWeight: 600, fontSize: "0.85rem" }}>
+                                Not configured
+                              </span>
+                            )}
+                          </td>
                           <td>{formatCurrency(committed)}</td>
                           <td>{formatCurrency(released)}</td>
                           <td style={{ minWidth: "140px" }}>

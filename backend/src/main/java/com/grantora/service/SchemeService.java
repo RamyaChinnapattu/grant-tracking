@@ -96,8 +96,8 @@ public class SchemeService {
     @Transactional
     public Scheme createScheme(Scheme scheme) {
         validateEligibilityConfiguration(scheme);
-        if (scheme.getAllocatedFunds() != null && scheme.getAllocatedFunds().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Allocated funds cannot be negative.");
+        if (scheme.getAllocatedFunds() != null && scheme.getAllocatedFunds().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Total scheme budget (allocated funds) must be greater than zero.");
         }
         if (scheme.getMaximumGrantAmount() != null && scheme.getMaximumGrantAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum grant amount must be greater than zero.");
@@ -120,6 +120,9 @@ public class SchemeService {
                 questions.add(question);
             }
         }
+        if (scheme.getEligibilityConfigurationVersion() == null || scheme.getEligibilityConfigurationVersion() <= 0) {
+            scheme.setEligibilityConfigurationVersion(1);
+        }
         scheme.setEligibilityQuestions(questions);
         Scheme saved = schemeRepository.save(scheme);
         if (auditService != null) {
@@ -136,8 +139,8 @@ public class SchemeService {
     @Transactional
     public Scheme updateScheme(Long id, Scheme updatedScheme) {
         validateEligibilityConfiguration(updatedScheme);
-        if (updatedScheme.getAllocatedFunds() != null && updatedScheme.getAllocatedFunds().compareTo(BigDecimal.ZERO) < 0) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Allocated funds cannot be negative.");
+        if (updatedScheme.getAllocatedFunds() != null && updatedScheme.getAllocatedFunds().compareTo(BigDecimal.ZERO) <= 0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Total scheme budget (allocated funds) must be greater than zero.");
         }
         if (updatedScheme.getMaximumGrantAmount() != null && updatedScheme.getMaximumGrantAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Maximum grant amount must be greater than zero.");
@@ -151,8 +154,17 @@ public class SchemeService {
         existing.setMaximumAge(updatedScheme.getMaximumAge());
         existing.setMaximumAnnualIncome(updatedScheme.getMaximumAnnualIncome());
         existing.setMaximumGrantAmount(updatedScheme.getMaximumGrantAmount());
-        existing.setAllocatedFunds(updatedScheme.getAllocatedFunds());
+        if (updatedScheme.getAllocatedFunds() != null) {
+            existing.setAllocatedFunds(updatedScheme.getAllocatedFunds());
+        }
         existing.setEligibilityThreshold(updatedScheme.getEligibilityThreshold());
+        if (updatedScheme.getEligibilityConfigurationVersion() != null
+                && updatedScheme.getEligibilityConfigurationVersion() > 0) {
+            existing.setEligibilityConfigurationVersion(updatedScheme.getEligibilityConfigurationVersion());
+        } else if (existing.getEligibilityConfigurationVersion() == null
+                || existing.getEligibilityConfigurationVersion() <= 0) {
+            existing.setEligibilityConfigurationVersion(1);
+        }
         existing.setEligibleCategories(updatedScheme.getEligibleCategories());
         reconcileQuestions(existing, updatedScheme.getEligibilityQuestions());
         existing.setApplicationStartDate(updatedScheme.getApplicationStartDate());

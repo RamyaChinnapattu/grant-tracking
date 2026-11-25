@@ -1008,4 +1008,30 @@ class DisbursementServiceTest {
                 .filter(r -> r.schemeId().equals(21L)).findFirst().orElseThrow();
         assertEquals(0, BigDecimal.ZERO.compareTo(zeroRow.utilizationPercentage()));
     }
+
+    @Test
+    void fundUtilizationPreservesNullAllocatedFundsAsUnconfigured() {
+        Scheme configured = new Scheme();
+        configured.setId(20L);
+        configured.setSchemeName("Configured Scheme");
+        configured.setAllocatedFunds(BigDecimal.valueOf(65000000));
+
+        Scheme unconfigured = new Scheme();
+        unconfigured.setId(21L);
+        unconfigured.setSchemeName("Agriculture Development Grant");
+        unconfigured.setAllocatedFunds(null);
+
+        when(schemeRepository.findAll()).thenReturn(List.of(configured, unconfigured));
+        when(applicationRepository.findAllByOrderByIdDesc()).thenReturn(List.of());
+        when(planRepository.findAll()).thenReturn(List.of());
+        when(installmentRepository.findAll()).thenReturn(List.of());
+
+        FundUtilizationSummaryResponse summary = disbursementService.getFundUtilizationSummary();
+        assertEquals(0, BigDecimal.valueOf(65000000).compareTo(summary.totalAllocatedFunds()));
+
+        SchemeFundUtilizationResponse unconfiguredRow = summary.schemes().stream()
+                .filter(r -> r.schemeId().equals(21L)).findFirst().orElseThrow();
+        assertNull(unconfiguredRow.allocatedFunds());
+        assertNull(unconfiguredRow.remainingAmount());
+    }
 }

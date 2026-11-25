@@ -89,8 +89,10 @@ const emptyForm = {
   minimumAge: "18",
   maximumAge: "65",
   maximumAnnualIncome: "500000",
+  allocatedFunds: "",
   maximumGrantAmount: "",
   eligibilityThreshold: "70",
+  eligibilityConfigurationVersion: 1,
   eligibleCategories: ["GENERAL", "OBC", "SC", "ST", "EWS", "MINORITY", "OTHER"],
   eligibilityQuestions: defaultInitialQuestions,
   applicationStartDate: "",
@@ -102,6 +104,7 @@ const numericFields = [
   "minimumAge",
   "maximumAge",
   "maximumAnnualIncome",
+  "allocatedFunds",
   "maximumGrantAmount",
   "eligibilityThreshold",
 ];
@@ -117,10 +120,16 @@ function toFormValues(scheme) {
     maximumAge: scheme.maximumAge != null ? String(scheme.maximumAge) : "",
     maximumAnnualIncome:
       scheme.maximumAnnualIncome != null ? String(scheme.maximumAnnualIncome) : "",
+    allocatedFunds:
+      scheme.allocatedFunds != null ? String(scheme.allocatedFunds) : "",
     maximumGrantAmount:
       scheme.maximumGrantAmount != null ? String(scheme.maximumGrantAmount) : "",
     eligibilityThreshold:
       scheme.eligibilityThreshold != null ? String(scheme.eligibilityThreshold) : "70",
+    eligibilityConfigurationVersion:
+      scheme.eligibilityConfigurationVersion != null
+        ? scheme.eligibilityConfigurationVersion
+        : null,
     eligibleCategories: Array.isArray(scheme.eligibleCategories)
       ? scheme.eligibleCategories
       : [],
@@ -153,10 +162,16 @@ function toPayload(form) {
     maximumAge: form.maximumAge === "" ? null : Number(form.maximumAge),
     maximumAnnualIncome:
       form.maximumAnnualIncome === "" ? null : Number(form.maximumAnnualIncome),
+    allocatedFunds:
+      form.allocatedFunds === "" ? null : Number(form.allocatedFunds),
     maximumGrantAmount:
       form.maximumGrantAmount === "" ? null : Number(form.maximumGrantAmount),
     eligibilityThreshold:
       form.eligibilityThreshold === "" ? 70 : Number(form.eligibilityThreshold),
+    eligibilityConfigurationVersion:
+      form.eligibilityConfigurationVersion != null && Number(form.eligibilityConfigurationVersion) > 0
+        ? Number(form.eligibilityConfigurationVersion)
+        : null,
     eligibleCategories: (form.eligibleCategories || [])
       .map((cat) => cat.trim())
       .filter(Boolean),
@@ -309,7 +324,16 @@ function SchemeManagement() {
     return "";
   }, [form.applicationStartDate, form.applicationEndDate]);
 
-  // Live grant amount validation
+  // Live budget & grant amount validation
+  const allocatedFundsError = useMemo(() => {
+    if (form.allocatedFunds === "") return "";
+    const num = Number(form.allocatedFunds);
+    if (isNaN(num) || num <= 0) {
+      return "Total scheme budget must be greater than zero.";
+    }
+    return "";
+  }, [form.allocatedFunds]);
+
   const grantAmountError = useMemo(() => {
     if (form.maximumGrantAmount !== "" && Number(form.maximumGrantAmount) < 0) {
       return "Maximum grant amount must be zero or greater.";
@@ -489,6 +513,16 @@ function SchemeManagement() {
 
     if (dateError) {
       setActionError(dateError);
+      return;
+    }
+
+    if (form.allocatedFunds === "" || form.allocatedFunds == null) {
+      setActionError("Please enter a valid positive Total Scheme Budget (₹).");
+      return;
+    }
+
+    if (allocatedFundsError) {
+      setActionError(allocatedFundsError);
       return;
     }
 
@@ -1004,6 +1038,36 @@ function SchemeManagement() {
           </div>
           <div className="scheme-form-grid">
             <label className="scheme-field">
+              <span className="scheme-field__label">
+                Total Scheme Budget (₹) <span className="scheme-field__required">*</span>
+              </span>
+              <input
+                type="number"
+                name="allocatedFunds"
+                min="1"
+                step="1000"
+                value={form.allocatedFunds}
+                onChange={handleChange}
+                placeholder="e.g. 10000000"
+                required
+              />
+              {allocatedFundsError && (
+                <span className="scheme-field__error">{allocatedFundsError}</span>
+              )}
+              {form.allocatedFunds && !allocatedFundsError ? (
+                <span className="scheme-field__hint">
+                  {formatCurrency(form.allocatedFunds)} total pool allocated for the entire scheme
+                </span>
+              ) : (
+                !allocatedFundsError && (
+                  <span className="scheme-field__hint">
+                    Total scheme pool (separate from per-beneficiary Maximum Grant Amount)
+                  </span>
+                )
+              )}
+            </label>
+
+            <label className="scheme-field">
               <span className="scheme-field__label">Maximum Grant Amount (₹)</span>
               <input
                 type="number"
@@ -1476,6 +1540,7 @@ function SchemeManagement() {
             <thead>
               <tr>
                 <th scope="col">Scheme & Department</th>
+                <th scope="col">Total Budget</th>
                 <th scope="col">Max Grant</th>
                 <th scope="col">Age / Income Cap</th>
                 <th scope="col">Application Period</th>
@@ -1486,14 +1551,14 @@ function SchemeManagement() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan="6" className="scheme-table__state">
+                  <td colSpan="7" className="scheme-table__state">
                     <RefreshCw size={20} className="spin-icon" aria-hidden="true" />
                     <span>Loading schemes…</span>
                   </td>
                 </tr>
               ) : filteredSchemes.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="scheme-table__state">
+                  <td colSpan="7" className="scheme-table__state">
                     <Filter size={24} aria-hidden="true" />
                     <p>No schemes matched your search or status filter.</p>
                     {searchQuery || statusFilter !== "ALL" ? (
@@ -1522,6 +1587,15 @@ function SchemeManagement() {
                             {scheme.department || "General Department"}
                           </span>
                         </div>
+                      </td>
+                      <td>
+                        {scheme.allocatedFunds != null ? (
+                          <strong>{formatCurrency(scheme.allocatedFunds)}</strong>
+                        ) : (
+                          <span style={{ color: "#d97706", fontWeight: 600, fontSize: "0.85rem" }}>
+                            Not configured
+                          </span>
+                        )}
                       </td>
                       <td>
                         <strong>{formatCurrency(scheme.maximumGrantAmount)}</strong>
@@ -1665,6 +1739,14 @@ function SchemeManagement() {
                       <span className="scheme-detail-label">Max Annual Income</span>
                       <span className="scheme-detail-val">
                         {formatCurrency(selectedScheme.maximumAnnualIncome)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="scheme-detail-label">Total Scheme Budget</span>
+                      <span className="scheme-detail-val">
+                        {selectedScheme.allocatedFunds != null
+                          ? formatCurrency(selectedScheme.allocatedFunds)
+                          : "Not configured"}
                       </span>
                     </div>
                     <div>

@@ -921,8 +921,10 @@ public class DisbursementService {
         List<SchemeFundUtilizationResponse> schemeBreakdowns = new ArrayList<>();
 
         for (Scheme s : allSchemes) {
-            BigDecimal schemeAllocated = s.getAllocatedFunds() != null ? s.getAllocatedFunds() : BigDecimal.ZERO;
-            totalAllocated = totalAllocated.add(schemeAllocated);
+            BigDecimal schemeAllocated = s.getAllocatedFunds();
+            if (schemeAllocated != null) {
+                totalAllocated = totalAllocated.add(schemeAllocated);
+            }
 
             List<GrantApplication> sApps = approvedApps.stream()
                     .filter(a -> a.getScheme() != null && Objects.equals(a.getScheme().getId(), s.getId()))
@@ -951,7 +953,9 @@ public class DisbursementService {
                     .filter(Objects::nonNull)
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
-            BigDecimal sRemaining = schemeAllocated.subtract(sApproved).max(BigDecimal.ZERO);
+            BigDecimal sRemaining = schemeAllocated != null
+                    ? schemeAllocated.subtract(sApproved).max(BigDecimal.ZERO)
+                    : null;
             BigDecimal sUtilizationPct = sApproved.compareTo(BigDecimal.ZERO) > 0
                     ? sDisbursed.multiply(BigDecimal.valueOf(100)).divide(sApproved, 2, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;

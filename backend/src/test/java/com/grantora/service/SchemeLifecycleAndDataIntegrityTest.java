@@ -489,4 +489,86 @@ class SchemeLifecycleAndDataIntegrityTest {
         assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
         assertTrue(ex.getReason().contains("Duplicate question ID"));
     }
+
+    @Test
+    void createAndEditScheme_savesAllocatedFundsAndPreservesNullUntilExplicitlySet() {
+        // Existing scheme starts with null allocatedFunds
+        assertNull(existingScheme.getAllocatedFunds());
+
+        // Partial/status update without allocatedFunds leaves existing null unchanged
+        Scheme statusOnlyUpdate = copyOf(existingScheme);
+        statusOnlyUpdate.setEligibilityQuestions(List.of(q1));
+        statusOnlyUpdate.setAllocatedFunds(null);
+        Scheme afterNullUpdate = schemeService.updateScheme(1L, statusOnlyUpdate);
+        assertNull(afterNullUpdate.getAllocatedFunds());
+
+        // Non-positive allocatedFunds is rejected
+        Scheme zeroBudgetUpdate = copyOf(existingScheme);
+        zeroBudgetUpdate.setEligibilityQuestions(List.of(q1));
+        zeroBudgetUpdate.setAllocatedFunds(BigDecimal.ZERO);
+        ResponseStatusException ex = assertThrows(
+                ResponseStatusException.class,
+                () -> schemeService.updateScheme(1L, zeroBudgetUpdate)
+        );
+        assertEquals(HttpStatus.BAD_REQUEST, ex.getStatusCode());
+
+        // Explicitly saving a positive budget updates allocatedFunds without altering maximumGrantAmount
+        Scheme explicitBudgetUpdate = copyOf(existingScheme);
+        explicitBudgetUpdate.setEligibilityQuestions(List.of(q1));
+        explicitBudgetUpdate.setAllocatedFunds(new BigDecimal("15000000.00"));
+        Scheme updated = schemeService.updateScheme(1L, explicitBudgetUpdate);
+        assertEquals(0, new BigDecimal("15000000.00").compareTo(updated.getAllocatedFunds()));
+        assertEquals(0, new BigDecimal("100000.00").compareTo(updated.getMaximumGrantAmount()));
+
+        // Creating a new scheme saves its allocatedFunds
+        Scheme newScheme = copyOf(existingScheme);
+        newScheme.setId(null);
+        SchemeEligibilityQuestion newQ = new SchemeEligibilityQuestion();
+        newQ.setQuestionText("Own land?");
+        newQ.setQuestionType("YES_NO");
+        newQ.setRequired(true);
+        newQ.setMaximumPoints(new BigDecimal("100.00"));
+        newQ.setAnswerOptions(List.of(
+                new SchemeEligibilityQuestion.AnswerOption("YES", "Yes", new BigDecimal("100.00"), true),
+                new SchemeEligibilityQuestion.AnswerOption("NO", "No", BigDecimal.ZERO, false)
+        ));
+        newScheme.setEligibilityQuestions(List.of(newQ));
+        newScheme.setAllocatedFunds(new BigDecimal("25000000.00"));
+        Scheme created = schemeService.createScheme(newScheme);
+        assertEquals(0, new BigDecimal("25000000.00").compareTo(created.getAllocatedFunds()));
+        assertEquals(1, created.getEligibilityConfigurationVersion());
+    }
+
+    @Test
+    void createAndEditScheme_initializesEligibilityVersionAndPreservesExistingVersion() {
+        Scheme newScheme = copyOf(existingScheme);
+        newScheme.setId(null);
+        newScheme.setEligibilityConfigurationVersion(null);
+        SchemeEligibilityQuestion newQ = new SchemeEligibilityQuestion();
+        newQ.setQuestionText("Own land?");
+        newQ.setQuestionType("YES_NO");
+        newQ.setRequired(true);
+        newQ.setMaximumPoints(new BigDecimal("100.00"));
+        newQ.setAnswerOptions(List.of(
+                new SchemeEligibilityQuestion.AnswerOption("YES", "Yes", new BigDecimal("100.00"), true),
+                new SchemeEligibilityQuestion.AnswerOption("NO", "No", BigDecimal.ZERO, false)
+        ));
+        newScheme.setEligibilityQuestions(List.of(newQ));
+        newScheme.setAllocatedFunds(new BigDecimal("5000000.00"));
+
+        Scheme created = schemeService.createScheme(newScheme);
+        assertEquals(1, created.getEligibilityConfigurationVersion());
+
+        existingScheme.setEligibilityConfigurationVersion(3);
+        existingScheme.setAllocatedFunds(new BigDecimal("12000000.00"));
+
+        Scheme updateWithoutVersionOrBudget = copyOf(existingScheme);
+        updateWithoutVersionOrBudget.setEligibilityQuestions(List.of(q1));
+        updateWithoutVersionOrBudget.setEligibilityConfigurationVersion(null);
+        updateWithoutVersionOrBudget.setAllocatedFunds(null);
+
+        Scheme updated = schemeService.updateScheme(1L, updateWithoutVersionOrBudget);
+        assertEquals(3, updated.getEligibilityConfigurationVersion());
+        assertEquals(0, new BigDecimal("12000000.00").compareTo(updated.getAllocatedFunds()));
+    }
 }
