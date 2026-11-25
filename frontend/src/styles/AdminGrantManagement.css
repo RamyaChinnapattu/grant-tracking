@@ -39,54 +39,56 @@
 .mgmt-tabs {
   display: flex;
   gap: 0.5rem;
-  border-bottom: 2px solid #e2e8f0;
+  padding: 6px;
+  background: #ffffff;
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
   margin-bottom: 1.5rem;
   overflow-x: auto;
-  padding-bottom: 2px;
 }
 
 .mgmt-tab-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.75rem 1.25rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #64748b;
+  padding: 0.7rem 1.2rem;
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
   background: transparent;
   border: none;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 10px;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.18s ease;
   white-space: nowrap;
 }
 
 .mgmt-tab-btn:hover {
-  color: #1e40af;
-  background-color: #f8fafc;
-  border-radius: 6px 6px 0 0;
+  color: var(--color-indigo);
+  background-color: var(--color-tint-lavender);
 }
 
 .mgmt-tab-btn.active {
-  color: #1d4ed8;
-  border-bottom-color: #1d4ed8;
-  background-color: #eff6ff;
-  border-radius: 6px 6px 0 0;
+  color: var(--color-indigo);
+  border-bottom-color: var(--color-indigo);
+  background-color: var(--color-tint-lavender);
 }
 
 .mgmt-badge {
   display: inline-block;
-  padding: 0.15rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.74rem;
+  font-weight: 750;
   border-radius: 9999px;
   background-color: #e2e8f0;
   color: #334155;
 }
 
 .mgmt-tab-btn.active .mgmt-badge {
-  background-color: #dbeafe;
-  color: #1e40af;
+  background-color: #5146d8;
+  color: #ffffff;
 }
 
 /* Common UI Elements */
@@ -185,54 +187,87 @@
 
 .mgmt-kpi-card {
   background: #ffffff;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 16px;
+  padding: 1.35rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.mgmt-kpi-card:nth-child(1) {
+  background: linear-gradient(155deg, #f6f4ff 0%, #f0edff 100%);
+  border-color: #dcd5ff;
+}
+
+.mgmt-kpi-card:nth-child(2) {
+  background: linear-gradient(155deg, #f4f8ff 0%, #eaf2ff 100%);
+  border-color: #cfe0ff;
+}
+
+.mgmt-kpi-card:nth-child(3) {
+  background: linear-gradient(155deg, #f1fcf8 0%, #e5f8f1 100%);
+  border-color: #bcebd9;
+}
+
+.mgmt-kpi-card:nth-child(4) {
+  background: linear-gradient(155deg, #fffcf4 0%, #fff7e9 100%);
+  border-color: #fde3b4;
+}
+
+.mgmt-kpi-card:nth-child(5) {
+  background: linear-gradient(155deg, #f5f7ff 0%, #eef2ff 100%);
+  border-color: #d7dfff;
+}
+
+.mgmt-kpi-card:nth-child(6) {
+  background: linear-gradient(155deg, #fff7ed 0%, #fff3df 100%);
+  border-color: #fedfb0;
 }
 
 .mgmt-kpi-card span {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #64748b;
-  margin-bottom: 0.5rem;
+  font-size: 0.84rem;
+  font-weight: 650;
+  color: var(--color-text-muted);
+  margin-bottom: 0.55rem;
 }
 
 .mgmt-kpi-card strong {
   display: block;
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #0f172a;
+  font-size: 1.58rem;
+  font-weight: 800;
+  color: var(--color-on-surface);
+  font-variant-numeric: tabular-nums;
 }
 
 .mgmt-kpi-card small {
   display: block;
-  font-size: 0.75rem;
-  color: #94a3b8;
-  margin-top: 0.25rem;
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  margin-top: 0.3rem;
 }
 
 /* Quick Action Banner */
 .mgmt-quick-actions {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 1rem 1.5rem;
+  background: linear-gradient(135deg, #101B35 0%, #1B275E 65%, #3B35A8 100%);
+  border: 1px solid rgba(81, 70, 216, 0.4);
+  border-radius: 16px;
+  padding: 1.15rem 1.5rem;
   margin-bottom: 1.5rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
+  box-shadow: var(--shadow-md);
 }
 
 .mgmt-quick-actions h3 {
   margin: 0;
-  font-size: 1rem;
-  color: #1e293b;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #ffffff;
 }
 
 .mgmt-quick-actions__buttons {
@@ -398,13 +433,14 @@
 
 .mgmt-modal {
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 16px;
   width: 100%;
   max-width: 750px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  border: 1px solid var(--color-outline-variant);
+  box-shadow: 0 24px 48px rgba(16, 27, 53, 0.24);
   overflow: hidden;
 }
 
@@ -422,7 +458,8 @@
 
 .mgmt-modal__header {
   padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid #e2e8f0;
+  background: linear-gradient(120deg, #f4f6fc 0%, #eef2ff 100%);
+  border-bottom: 1px solid var(--color-outline-variant);
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -431,8 +468,9 @@
 
 .mgmt-modal__header h2 {
   margin: 0;
-  font-size: 1.25rem;
-  color: #0f172a;
+  font-size: 1.2rem;
+  font-weight: 750;
+  color: var(--color-on-surface);
 }
 
 .mgmt-modal__body {

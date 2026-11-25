@@ -1,0 +1,1217 @@
+/* ==========================================================================
+   Grantora Second-Pass Modern FinTech Design System
+   Depth, Strong Typographic Scale, Overflow Safety & Visual Contrast
+   ========================================================================== */
+
+.saas-page {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  width: 100%;
+  max-width: 1400px;
+  min-width: 0;
+  margin: 0 auto;
+}
+
+.saas-page > * {
+  min-width: 0;
+}
+
+/* Contrasting FinTech Page Header */
+.saas-page-header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 26px 28px;
+  background: linear-gradient(125deg, #FFFFFF 0%, #F4F7FE 55%, #EAF0FC 100%);
+  border: 1px solid var(--color-card-border);
+  border-left: 5px solid var(--color-indigo);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.saas-page-header--hero {
+  background: var(--gradient-navy-hero);
+  border: 1px solid rgba(99, 88, 230, 0.45);
+  border-left: 5px solid var(--color-teal);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-lg);
+}
+
+.saas-page-header__copy {
+  min-width: 0;
+  flex: 1 1 340px;
+}
+
+.saas-page-header__top-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+
+.saas-page-header__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: var(--color-tint-lavender);
+  border: 1px solid #D7CEFE;
+  color: var(--color-indigo);
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.saas-page-header--hero .saas-page-header__eyebrow {
+  background: rgba(18, 184, 166, 0.22);
+  border-color: rgba(126, 244, 230, 0.35);
+  color: #7EF4E6;
+}
+
+.saas-page-header__title {
+  margin: 0;
+  color: var(--color-on-surface);
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.saas-page-header--hero .saas-page-header__title {
+  color: #FFFFFF;
+}
+
+.saas-page-header__subtitle {
+  margin: 8px 0 0;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+  max-width: 760px;
+  line-height: 1.55;
+}
+
+.saas-page-header--hero .saas-page-header__subtitle {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.saas-page-header__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+/* Deep Midnight Navy -> Royal Indigo FinTech Hero Banner */
+.fintech-hero {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  padding: 28px 30px;
+  border-radius: var(--radius-lg);
+  background: var(--gradient-navy-hero);
+  color: #FFFFFF;
+  border: 1px solid rgba(99, 88, 230, 0.42);
+  box-shadow: var(--shadow-lg);
+}
+
+.fintech-hero__glow {
+  position: absolute;
+  top: -130px;
+  right: -80px;
+  width: 380px;
+  height: 380px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(18, 184, 166, 0.28) 0%, rgba(52, 120, 246, 0.14) 48%, transparent 74%);
+  pointer-events: none;
+}
+
+.fintech-hero__top {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.fintech-hero__copy {
+  min-width: 0;
+  flex: 1 1 360px;
+  max-width: 720px;
+}
+
+.fintech-hero__eyebrow-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.fintech-hero__eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(18, 184, 166, 0.22);
+  border: 1px solid rgba(126, 244, 230, 0.35);
+  color: #7EF4E6;
+  font-size: 0.78rem;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.fintech-hero__title {
+  margin: 0;
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  color: #FFFFFF;
+  overflow-wrap: anywhere;
+}
+
+.fintech-hero__subtitle {
+  margin: 8px 0 0;
+  color: rgba(226, 232, 240, 0.9);
+  font-size: var(--fs-body);
+  line-height: 1.55;
+}
+
+.fintech-hero__actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.fintech-hero__metrics {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 14px;
+}
+
+.fintech-hero__metric {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 20px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.11);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+}
+
+.fintech-hero__metric span {
+  font-size: var(--fs-caption);
+  font-weight: 600;
+  color: rgba(226, 232, 240, 0.88);
+}
+
+.fintech-hero__metric strong {
+  font-size: clamp(1.5rem, 2vw, 1.85rem);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  color: #FFFFFF;
+  overflow-wrap: anywhere;
+}
+
+.fintech-hero__metric small {
+  font-size: var(--fs-caption);
+  color: #7EF4E6;
+}
+
+/* Multi-Tone FinTech KPI Grid (28-34px KPI Values, Clear Borders & Tints) */
+.saas-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 16px;
+}
+
+.saas-kpi-card {
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 22px 24px;
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  text-decoration: none;
+  text-align: left;
+  color: inherit;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+}
+
+a.saas-kpi-card:hover,
+button.saas-kpi-card:hover {
+  border-color: var(--color-indigo);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-2px);
+}
+
+.fintech-kpi--featured {
+  background: var(--gradient-navy-hero);
+  border-color: rgba(81, 70, 216, 0.55);
+  color: #FFFFFF;
+  box-shadow: var(--shadow-md);
+}
+
+.fintech-kpi--featured .saas-kpi-card__label {
+  color: rgba(226, 232, 240, 0.9);
+}
+
+.fintech-kpi--featured .saas-kpi-card__value {
+  color: #FFFFFF;
+}
+
+.fintech-kpi--featured .saas-kpi-card__meta {
+  color: #7EF4E6;
+}
+
+.fintech-kpi--featured .saas-kpi-card__icon {
+  background: rgba(255, 255, 255, 0.16);
+  color: #7EF4E6;
+}
+
+.fintech-kpi--lavender {
+  background: linear-gradient(155deg, #F7F5FF 0%, var(--color-tint-lavender) 100%);
+  border-color: #D6CEFE;
+}
+
+.fintech-kpi--lavender .saas-kpi-card__icon {
+  background: #FFFFFF;
+  color: #5146D8;
+  border: 1px solid #E2DCFF;
+  box-shadow: 0 3px 8px rgba(81, 70, 216, 0.14);
+}
+
+.fintech-kpi--blue {
+  background: linear-gradient(155deg, #F5F9FF 0%, var(--color-tint-blue) 100%);
+  border-color: #C7DCFF;
+}
+
+.fintech-kpi--blue .saas-kpi-card__icon {
+  background: #FFFFFF;
+  color: #2563EB;
+  border: 1px solid #D8E6FF;
+  box-shadow: 0 3px 8px rgba(52, 120, 246, 0.14);
+}
+
+.fintech-kpi--mint {
+  background: linear-gradient(155deg, #F2FCF8 0%, var(--color-tint-mint) 100%);
+  border-color: #B4E8D4;
+}
+
+.fintech-kpi--mint .saas-kpi-card__icon {
+  background: #FFFFFF;
+  color: #16A879;
+  border: 1px solid #CAF2E3;
+  box-shadow: 0 3px 8px rgba(22, 168, 121, 0.14);
+}
+
+.fintech-kpi--cream {
+  background: linear-gradient(155deg, #FFFBF3 0%, var(--color-tint-cream) 100%);
+  border-color: #FBD9A4;
+}
+
+.fintech-kpi--cream .saas-kpi-card__icon {
+  background: #FFFFFF;
+  color: #D97706;
+  border: 1px solid #FDE4BD;
+  box-shadow: 0 3px 8px rgba(217, 119, 6, 0.14);
+}
+
+.fintech-kpi--rose {
+  background: linear-gradient(155deg, #FFF7F8 0%, var(--color-tint-rose) 100%);
+  border-color: #F5C3CB;
+}
+
+.fintech-kpi--rose .saas-kpi-card__icon {
+  background: #FFFFFF;
+  color: #D93848;
+  border: 1px solid #F8D5DB;
+  box-shadow: 0 3px 8px rgba(217, 56, 72, 0.14);
+}
+
+.saas-kpi-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.saas-kpi-card__label {
+  font-size: var(--fs-label);
+  font-weight: 650;
+  color: var(--color-text-muted);
+  line-height: 1.35;
+}
+
+.saas-kpi-card__icon {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: var(--color-tint-lavender);
+  color: var(--color-indigo);
+  flex-shrink: 0;
+}
+
+.saas-kpi-card__icon--teal {
+  background: var(--color-tint-mint);
+  color: var(--color-emerald);
+}
+
+.saas-kpi-card__icon--success {
+  background: var(--color-tint-mint);
+  color: var(--color-success);
+}
+
+.saas-kpi-card__icon--warning {
+  background: var(--color-tint-cream);
+  color: var(--color-warning);
+}
+
+.saas-kpi-card__icon--danger {
+  background: var(--color-tint-rose);
+  color: var(--color-error);
+}
+
+.saas-kpi-card__value {
+  font-size: var(--fs-kpi);
+  font-weight: 800;
+  color: var(--color-on-surface);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.saas-kpi-card__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.saas-kpi-card__meta {
+  font-size: var(--fs-caption);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  line-height: 1.4;
+}
+
+/* Elevated Panels & Differentiated Section Containers */
+.saas-panel {
+  min-width: 0;
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  padding: 24px 26px;
+}
+
+.saas-panel--secondary {
+  background: var(--color-surface-secondary);
+  border-color: #CDD8EE;
+}
+
+.saas-panel--tinted-lavender {
+  background: linear-gradient(180deg, #F5F3FF 0%, #FFFFFF 100%);
+  border-color: #DCD4FE;
+}
+
+.saas-panel--tinted-blue {
+  background: linear-gradient(180deg, #EEF4FF 0%, #FFFFFF 100%);
+  border-color: #CEDFFF;
+}
+
+.saas-panel--tinted-mint {
+  background: linear-gradient(180deg, #ECFBF5 0%, #FFFFFF 100%);
+  border-color: #C3EEDB;
+}
+
+.saas-panel--tinted-warm {
+  background: linear-gradient(180deg, #FFF7EC 0%, #FFFFFF 100%);
+  border-color: #FBDDB1;
+}
+
+.saas-panel__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.saas-panel__title {
+  margin: 0;
+  font-size: var(--fs-h2);
+  font-weight: 750;
+  color: var(--color-on-surface);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.saas-panel__subtitle {
+  margin: 4px 0 0;
+  font-size: var(--fs-label);
+  color: var(--color-text-muted);
+  line-height: 1.45;
+}
+
+/* Section Container Band (Separates inner white cards cleanly) */
+.saas-section-band {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  background: var(--color-surface-secondary);
+  border: 1px solid #D3DDF0;
+  border-radius: var(--radius-lg);
+}
+
+/* Interactive FinTech Donut Chart */
+.fintech-donut {
+  display: grid;
+  grid-template-columns: 172px minmax(0, 1fr);
+  align-items: center;
+  gap: 24px;
+}
+
+.fintech-donut__visual {
+  position: relative;
+  width: 172px;
+  height: 172px;
+  margin: 0 auto;
+}
+
+.fintech-donut__svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.fintech-donut__center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  padding: 20px;
+}
+
+.fintech-donut__center span {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  line-height: 1.2;
+}
+
+.fintech-donut__center strong {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: var(--color-on-surface);
+  line-height: 1.15;
+}
+
+.fintech-donut__center small {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--color-indigo);
+}
+
+.fintech-donut__legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.fintech-donut__legend-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: #FFFFFF;
+  border: 1px solid var(--color-card-border);
+  font-size: var(--fs-label);
+  cursor: pointer;
+  transition: background 140ms ease, border-color 140ms ease;
+}
+
+.fintech-donut__legend-item.is-active,
+.fintech-donut__legend-item:hover {
+  background: var(--color-tint-lavender);
+  border-color: #C7BCFD;
+}
+
+.fintech-donut__legend-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--color-on-surface-variant);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.fintech-donut__swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.fintech-donut__legend-right {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.fintech-donut__legend-right strong {
+  color: var(--color-on-surface);
+  font-weight: 750;
+}
+
+.fintech-donut__legend-right small {
+  color: var(--color-text-muted);
+  font-size: var(--fs-caption);
+}
+
+.fintech-donut__empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--color-text-muted);
+  font-size: var(--fs-body);
+}
+
+/* FinTech Progress Meter */
+.fintech-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.fintech-progress__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.fintech-progress__label {
+  font-size: var(--fs-label);
+  font-weight: 650;
+  color: inherit;
+}
+
+.fintech-progress__pct {
+  font-size: var(--fs-label);
+  font-weight: 750;
+  color: var(--color-indigo);
+  font-variant-numeric: tabular-nums;
+}
+
+.fintech-hero .fintech-progress__pct {
+  color: #7EF4E6;
+}
+
+.fintech-progress__track {
+  height: 10px;
+  width: 100%;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.28);
+  overflow: hidden;
+}
+
+.fintech-progress__fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 360ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.fintech-progress__fill--indigo {
+  background: var(--gradient-indigo-blue);
+}
+
+.fintech-progress__fill--emerald {
+  background: var(--gradient-teal-emerald);
+}
+
+.fintech-progress__fill--amber {
+  background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+}
+
+.fintech-progress__sub {
+  font-size: var(--fs-caption);
+  color: var(--color-text-muted);
+}
+
+.fintech-hero .fintech-progress__sub {
+  color: rgba(226, 232, 240, 0.88);
+}
+
+/* Buttons (Readable, Unclipped, Consistent Height) */
+.saas-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 18px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: var(--fs-label);
+  font-weight: 650;
+  line-height: 1.25;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.saas-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.saas-btn--sm {
+  min-height: 36px;
+  padding: 6px 14px;
+  font-size: var(--fs-caption);
+  border-radius: 8px;
+}
+
+.saas-btn--primary {
+  background: var(--gradient-indigo-blue);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(81, 70, 216, 0.25);
+}
+
+.saas-btn--primary:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(81, 70, 216, 0.35);
+}
+
+.saas-btn--accent {
+  background: var(--gradient-teal-emerald);
+  color: #FFFFFF;
+  box-shadow: 0 4px 14px rgba(18, 184, 166, 0.25);
+}
+
+.saas-btn--accent:hover:not(:disabled) {
+  box-shadow: 0 6px 20px rgba(22, 168, 121, 0.35);
+}
+
+.saas-btn--secondary {
+  background: #FFFFFF;
+  border-color: var(--color-outline);
+  color: var(--color-on-surface-variant);
+  box-shadow: var(--shadow-xs);
+}
+
+.saas-btn--secondary:hover:not(:disabled) {
+  background: var(--color-tint-lavender);
+  border-color: var(--color-indigo);
+  color: var(--color-indigo);
+}
+
+.saas-btn--hero-ghost {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #FFFFFF;
+}
+
+.saas-btn--hero-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.saas-btn--danger {
+  background: #FFFFFF;
+  border-color: #F5C3CB;
+  color: var(--color-error-text);
+}
+
+.saas-btn--danger:hover:not(:disabled) {
+  background: var(--color-tint-rose);
+}
+
+.saas-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Semantic Status Badges */
+.saas-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: var(--fs-caption);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.saas-badge--success {
+  background: var(--color-tint-mint);
+  border: 1px solid #BCEBD9;
+  color: #0E7A58;
+}
+
+.saas-badge--info {
+  background: var(--color-tint-blue);
+  border: 1px solid #C7DCFF;
+  color: #1E4FD0;
+}
+
+.saas-badge--teal {
+  background: #D9FBF5;
+  border: 1px solid #9AEFE0;
+  color: #0B7065;
+}
+
+.saas-badge--indigo {
+  background: var(--color-tint-lavender);
+  border: 1px solid #D6CEFE;
+  color: var(--color-indigo);
+}
+
+.saas-badge--warning {
+  background: var(--color-tint-cream);
+  border: 1px solid #FBD9A4;
+  color: #9A5504;
+}
+
+.saas-badge--danger {
+  background: var(--color-tint-rose);
+  border: 1px solid #F5C3CB;
+  color: #9F1F2E;
+}
+
+.saas-badge--neutral {
+  background: var(--color-surface-secondary);
+  border: 1px solid var(--color-card-border);
+  color: var(--color-secondary);
+}
+
+/* Bar Charts (Real Data Visualization) */
+.saas-bar-chart {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.saas-bar-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: var(--color-surface-low);
+  border: 1px solid var(--color-card-border);
+}
+
+.saas-bar-item__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: var(--fs-label);
+}
+
+.saas-bar-item__title {
+  font-weight: 700;
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.saas-bar-item__meta {
+  font-size: var(--fs-caption);
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.saas-bar-track {
+  position: relative;
+  height: 11px;
+  background: #DFE6F3;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.saas-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  transition: width 380ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.saas-bar-fill--committed {
+  background: rgba(81, 70, 216, 0.28);
+}
+
+.saas-bar-fill--disbursed {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--gradient-teal-emerald);
+}
+
+/* Skeleton Loader */
+@keyframes saasShimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.saas-skeleton {
+  border-radius: var(--radius-sm);
+  background: linear-gradient(90deg, #E8EDF7 25%, #DCE4F3 50%, #E8EDF7 75%);
+  background-size: 200% 100%;
+  animation: saasShimmer 1.4s ease-in-out infinite;
+}
+
+/* Alerts & Empty States */
+.saas-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 14px 18px;
+  border-radius: var(--radius-md);
+  font-size: var(--fs-body);
+  font-weight: 550;
+}
+
+.saas-alert--error {
+  background: var(--color-tint-rose);
+  border: 1px solid #F5C3CB;
+  color: var(--color-error-text);
+}
+
+.saas-alert--success {
+  background: var(--color-tint-mint);
+  border: 1px solid #B4E8D4;
+  color: var(--color-success);
+}
+
+.saas-alert--info {
+  background: var(--color-tint-blue);
+  border: 1px solid #C7DCFF;
+  color: var(--color-info-text);
+}
+
+.saas-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 44px 24px;
+  border: 1.5px dashed #C5D1E5;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, #F6F8FE 0%, #FFFFFF 100%);
+  color: var(--color-text-muted);
+}
+
+.saas-empty__icon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--color-tint-lavender);
+  color: var(--color-indigo);
+}
+
+.saas-empty h4 {
+  margin: 4px 0 0;
+  color: var(--color-on-surface);
+  font-size: var(--fs-h3);
+}
+
+.saas-empty p {
+  margin: 0;
+  max-width: 480px;
+  font-size: var(--fs-body);
+}
+
+/* ==========================================================================
+   Global Container Normalization, Overflow Protection & Enterprise Controls
+   ========================================================================== */
+
+.admin-grant-mgmt,
+.ben-grant-workspace,
+.officer-review-workspace,
+.verification-workflow,
+.fund-analytics,
+.admin-dash,
+.dashboard-home,
+.scheme-management,
+.grant-applications,
+.beneficiary-notifications {
+  width: 100%;
+  max-width: 1400px !important;
+  min-width: 0;
+  margin: 0 auto !important;
+  padding: 0 !important;
+  color: var(--color-on-surface);
+}
+
+.admin-grant-mgmt .mgmt-header h1,
+.ben-grant-workspace .ben-header h1,
+.officer-review-workspace .officer-header h1 {
+  font-size: var(--fs-h1);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--color-on-surface);
+}
+
+.mgmt-card,
+.ben-card,
+.officer-card,
+.fund-panel,
+.fund-filter-panel,
+.scheme-form-card,
+.dash-table-wrap,
+.dash-notif-preview-card,
+.admin-dashboard__table-wrap {
+  min-width: 0;
+  background: var(--color-surface-lowest);
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+.mgmt-kpi-card,
+.fund-kpis article,
+.verification-stat-card {
+  min-width: 0;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-card-border);
+  box-shadow: var(--shadow-sm);
+  transition: transform 180ms ease, box-shadow 180ms ease;
+}
+
+.mgmt-kpi-card:hover,
+.fund-kpis article:hover,
+.verification-stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+}
+
+.mgmt-btn,
+.officer-tab-btn,
+.ben-tab-btn,
+.mgmt-tab-btn,
+.fund-button,
+.notif-btn,
+.admin-dash-btn,
+.scheme-management__button,
+.grant-applications__button,
+.verification-button {
+  font-family: var(--font);
+  font-size: var(--fs-label);
+  border-radius: 10px;
+}
+
+.mgmt-btn.primary,
+.fund-button:not(.secondary):not(.quiet),
+.notif-btn--primary,
+.admin-dash-btn--primary,
+.scheme-management__button--primary,
+.grant-applications__button--primary,
+.verification-button--primary {
+  background: var(--gradient-indigo-blue) !important;
+  border-color: transparent !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(81, 70, 216, 0.22);
+}
+
+.mgmt-btn.primary:hover:not(:disabled),
+.fund-button:not(.secondary):not(.quiet):hover:not(:disabled),
+.notif-btn--primary:hover:not(:disabled),
+.admin-dash-btn--primary:hover:not(:disabled),
+.scheme-management__button--primary:hover:not(:disabled),
+.grant-applications__button--primary:hover:not(:disabled),
+.verification-button--primary:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgba(81, 70, 216, 0.32);
+}
+
+.mgmt-btn.success {
+  background: var(--gradient-teal-emerald) !important;
+  border-color: transparent !important;
+  color: #FFFFFF !important;
+  box-shadow: 0 4px 12px rgba(22, 168, 121, 0.24);
+}
+
+/* FinTech Pill Tabs */
+.mgmt-tab-btn.active,
+.ben-tab-btn.active,
+.officer-tab-btn.active,
+.verification-tab--active {
+  color: var(--color-indigo) !important;
+  border-bottom-color: var(--color-indigo) !important;
+  background-color: var(--color-tint-lavender) !important;
+}
+
+/* Form Inputs: Distinct Visible Boundaries & Adequate Internal Padding */
+.saas-page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.saas-page select,
+.saas-page textarea {
+  min-height: 42px;
+  background-color: #FFFFFF;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 10px;
+  padding: 9px 13px;
+  font-size: var(--fs-body);
+  color: var(--color-on-surface);
+  transition: border-color 150ms ease, box-shadow 150ms ease, background-color 150ms ease;
+}
+
+.saas-page input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):focus,
+.saas-page select:focus,
+.saas-page textarea:focus {
+  outline: none;
+  border-color: var(--color-indigo);
+  box-shadow: 0 0 0 3px rgba(81, 70, 216, 0.16);
+}
+
+/* Enterprise Tables: Clear Headers, Comfortable Padding, Responsive Scroll */
+.dash-table-wrap,
+.mgmt-table-wrap,
+.grant-applications__table-wrap,
+.admin-dashboard__table-wrap,
+.fund-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-card-border);
+  background: #FFFFFF;
+}
+
+.mgmt-table th,
+.dash-table th,
+.grant-applications__table th,
+.admin-dashboard__table th,
+.fund-table-wrap th {
+  background: #EAF0FC !important;
+  color: #34425C !important;
+  font-size: var(--fs-caption) !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 14px 18px !important;
+  border-bottom: 1.5px solid #D3DDF0 !important;
+  white-space: nowrap;
+}
+
+.mgmt-table td,
+.dash-table td,
+.grant-applications__table td,
+.admin-dashboard__table td,
+.fund-table-wrap td {
+  font-size: var(--fs-table);
+  padding: 15px 18px !important;
+  border-bottom: 1px solid #EAEFF7;
+  color: var(--color-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.mgmt-table tbody tr:hover,
+.dash-table tbody tr:hover,
+.grant-applications__table tbody tr:hover,
+.admin-dashboard__table tbody tr:hover,
+.fund-table-wrap tbody tr:hover {
+  background: #F4F7FE;
+}
+
+/* Universal Long Identifier & Email Wrapping */
+.saas-page td,
+.saas-page dd,
+.saas-page p,
+.saas-page span,
+.saas-page strong {
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .fintech-donut {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .fintech-donut__legend {
+    width: 100%;
+  }
+
+  .saas-page-header,
+  .fintech-hero,
+  .saas-panel {
+    padding: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .saas-kpi-card,
+  .saas-btn,
+  .fintech-progress__fill,
+  .saas-bar-fill {
+    transition: none;
+  }
+}
+
+/* Spin utility */
+@keyframes spinAnim {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.spin {
+  animation: spinAnim 1s linear infinite;
+}

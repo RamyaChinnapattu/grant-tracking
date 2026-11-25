@@ -126,9 +126,9 @@
 /* Modern Form Card */
 .scheme-form-card {
   border: 1px solid var(--color-outline-variant);
-  border-radius: 12px;
+  border-radius: 16px;
   background: var(--color-surface-lowest);
-  box-shadow: 0 2px 8px var(--color-shadow);
+  box-shadow: var(--shadow-sm);
   padding: 24px;
   display: flex;
   flex-direction: column;
@@ -147,7 +147,7 @@
 .scheme-form-card__header h3 {
   margin: 0 0 4px;
   font-size: 1.2rem;
-  font-weight: 700;
+  font-weight: 750;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -166,9 +166,9 @@
   flex-direction: column;
   gap: 16px;
   padding: 20px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 10px;
-  background: var(--color-surface-low);
+  border: 1px solid #dfe5f2;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8faff 0%, #f4f6fc 100%);
 }
 
 .scheme-form-section__header {
@@ -186,14 +186,15 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: var(--color-primary);
+  width: 30px;
+  height: 30px;
+  border-radius: 10px;
+  background: var(--gradient-indigo-blue);
   color: #ffffff;
   font-size: 0.85rem;
-  font-weight: 700;
+  font-weight: 750;
   flex-shrink: 0;
+  box-shadow: 0 3px 8px rgba(81, 70, 216, 0.25);
 }
 
 .scheme-form-section__header h4 {
@@ -623,12 +624,12 @@
 .scheme-list-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 12px;
-  background: var(--color-surface-lowest);
-  padding: 24px;
-  box-shadow: 0 2px 8px var(--color-shadow);
+  gap: 20px;
+  border: 1px solid #CEDCF1;
+  border-radius: 18px;
+  background: var(--color-surface-secondary);
+  padding: 26px 28px;
+  box-shadow: var(--shadow-sm);
 }
 
 .scheme-list-header {
@@ -640,9 +641,9 @@
 }
 
 .scheme-list-header h3 {
-  margin: 0 0 2px;
-  font-size: 1.25rem;
-  font-weight: 700;
+  margin: 0 0 4px;
+  font-size: var(--fs-h2);
+  font-weight: 750;
   color: var(--color-on-surface);
 }
 
@@ -657,20 +658,23 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 7px 12px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 8px;
-  background: var(--color-surface-low);
+  padding: 6px 14px;
+  border: 1.5px solid #CBD5E1;
+  border-radius: 10px;
+  background: #FFFFFF;
   width: 100%;
-  max-width: 320px;
+  max-width: 340px;
 }
 
 .scheme-search-box input {
-  border: none;
-  background: transparent;
+  border: none !important;
+  box-shadow: none !important;
+  min-height: 30px !important;
+  padding: 4px 2px !important;
+  background: transparent !important;
   width: 100%;
   font: inherit;
-  font-size: 0.88rem;
+  font-size: var(--fs-label);
   color: var(--color-on-surface);
   outline: none;
 }
@@ -688,73 +692,82 @@
 /* Filter Tabs */
 .scheme-filter-tabs {
   display: flex;
-  gap: 6px;
-  border-bottom: 1px solid var(--color-outline-variant);
-  padding-bottom: 10px;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px;
+  background: #FFFFFF;
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  width: fit-content;
 }
 
 .scheme-filter-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 14px;
-  border-radius: 6px;
+  gap: 7px;
+  padding: 8px 16px;
+  border-radius: 9px;
   border: none;
   background: transparent;
   color: var(--color-text-muted);
-  font-size: 0.85rem;
-  font-weight: 500;
+  font-size: var(--fs-label);
+  font-weight: 650;
   cursor: pointer;
   transition: all 0.15s ease;
 }
 
 .scheme-filter-tab:hover {
-  background: var(--color-surface-low);
-  color: var(--color-on-surface);
+  background: var(--color-tint-lavender);
+  color: var(--color-indigo);
 }
 
 .scheme-filter-tab.is-active {
-  background: var(--color-surface-high, #e2e8f0);
-  color: var(--color-primary);
-  font-weight: 700;
+  background: var(--color-tint-lavender);
+  color: var(--color-indigo);
+  font-weight: 750;
 }
 
 .scheme-filter-count {
   display: inline-block;
-  padding: 1px 6px;
-  border-radius: 10px;
-  background: var(--color-surface-lowest);
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--color-surface-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
 }
 
 /* Schemes Table */
 .scheme-table-container {
   width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 8px;
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  background: #FFFFFF;
+  box-shadow: var(--shadow-xs);
 }
 
 .scheme-table {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
-  font-size: 0.88rem;
+  font-size: var(--fs-table);
 }
 
 .scheme-table th {
-  padding: 11px 14px;
-  background: var(--color-surface-low);
-  border-bottom: 1px solid var(--color-outline-variant);
-  font-weight: 600;
-  color: var(--color-on-surface-variant);
+  padding: 14px 18px;
+  background: #EAF0FC;
+  border-bottom: 1.5px solid #D3DDF0;
+  font-size: var(--fs-caption);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #34425C;
   white-space: nowrap;
 }
 
 .scheme-table td {
-  padding: 12px 14px;
-  border-bottom: 1px solid var(--color-outline-variant);
+  padding: 15px 18px;
+  border-bottom: 1px solid #EAEFF7;
   vertical-align: middle;
 }
 

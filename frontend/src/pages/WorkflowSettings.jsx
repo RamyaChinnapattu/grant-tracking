@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Clock, RefreshCw, Save, ShieldCheck } from "lucide-react";
+import { Save } from "lucide-react";
 import api from "../services/api";
+import { AlertBanner, PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/DashboardHome.css";
 import "../styles/AdminDashboardHome.css";
 
@@ -91,55 +92,17 @@ export default function WorkflowSettings() {
   ];
 
   return (
-    <div className="admin-dash">
-      <div className="dashboard-home__welcome">
-        <div className="dashboard-home__welcome-top">
-          <div>
-            <span className="dashboard-home__eyebrow">
-              Workflow Automation
-            </span>
-            <h2>Workflow Settings &amp; Deadlines</h2>
-            <p>
-              Configure turn-around SLAs and escalation timers across the three officer
-              review levels: Field, District, and Finance.
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="saas-page" style={{ maxWidth: "820px" }}>
+      <PageHeader
+        eyebrow="Workflow Automation"
+        title="Workflow Settings & Deadlines"
+        subtitle="Configure turn-around SLAs and escalation timers across Field, District, and Finance verification stages."
+      />
 
-      {status && (
-        <div
-          style={{
-            padding: "12px 18px",
-            background: "#dcfce7",
-            border: "1px solid #bbf7d0",
-            color: "#15803d",
-            borderRadius: "10px",
-            fontSize: "0.9rem",
-            fontWeight: 600,
-          }}
-          role="status"
-        >
-          {status}
-        </div>
-      )}
+      <AlertBanner type="success" message={status} onClose={() => setStatus("")} />
+      <AlertBanner type="error" message={error} onClose={() => setError("")} />
 
-      {error && (
-        <div className="dash-error-banner" role="alert">
-          <span>{error}</span>
-        </div>
-      )}
-
-      <div
-        style={{
-          background: "var(--color-surface-lowest)",
-          border: "1px solid var(--color-outline-variant)",
-          borderRadius: "14px",
-          padding: "26px",
-          boxShadow: "0 4px 16px var(--color-shadow)",
-          maxWidth: "760px",
-        }}
-      >
+      <div className="saas-panel">
         <div style={{ marginBottom: "20px" }}>
           <h3 style={{ margin: "0 0 6px", fontSize: "1.15rem" }}>
             Verification Stage Deadlines

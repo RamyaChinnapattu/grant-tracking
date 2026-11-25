@@ -52,6 +52,12 @@ import {
   getComplianceDocumentFile,
 } from "../services/complianceService";
 import { getSchemes } from "../services/schemeService";
+import {
+  DonutChart,
+  HeroBanner,
+  ProgressMeter,
+} from "../components/ui/SaaSPrimitives";
+import { FINTECH_CHART_COLORS } from "../utils/fintechCharts";
 import "../styles/AdminGrantManagement.css";
 
 function formatCurrency(amount) {
@@ -738,26 +744,28 @@ export default function AdminGrantManagement() {
   }, [plans, planSearch, planStatusFilter]);
 
   return (
-    <div className="admin-grant-mgmt">
-      {/* Page Header */}
-      <header className="mgmt-header">
-        <div>
-          <h1>Grant Management</h1>
-          <p>
-            Consolidated financial administration: budgets, staged plans, compliance evidence, release queues, and utilization audits.
-          </p>
-        </div>
-        <div className="mgmt-header__actions">
+    <div className="admin-grant-mgmt saas-page">
+      <HeroBanner
+        eyebrow="Treasury & Financial Control"
+        title="Grant Management"
+        subtitle="Consolidated financial administration: scheme budgets, staged disbursement plans, compliance verification, and release queues."
+        badge={
+          <span className="saas-badge saas-badge--teal">
+            {readyInstallments.length} Ready to Release
+          </span>
+        }
+        actions={
           <button
-            className="mgmt-btn secondary"
+            className="saas-btn saas-btn--hero-ghost"
+            type="button"
             onClick={() => loadAllData(true)}
             disabled={refreshing || loading}
           >
-            <RefreshCw size={16} className={refreshing ? "spin" : ""} />
-            {refreshing ? "Refreshing…" : "Refresh"}
+            <RefreshCw size={15} className={refreshing ? "spin" : ""} />
+            {refreshing ? "Refreshing…" : "Refresh Data"}
           </button>
-        </div>
-      </header>
+        }
+      />
 
       {/* Global Alerts */}
       {error && (
@@ -897,14 +905,14 @@ export default function AdminGrantManagement() {
           {/* Quick Action Navigation */}
           <div className="mgmt-quick-actions">
             <div>
-              <h3>Workflow Shortcuts</h3>
-              <p style={{ margin: 0, color: "#64748b", fontSize: "0.85rem" }}>
+              <h3>Financial Workflow Shortcuts</h3>
+              <p style={{ margin: "3px 0 0", color: "rgba(226, 232, 240, 0.88)", fontSize: "0.85rem" }}>
                 Jump directly to the next stage of the grant disbursement cycle.
               </p>
             </div>
             <div className="mgmt-quick-actions__buttons">
               <button
-                className="mgmt-btn primary"
+                className="saas-btn saas-btn--accent"
                 onClick={() => {
                   switchTab("plans");
                   setShowCreatePlanModal(true);
@@ -912,12 +920,64 @@ export default function AdminGrantManagement() {
               >
                 <Plus size={16} /> Setup Disbursement Plan
               </button>
-              <button className="mgmt-btn secondary" onClick={() => switchTab("releases")}>
-                <CircleDollarSign size={16} /> Review Payment Releases ({readyInstallments.length})
+              <button className="saas-btn saas-btn--hero-ghost" onClick={() => switchTab("releases")}>
+                <CircleDollarSign size={16} /> Payment Releases ({readyInstallments.length})
               </button>
-              <button className="mgmt-btn secondary" onClick={() => switchTab("compliance")}>
-                <BadgeCheck size={16} /> Compliance Submissions ({complianceQueue.length})
+              <button className="saas-btn saas-btn--hero-ghost" onClick={() => switchTab("compliance")}>
+                <BadgeCheck size={16} /> Compliance Queue ({complianceQueue.length})
               </button>
+            </div>
+          </div>
+
+          {/* Fund Allocation Breakdown Chart */}
+          <div className="mgmt-card" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem", alignItems: "center" }}>
+            <div>
+              <h2 style={{ margin: "0 0 0.25rem", fontSize: "1.1rem", fontWeight: 750 }}>
+                Treasury Allocation Breakdown
+              </h2>
+              <p style={{ margin: "0 0 1rem", fontSize: "0.84rem", color: "var(--color-text-muted)" }}>
+                Disbursed funds vs committed unpaid sanctions vs remaining scheme budget
+              </p>
+              <DonutChart
+                segments={[
+                  {
+                    label: "Disbursed Funds",
+                    value: financialTotals.totalDisbursed,
+                    color: FINTECH_CHART_COLORS.emerald,
+                  },
+                  {
+                    label: "Committed (Pending Release)",
+                    value: Math.max(0, financialTotals.totalCommitted - financialTotals.totalDisbursed),
+                    color: FINTECH_CHART_COLORS.indigo,
+                  },
+                  {
+                    label: "Remaining Uncommitted Budget",
+                    value: financialTotals.remainingBudget,
+                    color: FINTECH_CHART_COLORS.blue,
+                  },
+                ]}
+                centerLabel="Total Budget"
+                centerValue={formatCurrency(financialTotals.totalAllocated)}
+                formatValue={(v) => formatCurrency(v)}
+                emptyText="Configure scheme budgets or approve grants to visualize fund distribution."
+              />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "1rem", borderRadius: "14px", background: "var(--color-surface-low)", border: "1px solid var(--color-outline-variant)" }}>
+              <ProgressMeter
+                label="Sanction Utilization (Committed / Budget)"
+                value={financialTotals.totalCommitted}
+                max={financialTotals.totalAllocated || 1}
+                tone="indigo"
+                sublabel={`${formatCurrency(financialTotals.totalCommitted)} committed out of ${formatCurrency(financialTotals.totalAllocated)}`}
+              />
+              <ProgressMeter
+                label="Payout Completion (Disbursed / Committed)"
+                value={financialTotals.totalDisbursed}
+                max={financialTotals.totalCommitted || 1}
+                tone="emerald"
+                sublabel={`${formatCurrency(financialTotals.totalDisbursed)} actually transferred to beneficiaries`}
+              />
             </div>
           </div>
 
@@ -1009,6 +1069,50 @@ export default function AdminGrantManagement() {
               </div>
             )}
           </div>
+
+          {regionalData.length > 0 && (
+            <div className="mgmt-card">
+              <div className="mgmt-card-header">
+                <div>
+                  <h2>Regional Disbursement &amp; Utilization Analytics</h2>
+                  <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "#64748b" }}>
+                    Live approved vs. disbursed performance across districts
+                  </p>
+                </div>
+              </div>
+              <div className="mgmt-table-wrap">
+                <table className="mgmt-table">
+                  <thead>
+                    <tr>
+                      <th>Region</th>
+                      <th>Applications</th>
+                      <th>Approved</th>
+                      <th>Disbursed</th>
+                      <th>Compliance Rate</th>
+                      <th>Utilization</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {regionalData.slice(0, 8).map((r, idx) => (
+                      <tr key={`${r.state}-${r.district}-${idx}`}>
+                        <td>
+                          <strong>{r.district || "All Districts"}</strong>
+                          <div style={{ fontSize: "0.75rem", color: "#64748b" }}>
+                            {r.state || "—"}
+                          </div>
+                        </td>
+                        <td>{r.totalApplications ?? 0}</td>
+                        <td>{formatCurrency(r.totalApprovedAmount)}</td>
+                        <td>{formatCurrency(r.totalDisbursedAmount)}</td>
+                        <td>{Number(r.complianceRate ?? 0).toFixed(1)}%</td>
+                        <td>{Number(r.fundUtilizationRate ?? 0).toFixed(1)}%</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

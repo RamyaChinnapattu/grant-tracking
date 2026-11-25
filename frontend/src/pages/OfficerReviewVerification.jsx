@@ -28,6 +28,7 @@ import {
   getUtilizationReviewQueue,
   reviewUtilization,
 } from "../services/fundAnalyticsService";
+import { AlertBanner, PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/OfficerReviewVerification.css";
 import "../styles/AdminGrantManagement.css";
 
@@ -192,52 +193,26 @@ export default function OfficerReviewVerification() {
   };
 
   return (
-    <div className="officer-review-workspace">
-      {/* Header */}
-      <header className="officer-header">
-        <div>
-          <h1>Review &amp; Verification</h1>
-          <p>
-            Field, District, and Finance verification queue for milestone compliance documents and beneficiary grant expenditure.
-          </p>
-        </div>
-        <div>
+    <div className="officer-review-workspace saas-page">
+      <PageHeader
+        eyebrow="Officer Verification"
+        title="Review & Verification"
+        subtitle="Field, District, and Finance verification queue for milestone compliance documents and beneficiary grant expenditure."
+        actions={
           <button
-            className="mgmt-btn secondary"
+            className="saas-btn saas-btn--secondary"
+            type="button"
             onClick={() => loadData(true)}
             disabled={refreshing || loading}
           >
-            <RefreshCw size={16} className={refreshing ? "spin" : ""} />
+            <RefreshCw size={15} className={refreshing ? "spin" : ""} />
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
-        </div>
-      </header>
+        }
+      />
 
-      {/* Global Alerts */}
-      {error && (
-        <div className="mgmt-alert error" role="alert">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-          <button
-            onClick={() => setError("")}
-            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
-      {successMsg && (
-        <div className="mgmt-alert success" role="status">
-          <CheckCircle2 size={18} />
-          <span>{successMsg}</span>
-          <button
-            onClick={() => setSuccessMsg("")}
-            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      <AlertBanner type="error" message={error} onClose={() => setError("")} />
+      <AlertBanner type="success" message={successMsg} onClose={() => setSuccessMsg("")} />
 
       {/* Tabs */}
       <nav className="officer-tabs">

@@ -51,11 +51,36 @@
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 18px;
+  padding: 16px 18px;
   border: 1px solid var(--color-outline-variant);
-  border-radius: 10px;
+  border-radius: 16px;
   background: var(--color-surface-lowest);
-  box-shadow: 0 2px 8px var(--color-shadow);
+  box-shadow: var(--shadow-sm);
+}
+
+.verification-stat-card:nth-child(1) {
+  background: linear-gradient(155deg, #f6f4ff 0%, #f0edff 100%);
+  border-color: #dcd5ff;
+}
+
+.verification-stat-card:nth-child(2) {
+  background: linear-gradient(155deg, #f4f8ff 0%, #eaf2ff 100%);
+  border-color: #cfe0ff;
+}
+
+.verification-stat-card:nth-child(3) {
+  background: linear-gradient(155deg, #fffcf4 0%, #fff7e9 100%);
+  border-color: #fde3b4;
+}
+
+.verification-stat-card:nth-child(4) {
+  background: linear-gradient(155deg, #f1fcf8 0%, #e5f8f1 100%);
+  border-color: #bcebd9;
+}
+
+.verification-stat-card:nth-child(5) {
+  background: linear-gradient(155deg, #fff6f7 0%, #fdf0f2 100%);
+  border-color: #f7ccd3;
 }
 
 .verification-stat-card__icon {
@@ -100,15 +125,15 @@
 }
 
 .verification-stat-card__value {
-  font-size: 1.5rem;
+  font-size: var(--fs-kpi);
   font-weight: 800;
   color: var(--color-on-surface);
-  line-height: 1.2;
+  line-height: 1.15;
 }
 
 .verification-stat-card__label {
-  font-size: 0.8rem;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 650;
   color: var(--color-text-muted);
 }
 
@@ -116,8 +141,11 @@
 .verification-tabs {
   display: flex;
   gap: 8px;
-  border-bottom: 2px solid var(--color-outline-variant);
-  padding-bottom: 2px;
+  padding: 7px;
+  background: #FFFFFF;
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
   overflow-x: auto;
 }
 
@@ -127,11 +155,12 @@
   gap: 8px;
   padding: 10px 18px;
   border: none;
-  border-bottom: 3px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 10px;
   background: transparent;
   color: var(--color-text-muted);
   font: inherit;
-  font-size: 0.9rem;
+  font-size: var(--fs-label);
   font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
@@ -139,14 +168,14 @@
 }
 
 .verification-tab:hover {
-  color: var(--color-primary);
-  background: var(--color-surface-low);
-  border-radius: 6px 6px 0 0;
+  color: var(--color-indigo);
+  background: var(--color-tint-lavender);
 }
 
 .verification-tab--active {
-  color: var(--color-primary);
-  border-bottom-color: var(--color-primary);
+  color: var(--color-indigo);
+  border-bottom-color: var(--color-indigo);
+  background: var(--color-tint-lavender);
   font-weight: 750;
 }
 
@@ -154,19 +183,19 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 7px;
   border-radius: 999px;
-  background: var(--color-surface-high);
+  background: var(--color-surface-secondary);
   color: var(--color-on-surface);
-  font-size: 0.75rem;
-  font-weight: 700;
+  font-size: 0.78rem;
+  font-weight: 750;
 }
 
 .verification-tab--active .verification-tab__badge {
-  background: var(--color-primary-fixed);
-  color: var(--color-primary);
+  background: var(--color-indigo);
+  color: #FFFFFF;
 }
 
 /* Controls */
@@ -176,6 +205,11 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
+  padding: 16px 20px;
+  background: #FFFFFF;
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
 }
 
 .verification-search {
@@ -257,65 +291,70 @@
 .verification-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .verification-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 18px;
-  padding: 18px 22px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 12px;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 22px 24px;
+  border: 1px solid var(--color-card-border);
+  border-left: 4px solid var(--color-indigo);
+  border-radius: 16px;
   background: var(--color-surface-lowest);
-  box-shadow: 0 2px 10px var(--color-shadow);
+  box-shadow: var(--shadow-sm);
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .verification-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 4px 14px var(--color-shadow);
+  border-color: var(--color-indigo);
+  box-shadow: var(--shadow-md);
 }
 
 .verification-card--selected {
-  border-color: var(--color-primary);
-  background: var(--color-surface-low);
+  border-color: var(--color-indigo);
+  background: var(--color-tint-lavender);
 }
 
 .verification-card__main {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  flex: 1;
+  gap: 10px;
+  flex: 1 1 320px;
+  min-width: 0;
 }
 
 .verification-card__title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .verification-card__title h3 {
   margin: 0;
-  color: var(--color-primary);
-  font-size: 1.08rem;
-  font-weight: 700;
+  color: var(--color-on-surface);
+  font-size: var(--fs-h3);
+  font-weight: 750;
+  overflow-wrap: anywhere;
 }
 
 .verification-card__meta {
   display: flex;
-  gap: 16px;
+  gap: 18px;
   flex-wrap: wrap;
-  font-size: 0.88rem;
-  color: var(--color-on-surface);
+  font-size: var(--fs-label);
+  color: var(--color-on-surface-variant);
+  overflow-wrap: anywhere;
 }
 
 .verification-card__meta span {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
 }
 
 .verification-card__assignee {
@@ -323,42 +362,43 @@
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
-  font-size: 0.82rem;
+  font-size: var(--fs-caption);
   color: var(--color-text-muted);
 }
 
 .verification-assignee-badge {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: var(--color-surface-high);
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--color-surface-secondary);
   color: var(--color-on-surface);
-  font-weight: 600;
+  font-weight: 650;
 }
 
 .verification-assignee-badge--me {
-  background: #dbeafe;
-  color: #1e40af;
-  border: 1px solid #bfdbfe;
+  background: var(--color-tint-blue);
+  color: #1E4FD0;
+  border: 1px solid #C7DCFF;
 }
 
 .verification-assignee-badge--none {
-  background: #fee2e2;
-  color: #991b1b;
+  background: var(--color-tint-rose);
+  color: var(--color-error-text);
+  border: 1px solid #F5C3CB;
 }
 
 /* Badges / Tags */
 .verification-tag {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 9px;
+  gap: 5px;
+  padding: 5px 11px;
   border-radius: 999px;
-  background: var(--color-surface-high);
+  background: var(--color-surface-secondary);
   color: var(--color-on-surface);
-  font-size: 0.74rem;
+  font-size: var(--fs-caption);
   font-weight: 700;
 }
 

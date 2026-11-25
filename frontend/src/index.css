@@ -1,36 +1,100 @@
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+@import "./styles/saas-system.css";
 
 :root {
-  --color-primary: #00288e;
-  --color-primary-container: #1e40af;
-  --color-on-primary: #ffffff;
-  --color-primary-fixed: #dde1ff;
-  --color-surface: #f8f9ff;
-  --color-surface-dim: #cbdbf5;
-  --color-surface-lowest: #ffffff;
-  --color-surface-low: #eff4ff;
-  --color-surface-container: #e5eeff;
-  --color-surface-high: #dce9ff;
-  --color-surface-highest: #d3e4fe;
-  --color-on-surface: #0b1c30;
-  --color-on-surface-variant: #444653;
-  --color-text-muted: #5c647a;
-  --color-outline: #757684;
-  --color-outline-variant: #c4c5d5;
-  --color-secondary: #565e74;
-  --color-secondary-container: #dae2fd;
-  --color-secondary-text: #3f465c;
-  --color-tertiary: #003d28;
-  --color-success: #002114;
-  --color-success-strong: #00563a;
-  --color-success-container: #85f8c4;
-  --color-error: #ba1a1a;
-  --color-error-text: #93000a;
-  --color-error-container: #ffdad6;
-  --color-warning-container: #dae2fd;
-  --color-warning-text: #3f465c;
-  --color-shadow: rgba(11, 28, 48, 0.08);
+  /* Core Brand & FinTech Accents */
+  --color-navy: #101B35;
+  --color-navy-elevated: #172052;
+  --color-indigo: #5146D8;
+  --color-indigo-soft: #6358E6;
+  --color-blue: #3478F6;
+  --color-teal: #12B8A6;
+  --color-emerald: #16A879;
 
+  /* Primary & Accent Semantic Mappings */
+  --color-primary: #5146D8;
+  --color-primary-container: #101B35;
+  --color-primary-hover: #4237C4;
+  --color-on-primary: #FFFFFF;
+  --color-primary-fixed: #F0EDFF;
+
+  --color-accent: #12B8A6;
+  --color-accent-strong: #16A879;
+  --color-accent-soft: #E5F8F1;
+
+  /* Distinct Layered Surfaces (No White-on-White) */
+  --color-surface: #F2F4FA;
+  --color-surface-dim: #DCE3EF;
+  --color-surface-lowest: #FFFFFF;
+  --color-surface-low: #F7F9FD;
+  --color-surface-secondary: #EAF0FC;
+  --color-surface-container: #E5ECF8;
+  --color-surface-high: #DCE3EF;
+  --color-surface-highest: #CBD5E1;
+
+  /* Differentiated Tinted Panels */
+  --color-tint-lavender: #F0EDFF;
+  --color-tint-blue: #E8F1FF;
+  --color-tint-mint: #E5F8F1;
+  --color-tint-cream: #FFF4E5;
+  --color-tint-rose: #FDEEEF;
+
+  /* Typography & Visible Borders */
+  --color-on-surface: #17233C;
+  --color-on-surface-variant: #334155;
+  --color-text-muted: #64748B;
+  --color-outline: #CBD5E1;
+  --color-outline-variant: #DCE3EF;
+  --color-card-border: #E0E6F0;
+
+  /* Secondary & Status States */
+  --color-secondary: #475569;
+  --color-secondary-container: #EAF0FC;
+  --color-secondary-text: #334155;
+  --color-tertiary: #12B8A6;
+
+  --color-success: #0E7A58;
+  --color-success-strong: #16A879;
+  --color-success-container: #E5F8F1;
+
+  --color-error: #D93848;
+  --color-error-text: #9F1F2E;
+  --color-error-container: #FDEEEF;
+
+  --color-warning: #D97706;
+  --color-warning-text: #9A5504;
+  --color-warning-container: #FFF4E5;
+
+  --color-info-text: #1E4FD0;
+  --color-info-container: #E8F1FF;
+
+  /* FinTech Gradients & Elevation Shadows */
+  --gradient-navy-hero: linear-gradient(135deg, #101B35 0%, #1B275E 58%, #5146D8 100%);
+  --gradient-sidebar: linear-gradient(180deg, #0D162C 0%, #141E4B 55%, #1E1C5B 100%);
+  --gradient-indigo-blue: linear-gradient(135deg, #5146D8 0%, #3478F6 100%);
+  --gradient-teal-emerald: linear-gradient(135deg, #12B8A6 0%, #16A879 100%);
+
+  --color-shadow: rgba(16, 27, 53, 0.07);
+  --shadow-xs: 0 1px 3px rgba(16, 27, 53, 0.05);
+  --shadow-sm: 0 3px 12px rgba(16, 27, 53, 0.055), 0 1px 3px rgba(16, 27, 53, 0.04);
+  --shadow-md: 0 10px 26px rgba(16, 27, 53, 0.085), 0 3px 8px rgba(81, 70, 216, 0.06);
+  --shadow-lg: 0 20px 44px rgba(16, 27, 53, 0.18);
+
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+
+  /* Standardized Typographic Scale (16px Base) */
+  --fs-h1: clamp(1.75rem, 2.4vw, 2rem);       /* 28-32px */
+  --fs-h2: clamp(1.25rem, 1.8vw, 1.5rem);     /* 20-24px */
+  --fs-h3: clamp(1rem, 1.25vw, 1.125rem);     /* 16-18px */
+  --fs-kpi: clamp(1.75rem, 2.2vw, 2.15rem);   /* 28-34px */
+  --fs-body: 0.9375rem;                       /* 15px */
+  --fs-label: 0.875rem;                       /* 14px */
+  --fs-table: 0.875rem;                       /* 14px */
+  --fs-caption: 0.8125rem;                    /* 13px */
+
+  /* Legacy Variable Aliases */
   --navy: var(--color-primary);
   --blue: var(--color-primary);
   --light: var(--color-surface-low);
@@ -39,11 +103,11 @@
   --muted: var(--color-text-muted);
   --border: var(--color-outline-variant);
   --green: var(--color-success-strong);
-  --font: "Inter", sans-serif;
+  --font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 
   font-family: var(--font);
   font-size: 16px;
-  line-height: 1.5;
+  line-height: 1.55;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -64,29 +128,16 @@ body {
   background: var(--color-surface);
   color: var(--color-on-surface);
   font-family: var(--font);
+  font-size: var(--fs-body);
 }
 
 button,
 input,
 select,
 textarea {
-  font: inherit;
-}
-
-button {
-  color: inherit;
+  font-family: inherit;
 }
 
 a {
   color: var(--color-primary);
-}
-
-#root {
-  width: 100%;
-  min-height: 100vh;
-}
-
-::selection {
-  background: var(--color-primary-fixed);
-  color: var(--color-on-surface);
 }

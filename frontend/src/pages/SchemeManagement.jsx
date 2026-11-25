@@ -30,6 +30,7 @@ import {
   getSchemes,
   updateScheme,
 } from "../services/schemeService";
+import { PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/SchemeManagement.css";
 
 const STANDARD_CATEGORIES = [
@@ -699,25 +700,23 @@ function SchemeManagement() {
   };
 
   return (
-    <div className="scheme-management">
-      {/* Top Header */}
-      <header className="scheme-management__header">
-        <div>
-          <h2>Scheme Management</h2>
-          <p>
-            Configure, publish, and maintain government grant schemes and their eligibility questionnaires.
-          </p>
-        </div>
-        <button
-          className="scheme-management__button scheme-management__button--secondary"
-          type="button"
-          onClick={loadSchemes}
-          disabled={loading}
-        >
-          <RefreshCw size={15} className={loading ? "spin-icon" : ""} aria-hidden="true" />
-          {loading ? "Refreshing…" : "Refresh"}
-        </button>
-      </header>
+    <div className="scheme-management saas-page">
+      <PageHeader
+        eyebrow="Program Catalog"
+        title="Scheme Management"
+        subtitle="Configure, publish, and maintain government grant schemes, allocated budgets, and eligibility questionnaires."
+        actions={
+          <button
+            className="saas-btn saas-btn--secondary"
+            type="button"
+            onClick={loadSchemes}
+            disabled={loading}
+          >
+            <RefreshCw size={15} className={loading ? "spin" : ""} aria-hidden="true" />
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        }
+      />
 
       {/* Global Alerts */}
       {error && (

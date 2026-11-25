@@ -1,11 +1,12 @@
 .beneficiary-page {
   max-width: 850px;
-  margin: 40px auto;
-  padding: 30px;
-  background: var(--color-surface-lowest);
+  margin: 24px auto;
+  padding: 32px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
   color: var(--color-on-surface);
-  border-radius: 16px;
-  box-shadow: 0 8px 25px var(--color-shadow);
+  border: 1px solid var(--color-outline-variant);
+  border-radius: 18px;
+  box-shadow: var(--shadow-md);
 }
 
 .beneficiary-page h1 {

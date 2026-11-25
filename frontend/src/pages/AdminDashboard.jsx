@@ -26,6 +26,7 @@ import {
   updateUser,
   deleteUser,
 } from "../services/userService";
+import { AlertBanner, PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/AdminDashboard.css";
 import "../styles/AdminDashboardHome.css";
 
@@ -312,67 +313,55 @@ function AdminDashboard() {
   }, [users, activeRoleFilter, searchQuery]);
 
   return (
-    <div className="admin-dashboard">
-      <div className="admin-dashboard__main">
-        <section aria-labelledby="users-management-heading">
-          <div className="admin-dashboard__section-heading">
-            <div>
-              <h2 id="users-management-heading">
-                Beneficiary &amp; Officer Management
-              </h2>
-              <p>
-                Manage registered citizen beneficiaries, verification officers
-                across Stage 1 (Field), Stage 2 (District), Stage 3 (Finance),
-                and administrators.
-              </p>
-            </div>
-            <div style={{ display: "flex", gap: "10px" }}>
+    <div className="saas-page">
+      <section aria-labelledby="users-management-heading" style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
+        <PageHeader
+          eyebrow="Directory & Access Control"
+          title="Beneficiary & Officer Management"
+          subtitle="Manage registered citizen beneficiaries, verification officers across Field, District, and Finance levels, and administrators."
+          actions={
+            <>
               <button
-                className="admin-dashboard__secondary-button"
+                className="saas-btn saas-btn--secondary"
                 type="button"
                 onClick={loadData}
                 disabled={loading}
               >
+                <RefreshCw size={15} className={loading ? "spin" : ""} />
                 {loading ? "Loading..." : "Refresh"}
               </button>
               {activeRoleFilter !== "BENEFICIARY" && (
                 <button
                   type="button"
-                  className="admin-dash-btn admin-dash-btn--primary"
+                  className="saas-btn saas-btn--primary"
                   onClick={() => setShowAddUserModal(true)}
                 >
                   <UserPlus size={15} />
                   Add Officer / Staff
                 </button>
               )}
-            </div>
-          </div>
+            </>
+          }
+        />
 
-          {error && (
-            <div className="admin-dashboard__notice admin-dashboard__notice--error" role="alert">
-              <span>{error}</span>
+        <AlertBanner
+          type="error"
+          message={error}
+          action={
+            error && (
               <button
-                className="admin-dashboard__secondary-button"
+                className="saas-btn saas-btn--sm saas-btn--secondary"
                 type="button"
                 onClick={loadData}
                 disabled={loading}
               >
                 Try again
               </button>
-            </div>
-          )}
-
-          {actionError && (
-            <p className="admin-dashboard__notice admin-dashboard__notice--error" role="alert">
-              {actionError}
-            </p>
-          )}
-
-          {successMessage && (
-            <p className="admin-dashboard__notice admin-dashboard__notice--success" role="status">
-              {successMessage}
-            </p>
-          )}
+            )
+          }
+        />
+        <AlertBanner type="error" message={actionError} onClose={() => setActionError("")} />
+        <AlertBanner type="success" message={successMessage} onClose={() => setSuccessMessage("")} />
 
           {/* Role Filter Tabs & Search */}
           <div className="admin-dash-toolbar" style={{ marginBottom: "18px" }}>
@@ -674,7 +663,6 @@ function AdminDashboard() {
             )}
           </section>
         )}
-      </div>
 
       {/* ADD OFFICER MODAL */}
       {showAddUserModal && (

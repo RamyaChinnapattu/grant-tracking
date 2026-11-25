@@ -22,6 +22,7 @@ import {
   getPendingActionText,
   getStepState,
 } from "../utils/applicationDisbursement";
+import { PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/GrantApplicationManagement.css";
 
 const APPLICATION_STATUSES = [
@@ -745,52 +746,47 @@ function GrantApplicationManagement() {
 
   return (
     <section
-      className="grant-applications"
+      className="grant-applications saas-page"
       aria-labelledby="grant-applications-heading"
     >
-      <div className="grant-applications__heading">
-        <div>
-          <h2 id="grant-applications-heading">
-            {isApplyPage
-              ? editingId
-                ? editingStatus === "NEEDS_CORRECTION"
-                  ? "Correct your application"
-                  : "Edit your draft"
-                : "Apply for a Grant"
-              : isTrackingPage
-                ? "My Applications"
-                : "Applications & Verification"}
-          </h2>
-
-          <p>
-            {isApplyPage
-              ? "Complete the form and submit your application for review."
-              : isTrackingPage
-                ? "Track application status, review decisions, and respond to correction requests."
-                : "Review grant applications, inspect details, and track verification decisions."}
-          </p>
-        </div>
-
-        <div style={{ display: "flex", gap: "10px" }}>
-          {!isBeneficiary && (
-            <Link
-              to="/admin/verification"
-              className="grant-applications__button grant-applications__button--secondary"
-              style={{ textDecoration: "none", display: "inline-flex", alignItems: "center" }}
+      <PageHeader
+        eyebrow={isBeneficiary ? "Beneficiary Portal" : "Applications & Verification"}
+        title={
+          isApplyPage
+            ? editingId
+              ? editingStatus === "NEEDS_CORRECTION"
+                ? "Correct your application"
+                : "Edit your draft"
+              : "Apply for a Grant"
+            : isTrackingPage
+              ? "My Applications"
+              : "Applications & Verification"
+        }
+        subtitle={
+          isApplyPage
+            ? "Complete the form and submit your application for verification."
+            : isTrackingPage
+              ? "Track application status, verification milestones, disbursement progress, and correction requests."
+              : "Review grant applications, inspect details, track verification decisions, and monitor disbursement progress."
+        }
+        actions={
+          <>
+            {!isBeneficiary && (
+              <Link to="/admin/verification" className="saas-btn saas-btn--secondary">
+                Verification Queue
+              </Link>
+            )}
+            <button
+              className="saas-btn saas-btn--secondary"
+              type="button"
+              onClick={handleRefresh}
+              disabled={loading}
             >
-              Verification Queue
-            </Link>
-          )}
-          <button
-            className="grant-applications__button grant-applications__button--secondary"
-            type="button"
-            onClick={handleRefresh}
-            disabled={loading}
-          >
-            {loading ? "Loading..." : "Refresh"}
-          </button>
-        </div>
-      </div>
+              {loading ? "Loading..." : "Refresh"}
+            </button>
+          </>
+        }
+      />
 
       {error && (
         <div

@@ -15,6 +15,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead,
 } from "../services/notificationService";
+import { AlertBanner, PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/BeneficiaryNotifications.css";
 
 function BeneficiaryNotifications() {
@@ -105,59 +106,55 @@ function BeneficiaryNotifications() {
   });
 
   return (
-    <div className="beneficiary-notifications">
-      <div className="beneficiary-notifications__header">
-        <div>
-          <div className="beneficiary-notifications__title-row">
-            <h2>Notifications</h2>
+    <div className="beneficiary-notifications saas-page">
+      <PageHeader
+        eyebrow="Inbox & Alerts"
+        title="Notifications"
+        subtitle={
+          isOfficer
+            ? "Stay informed on workflow assignments, review actions, and milestone compliance alerts."
+            : "Stay informed on verification updates, officer decisions, and disbursement releases for your grants."
+        }
+        actions={
+          <>
             {unreadCount > 0 && (
-              <span className="beneficiary-notifications__badge">
-                {unreadCount} unread
-              </span>
+              <span className="saas-badge saas-badge--info">{unreadCount} unread</span>
             )}
-          </div>
-          <p className="beneficiary-notifications__subtitle">
-            {isOfficer
-              ? "Stay informed on workflow assignments, review actions, and milestone compliance alerts."
-              : "Stay informed on verification updates, officer decisions, and next steps for your grant applications."}
-          </p>
-        </div>
-
-        <div className="beneficiary-notifications__actions">
-          <button
-            className="notif-btn notif-btn--outline"
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-          >
-            <RefreshCw size={15} />
-            Refresh
-          </button>
-          {unreadCount > 0 && (
             <button
-              className="notif-btn notif-btn--primary"
+              className="saas-btn saas-btn--secondary"
               type="button"
-              onClick={handleMarkAllRead}
+              onClick={loadData}
+              disabled={loading}
             >
-              <CheckCheck size={16} />
-              Mark all as read
+              <RefreshCw size={15} className={loading ? "spin" : ""} />
+              Refresh
             </button>
-          )}
-        </div>
-      </div>
+            {unreadCount > 0 && (
+              <button
+                className="saas-btn saas-btn--primary"
+                type="button"
+                onClick={handleMarkAllRead}
+              >
+                <CheckCheck size={15} />
+                Mark all as read
+              </button>
+            )}
+          </>
+        }
+      />
 
-      {actionMessage && (
-        <div className="notif-alert notif-alert--info">{actionMessage}</div>
-      )}
-
-      {error && (
-        <div className="notif-alert notif-alert--error">
-          <p>{error}</p>
-          <button type="button" onClick={loadData}>
-            Retry
-          </button>
-        </div>
-      )}
+      <AlertBanner type="info" message={actionMessage} onClose={() => setActionMessage("")} />
+      <AlertBanner
+        type="error"
+        message={error}
+        action={
+          error && (
+            <button type="button" className="saas-btn saas-btn--sm saas-btn--secondary" onClick={loadData}>
+              Retry
+            </button>
+          )
+        }
+      />
 
       <div className="beneficiary-notifications__filters">
         <button

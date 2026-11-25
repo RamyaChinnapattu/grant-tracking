@@ -1,6 +1,6 @@
 .admin-dashboard {
-  min-height: 100vh;
-  background: var(--color-surface);
+  min-height: auto;
+  background: transparent;
   color: var(--color-on-surface);
   text-align: left;
 }
@@ -34,9 +34,9 @@
 }
 
 .admin-dashboard__main {
-  max-width: 1200px;
+  max-width: 1380px;
   margin: 0 auto;
-  padding: 32px 24px;
+  padding: 0;
 }
 
 .admin-dashboard__section-heading {
@@ -102,20 +102,20 @@
 .admin-dashboard__actions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
-  white-space: nowrap;
 }
 
 .admin-dashboard__secondary-button,
 .admin-dashboard__delete-button {
-  padding: 8px 11px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 6px;
+  padding: 8px 14px;
+  border: 1px solid var(--color-outline);
+  border-radius: 9px;
   background: var(--color-surface-lowest);
-  color: var(--color-primary);
+  color: var(--color-indigo);
   font: inherit;
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 650;
   cursor: pointer;
 }
 
@@ -168,11 +168,11 @@
 
 .admin-dashboard__details {
   margin-top: 24px;
-  padding: 22px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 10px;
-  background: var(--color-surface-lowest);
-  box-shadow: 0 4px 14px var(--color-shadow);
+  padding: 26px 28px;
+  border: 1px solid #CEDCF1;
+  border-radius: 16px;
+  background: var(--color-surface-secondary);
+  box-shadow: var(--shadow-sm);
 }
 
 .admin-dashboard__details-grid {

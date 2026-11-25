@@ -76,9 +76,13 @@ function Login() {
 
   return (
     <div className="login-container">
+      <Link to="/" className="auth-brand">
+        <span className="auth-brand__mark" aria-hidden="true">G</span>
+        <span>Grantora</span>
+      </Link>
       <form className="login-form" onSubmit={handleSubmit}>
-        <h1>Grantora</h1>
-        <p>Sign in to your account</p>
+        <h1>Welcome back</h1>
+        <p className="auth-subtitle">Sign in to your Grantora government grant portal</p>
 
         {error && <div className="error-message">{error}</div>}
 

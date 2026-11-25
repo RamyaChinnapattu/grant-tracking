@@ -29,6 +29,7 @@ import {
   getVerificationQueue,
   submitVerificationDecision,
 } from "../services/grantApplicationService";
+import { PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/VerificationWorkflow.css";
 
 const emptyOfficer = {
@@ -722,32 +723,28 @@ function VerificationWorkflow({ historyOnly = false }) {
   }, [isAdmin, officerLevel, historyOnly]);
 
   return (
-    <div className="verification-workflow">
-      {/* Top Header */}
-      <header className="verification-workflow__header">
-        <div>
-          <span className="verification-workflow__eyebrow">
-            {portalHeading.eyebrow}
-          </span>
-          <h2>{portalHeading.title}</h2>
-          <p>{portalHeading.subtitle}</p>
-        </div>
-
-        <button
-          type="button"
-          className="verification-button"
-          onClick={loadData}
-          disabled={loading}
-          title="Refresh queue and status"
-        >
-          <RefreshCw
-            size={16}
-            className={loading ? "spin" : ""}
-            aria-hidden="true"
-          />
-          {loading ? "Refreshing…" : "Refresh"}
-        </button>
-      </header>
+    <div className="verification-workflow saas-page">
+      <PageHeader
+        eyebrow={portalHeading.eyebrow}
+        title={portalHeading.title}
+        subtitle={portalHeading.subtitle}
+        actions={
+          <button
+            type="button"
+            className="saas-btn saas-btn--secondary"
+            onClick={loadData}
+            disabled={loading}
+            title="Refresh queue and status"
+          >
+            <RefreshCw
+              size={15}
+              className={loading ? "spin" : ""}
+              aria-hidden="true"
+            />
+            {loading ? "Refreshing…" : "Refresh"}
+          </button>
+        }
+      />
 
       {/* Metric Cards Row */}
       <div className="verification-stats">

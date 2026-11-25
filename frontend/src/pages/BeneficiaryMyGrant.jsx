@@ -21,6 +21,11 @@ import {
   submitComplianceDocument,
   getComplianceDocumentFile,
 } from "../services/complianceService";
+import {
+  AlertBanner,
+  HeroBanner,
+  ProgressMeter,
+} from "../components/ui/SaaSPrimitives";
 import "../styles/BeneficiaryMyGrant.css";
 import "../styles/AdminGrantManagement.css";
 
@@ -244,52 +249,47 @@ export default function BeneficiaryMyGrant() {
   };
 
   return (
-    <div className="ben-grant-workspace">
-      {/* Header */}
-      <header className="ben-header">
-        <div>
-          <h1>My Grant</h1>
-          <p>
-            Track your grant payment schedule and upload milestone compliance documents.
-          </p>
-        </div>
-        <div>
+    <div className="ben-grant-workspace saas-page">
+      <HeroBanner
+        eyebrow="Citizen Grant Wallet"
+        title="My Grant & Payment Schedule"
+        subtitle="Track your staged disbursement plan, verified payout dates, remaining balance, and upload milestone compliance documents."
+        badge={
+          !loadingCompliance && !errorCompliance && pendingDocsCount > 0 ? (
+            <span className="saas-badge saas-badge--warning">
+              {pendingDocsCount} Document{pendingDocsCount === 1 ? "" : "s"} Pending
+            </span>
+          ) : null
+        }
+        actions={
           <button
-            className="mgmt-btn secondary"
+            className="saas-btn saas-btn--hero-ghost"
+            type="button"
             onClick={handleRefreshAll}
             disabled={refreshing || loadingPlans || loadingCompliance}
           >
-            <RefreshCw size={16} className={refreshing ? "spin" : ""} />
+            <RefreshCw size={15} className={refreshing ? "spin" : ""} />
             {refreshing ? "Refreshing…" : "Refresh"}
           </button>
-        </div>
-      </header>
+        }
+      >
+        {!loadingPlans && !errorPlans && (financialSummary?.totalApproved || 0) > 0 && (
+          <div style={{ position: "relative", zIndex: 1, background: "rgba(255,255,255,0.08)", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.14)" }}>
+            <ProgressMeter
+              label="Grant Release Completion"
+              value={financialSummary?.totalDisbursed || 0}
+              max={financialSummary?.totalApproved || 1}
+              tone="emerald"
+              sublabel={`${formatCurrency(financialSummary?.totalDisbursed)} released of ${formatCurrency(
+                financialSummary?.totalApproved
+              )} sanctioned`}
+            />
+          </div>
+        )}
+      </HeroBanner>
 
-      {/* Global Alerts */}
-      {error && (
-        <div className="mgmt-alert error" role="alert">
-          <AlertCircle size={18} />
-          <span>{error}</span>
-          <button
-            onClick={() => setError("")}
-            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
-      {successMsg && (
-        <div className="mgmt-alert success" role="status">
-          <CheckCircle2 size={18} />
-          <span>{successMsg}</span>
-          <button
-            onClick={() => setSuccessMsg("")}
-            style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer" }}
-          >
-            <X size={16} />
-          </button>
-        </div>
-      )}
+      <AlertBanner type="error" message={error} onClose={() => setError("")} />
+      <AlertBanner type="success" message={successMsg} onClose={() => setSuccessMsg("")} />
 
       {/* Financial KPI Summary */}
       <div className="mgmt-kpi-grid">

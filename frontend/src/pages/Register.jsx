@@ -51,23 +51,16 @@ function Register() {
 
   return (
     <div className="login-container">
+      <Link to="/" className="auth-brand">
+        <span className="auth-brand__mark" aria-hidden="true">G</span>
+        <span>Grantora</span>
+      </Link>
       <form className="login-form" onSubmit={handleSubmit}>
-        <h1>Grantora</h1>
-        <p>Create your beneficiary account</p>
+        <h1>Create Account</h1>
+        <p className="auth-subtitle">Register for a Grantora beneficiary account</p>
 
         {error && <div className="error-message">{error}</div>}
-        {success && (
-          <div
-            style={{
-              color: "var(--color-success)",
-              background: "var(--color-success-container)",
-              padding: "10px 12px",
-              borderRadius: "6px",
-            }}
-          >
-            {success}
-          </div>
-        )}
+        {success && <div className="success-message">{success}</div>}
 
         <label>Full Name</label>
         <input

@@ -105,30 +105,35 @@
 .beneficiary-notifications__filters {
   display: flex;
   gap: 8px;
-  border-bottom: 1px solid var(--color-outline-variant);
-  padding-bottom: 8px;
+  padding: 6px;
+  background: #FFFFFF;
+  border: 1px solid var(--color-card-border);
+  border-radius: 12px;
+  box-shadow: var(--shadow-xs);
+  width: fit-content;
 }
 
 .notif-tab {
   background: none;
   border: none;
-  font-size: 0.88rem;
-  font-weight: 600;
+  font-size: var(--fs-label);
+  font-weight: 650;
   color: var(--color-text-muted);
-  padding: 6px 14px;
-  border-radius: 6px;
+  padding: 8px 18px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 150ms ease;
 }
 
 .notif-tab:hover {
-  color: var(--color-on-surface);
-  background: var(--color-surface-low);
+  color: var(--color-indigo);
+  background: var(--color-tint-lavender);
 }
 
 .notif-tab--active {
-  color: var(--color-primary);
-  background: var(--color-primary-fixed);
+  color: var(--color-indigo);
+  background: var(--color-tint-lavender);
+  font-weight: 750;
 }
 
 .beneficiary-notifications__loading {
@@ -183,19 +188,21 @@
   gap: 16px;
   padding: 16px 20px;
   border: 1px solid var(--color-outline-variant);
-  border-radius: 10px;
+  border-radius: 14px;
   background: var(--color-surface-lowest);
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  box-shadow: var(--shadow-xs);
+  transition: border-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
 }
 
 .notif-card:hover {
-  border-color: var(--color-primary);
-  box-shadow: 0 4px 14px var(--color-shadow);
+  transform: translateY(-1px);
+  border-color: var(--color-indigo);
+  box-shadow: var(--shadow-md);
 }
 
 .notif-card--unread {
-  border-left: 4px solid var(--color-primary);
-  background: var(--color-surface-lowest);
+  border-left: 4px solid var(--color-indigo);
+  background: linear-gradient(90deg, #f6f4ff 0%, #ffffff 35%);
 }
 
 .notif-card__icon {
@@ -238,25 +245,28 @@
 }
 
 .notif-card__time {
-  font-size: 0.78rem;
+  font-size: var(--fs-caption);
   color: var(--color-text-muted);
+  font-weight: 600;
 }
 
 .notif-card__pill {
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 750;
   text-transform: uppercase;
-  color: var(--color-primary);
-  background: var(--color-primary-fixed);
-  padding: 1px 7px;
+  color: var(--color-indigo);
+  background: var(--color-tint-lavender);
+  border: 1px solid #D6CEFE;
+  padding: 2px 9px;
   border-radius: 999px;
 }
 
 .notif-card__message {
   margin: 0;
-  font-size: 0.92rem;
+  font-size: var(--fs-body);
   color: var(--color-on-surface);
-  line-height: 1.45;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .notif-card__footer {

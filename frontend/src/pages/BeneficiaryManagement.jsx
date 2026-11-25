@@ -4,6 +4,7 @@ import {
   createBeneficiary,
   updateMyBeneficiaryProfile,
 } from "../services/beneficiaryService";
+import { PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/BeneficiaryManagement.css";
 
 const initialForm = {
@@ -207,15 +208,12 @@ function BeneficiaryManagement() {
   const completionPct = Math.round((filledCount / coreFields.length) * 100);
 
   return (
-    <div style={styles.container}>
-      <div style={{ marginBottom: "20px" }}>
-        <h1 style={{ fontSize: "1.5rem", margin: "0 0 6px", color: "var(--color-on-surface)" }}>
-          My Beneficiary Profile
-        </h1>
-        <p style={{ color: "var(--color-text-muted)", margin: 0, fontSize: "0.95rem" }}>
-          Maintain accurate identity, contact, income, and geographical jurisdiction details for scheme eligibility and officer review.
-        </p>
-      </div>
+    <div style={styles.container} className="saas-page">
+      <PageHeader
+        eyebrow="Beneficiary Profile"
+        title="My Beneficiary Profile"
+        subtitle="Maintain accurate identity, contact, income, and geographical jurisdiction details for scheme eligibility and officer review."
+      />
 
       {/* Profile Completion Indicator */}
       <div

@@ -1,12 +1,11 @@
 .grant-applications {
-  margin: 28px 0;
-  padding: 24px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 12px;
-  background: var(--color-surface-lowest);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   color: var(--color-on-surface);
   text-align: left;
-  box-shadow: 0 4px 14px var(--color-shadow);
+  box-shadow: none;
 }
 
 .grant-applications__heading {
@@ -20,41 +19,42 @@
 .grant-applications__heading h2 {
   margin: 0 0 6px;
   color: var(--color-on-surface);
-  font-size: 1.4rem;
-  letter-spacing: normal;
+  font-size: var(--fs-h2);
+  letter-spacing: -0.02em;
 }
 
 .grant-applications__heading p,
 .grant-applications__help {
   color: var(--color-text-muted);
-  font-size: 0.9rem;
+  font-size: var(--fs-label);
 }
 
 .grant-applications__form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  margin-bottom: 24px;
-  padding: 20px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 9px;
-  background: var(--color-surface-low);
+  gap: 18px;
+  margin-bottom: 28px;
+  padding: 26px 28px;
+  border: 1px solid var(--color-card-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-lowest);
+  box-shadow: var(--shadow-sm);
 }
 
 .grant-applications__form h3,
 .grant-applications__details h3 {
   margin: 0;
   color: var(--color-on-surface);
-  font-size: 1.1rem;
+  font-size: var(--fs-h2);
 }
 
 .grant-applications__form label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   color: var(--color-on-surface-variant);
-  font-size: 0.85rem;
-  font-weight: 600;
+  font-size: var(--fs-label);
+  font-weight: 650;
 }
 
 .grant-applications__form input,
@@ -129,11 +129,11 @@ select.grant-applications__status {
 .grant-applications__eligibility-result {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 16px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 8px;
-  background: var(--color-surface-lowest);
+  gap: 12px;
+  padding: 20px 22px;
+  border: 1px solid #D6CEFE;
+  border-radius: 14px;
+  background: var(--color-tint-lavender);
 }
 
 .grant-applications__eligibility h4,
@@ -216,18 +216,23 @@ select.grant-applications__status {
 .grant-applications__actions {
   display: flex;
   align-items: center;
-  gap: 7px;
-  white-space: nowrap;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .grant-applications__button {
-  padding: 8px 11px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid var(--color-outline);
+  border-radius: 9px;
   font: inherit;
-  font-size: 0.82rem;
-  font-weight: 600;
+  font-size: var(--fs-caption);
+  font-weight: 650;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .grant-applications__button--primary {
@@ -283,26 +288,29 @@ select.grant-applications__status {
 .grant-applications__details {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-top: 22px;
-  padding: 20px;
-  border: 1px solid var(--color-outline-variant);
-  border-radius: 9px;
-  background: var(--color-surface-low);
-}
-
-.grant-applications__filters,
-.grant-applications__pagination,
-.grant-applications__document-preview-heading {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  gap: 20px;
+  margin-top: 24px;
+  padding: 26px 28px;
+  border: 1px solid #CEDCF1;
+  border-radius: 16px;
+  background: var(--color-surface-secondary);
+  box-shadow: var(--shadow-sm);
 }
 
 .grant-applications__filters {
-  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 16px 20px;
+  margin: 0;
+  background: #FFFFFF;
+  border: 1px solid var(--color-card-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
   color: var(--color-on-surface-variant);
-  font-size: 0.9rem;
+  font-size: var(--fs-label);
+  font-weight: 650;
 }
 
 .grant-applications__filters select {

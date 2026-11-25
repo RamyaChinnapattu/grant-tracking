@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { getAuditLogs } from "../services/auditService";
+import { AlertBanner, PageHeader, StatusBadge } from "../components/ui/SaaSPrimitives";
 import "../styles/DashboardHome.css";
 import "../styles/AdminDashboardHome.css";
 
@@ -105,43 +106,43 @@ function AdminAuditLogs() {
   }, [logs, actionFilter, searchQuery]);
 
   return (
-    <div className="admin-dash">
-      {/* Header */}
-      <div className="dashboard-home__welcome">
-        <div className="dashboard-home__welcome-top">
-          <div>
-            <span className="dashboard-home__eyebrow">
-              Compliance &amp; Governance
-            </span>
-            <h2>Administrative Audit Trail</h2>
-            <p>
-              Immutable audit history of citizen applications, officer verification
-              decisions, financial disbursements, compliance reviews, and administrative actions.
-            </p>
-          </div>
+    <div className="saas-page">
+      <PageHeader
+        eyebrow="Compliance & Governance"
+        title="Administrative Audit Trail"
+        subtitle="Immutable audit history of citizen applications, officer verification decisions, financial disbursements, compliance reviews, and administrative actions."
+        actions={
           <button
-            className="dash-refresh-btn"
+            className="saas-btn saas-btn--secondary"
             type="button"
             onClick={() => loadData(true)}
             disabled={loading || refreshing}
           >
             <RefreshCw
               size={15}
-              className={loading || refreshing ? "is-spinning" : ""}
+              className={loading || refreshing ? "spin" : ""}
             />
             {refreshing ? "Refreshing..." : "Sync Logs"}
           </button>
-        </div>
-      </div>
+        }
+      />
 
-      {error && (
-        <div className="dash-error-banner" role="alert">
-          <span>{error}</span>
-          <button type="button" onClick={() => loadData(true)}>
-            Try again
-          </button>
-        </div>
-      )}
+      <AlertBanner
+        type="error"
+        message={error}
+        onClose={() => setError("")}
+        action={
+          error && (
+            <button
+              type="button"
+              className="saas-btn saas-btn--sm saas-btn--secondary"
+              onClick={() => loadData(true)}
+            >
+              Try again
+            </button>
+          )
+        }
+      />
 
       {/* Filter Toolbar */}
       <div className="admin-dash-toolbar">

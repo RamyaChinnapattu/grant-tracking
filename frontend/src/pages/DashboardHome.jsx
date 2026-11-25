@@ -30,6 +30,13 @@ import {
 } from "../utils/applicationDisbursement";
 import AdminDashboardHome from "./AdminDashboardHome";
 import OfficerMilestone3Dashboard from "./OfficerMilestone3Dashboard";
+import {
+  AlertBanner,
+  HeroBanner,
+  KpiCard,
+  ProgressMeter,
+  SkeletonKpiRow,
+} from "../components/ui/SaaSPrimitives";
 import "../styles/DashboardHome.css";
 
 function BeneficiaryDashboardHome() {
@@ -162,187 +169,206 @@ function BeneficiaryDashboardHome() {
   };
 
   return (
-    <section className="dashboard-home">
-      {/* Welcome Banner */}
-      <div className="dashboard-home__welcome">
-        <div className="dashboard-home__welcome-top">
-          <span className="dashboard-home__eyebrow">
-            Beneficiary Portal
-          </span>
-          <button
-            className="dash-refresh-btn"
-            type="button"
-            onClick={loadData}
-            disabled={loading}
-            title="Refresh dashboard stats and notifications"
-          >
-            <RefreshCw size={15} className={loading ? "is-spinning" : ""} />
-            <span>{loading ? "Refreshing..." : "Refresh"}</span>
-          </button>
-        </div>
-        <h2>Welcome back, {firstName}</h2>
-        <p>
-          Track your grant applications, review officer verification decisions, and explore available subsidy programs.
-        </p>
-      </div>
-
-      {error && (
-        <div className="dash-error-banner" role="alert">
-          <span>{error}</span>
-          <button type="button" onClick={loadData}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {/* 5-Metric Summary Grid */}
-      <div className="dash-stats-grid">
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__icon dash-stat-card__icon--primary">
-            <ClipboardList size={22} />
+    <section className="saas-page">
+      <HeroBanner
+        eyebrow="Citizen Grant Wallet"
+        title={`Welcome back, ${firstName}`}
+        subtitle="Track grant approvals, officer verification milestones, compliance documents, and released disbursements in real time."
+        badge={
+          unreadNotifCount > 0 ? (
+            <span className="saas-badge saas-badge--teal">
+              {unreadNotifCount} New Alert{unreadNotifCount === 1 ? "" : "s"}
+            </span>
+          ) : null
+        }
+        actions={
+          <>
+            <Link to="/beneficiary/my-grant" className="saas-btn saas-btn--accent">
+              My Grant &amp; Payments
+            </Link>
+            <button
+              className="saas-btn saas-btn--hero-ghost"
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              title="Refresh dashboard stats and notifications"
+            >
+              <RefreshCw size={15} className={loading ? "spin" : ""} />
+              <span>{loading ? "Refreshing..." : "Refresh"}</span>
+            </button>
+          </>
+        }
+        metrics={[
+          {
+            label: "Sanctioned Grant Total",
+            value: loading ? "..." : formatCurrencyINR(disbursementTotals.totalApproved),
+            hint: `${approvedApps} approved grant${approvedApps === 1 ? "" : "s"}`,
+          },
+          {
+            label: "Released to Bank",
+            value: loading ? "..." : formatCurrencyINR(disbursementTotals.totalReleased),
+            hint: `${disbursementTotals.disbursedCount} fully disbursed`,
+          },
+          {
+            label: "Remaining Balance",
+            value: loading ? "..." : formatCurrencyINR(disbursementTotals.totalRemaining),
+            hint: `${disbursementTotals.partialCount} partial payout${disbursementTotals.partialCount === 1 ? "" : "s"}`,
+          },
+        ]}
+      >
+        {disbursementTotals.totalApproved > 0 && (
+          <div style={{ position: "relative", zIndex: 1, background: "rgba(255,255,255,0.08)", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.14)" }}>
+            <ProgressMeter
+              label="Disbursement Completion"
+              value={disbursementTotals.totalReleased}
+              max={disbursementTotals.totalApproved}
+              tone="emerald"
+              sublabel={`${formatCurrencyINR(disbursementTotals.totalReleased)} received of ${formatCurrencyINR(disbursementTotals.totalApproved)} approved`}
+            />
           </div>
-          <div className="dash-stat-card__data">
-            <span className="dash-stat-card__label">Total Applications</span>
-            <strong className="dash-stat-card__value">
-              {loading ? "..." : totalApps}
-            </strong>
-            <span className="dash-stat-card__subtext">All submitted &amp; drafts</span>
-          </div>
-        </div>
+        )}
+      </HeroBanner>
 
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__icon dash-stat-card__icon--success">
-            <CheckCircle2 size={22} />
-          </div>
-          <div className="dash-stat-card__data">
-            <span className="dash-stat-card__label">Approved Grants</span>
-            <strong className="dash-stat-card__value">
-              {loading ? "..." : approvedApps}
-            </strong>
-            <span className="dash-stat-card__subtext">
-              {loading
+      <AlertBanner
+        type="error"
+        message={error}
+        action={
+          error && (
+            <button type="button" className="saas-btn saas-btn--sm saas-btn--secondary" onClick={loadData}>
+              Try again
+            </button>
+          )
+        }
+      />
+
+      {loading && applications.length === 0 ? (
+        <SkeletonKpiRow count={6} />
+      ) : (
+        <div className="saas-kpi-grid">
+          <KpiCard
+            to="/beneficiary/applications"
+            tone="lavender"
+            icon={ClipboardList}
+            label="Total Applications"
+            value={loading ? "..." : totalApps}
+            meta="All submitted & drafts"
+          />
+
+          <KpiCard
+            to="/beneficiary/my-grant"
+            tone="mint"
+            icon={CheckCircle2}
+            label="Funds Released"
+            value={loading ? "..." : formatCurrencyINR(disbursementTotals.totalReleased)}
+            meta={
+              loading
+                ? "..."
+                : `Remaining: ${formatCurrencyINR(disbursementTotals.totalRemaining)}`
+            }
+          />
+
+          <KpiCard
+            to="/beneficiary/my-grant"
+            tone="blue"
+            icon={CheckCircle2}
+            label="Approved Grants"
+            value={loading ? "..." : approvedApps}
+            meta={
+              loading
                 ? "..."
                 : approvedApps > 0
                 ? `${disbursementTotals.disbursedCount} disbursed · ${disbursementTotals.partialCount} partial`
-                : "Finance approved"}
-            </span>
+                : "Finance approved"
+            }
+          />
+
+          <KpiCard
+            to="/beneficiary/applications"
+            tone="default"
+            icon={Clock}
+            label="Under Review"
+            value={loading ? "..." : underReviewApps}
+            meta="Field · District · Finance"
+          />
+
+          <KpiCard
+            to="/beneficiary/applications"
+            tone="cream"
+            icon={AlertCircle}
+            label="Needs Correction"
+            value={loading ? "..." : needsCorrectionApps}
+            meta={needsCorrectionApps > 0 ? "Action required" : "No pending fixes"}
+          />
+
+          <KpiCard
+            to="/beneficiary/applications"
+            tone="rose"
+            icon={XCircle}
+            label="Rejected"
+            value={loading ? "..." : rejectedApps}
+            meta="Not approved"
+          />
+        </div>
+      )}
+
+      {/* Quick Action Shortcuts Inside Secondary Tinted Band */}
+      <div className="saas-section-band">
+        <div className="dash-section__header">
+          <div>
+            <h3 className="dash-section__title">Quick Actions</h3>
+            <p style={{ margin: "4px 0 0", fontSize: "0.9rem", color: "var(--color-text-muted)" }}>
+              Start an application, track approvals, or manage your citizen profile
+            </p>
           </div>
         </div>
-
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__icon dash-stat-card__icon--success">
-            <CheckCircle2 size={22} />
-          </div>
-          <div className="dash-stat-card__data">
-            <span className="dash-stat-card__label">Funds Released</span>
-            <strong className="dash-stat-card__value">
-              {loading ? "..." : formatCurrencyINR(disbursementTotals.totalReleased)}
-            </strong>
-            <span className="dash-stat-card__subtext">
-              {loading
-                ? "..."
-                : `Remaining: ${formatCurrencyINR(disbursementTotals.totalRemaining)}`}
-            </span>
-          </div>
-        </div>
-
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__icon dash-stat-card__icon--info">
-            <Clock size={22} />
-          </div>
-          <div className="dash-stat-card__data">
-            <span className="dash-stat-card__label">Under Review</span>
-            <strong className="dash-stat-card__value">
-              {loading ? "..." : underReviewApps}
-            </strong>
-            <span className="dash-stat-card__subtext">Field · District · Finance</span>
-          </div>
-        </div>
-
-        <div
-          className={`dash-stat-card ${
-            needsCorrectionApps > 0 ? "dash-stat-card--highlight" : ""
-          }`}
-        >
-          <div className="dash-stat-card__icon dash-stat-card__icon--warning">
-            <AlertCircle size={22} />
-          </div>
-          <div className="dash-stat-card__data">
-            <span className="dash-stat-card__label">Needs Correction</span>
-            <strong className="dash-stat-card__value">
-              {loading ? "..." : needsCorrectionApps}
-            </strong>
-            <span className="dash-stat-card__subtext">
-              {needsCorrectionApps > 0 ? "Action required" : "No pending fixes"}
-            </span>
-          </div>
-        </div>
-
-        <div className="dash-stat-card">
-          <div className="dash-stat-card__icon dash-stat-card__icon--danger">
-            <XCircle size={22} />
-          </div>
-          <div className="dash-stat-card__data">
-            <span className="dash-stat-card__label">Rejected</span>
-            <strong className="dash-stat-card__value">
-              {loading ? "..." : rejectedApps}
-            </strong>
-            <span className="dash-stat-card__subtext">Not approved</span>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Action Shortcuts */}
-      <div className="dash-section">
-        <h3 className="dash-section__title">Quick Actions</h3>
         <div className="dash-actions-grid">
           <Link to="/beneficiary/schemes" className="dash-action-card">
             <span className="dash-action-card__icon">
-              <FolderKanban size={20} />
+              <FolderKanban size={22} />
             </span>
             <div className="dash-action-card__copy">
               <strong>Browse Schemes</strong>
               <span>Explore active schemes and criteria</span>
             </div>
-            <ArrowRight size={16} className="dash-action-card__arrow" />
+            <ArrowRight size={18} className="dash-action-card__arrow" />
           </Link>
 
           <Link to="/beneficiary/apply" className="dash-action-card">
             <span className="dash-action-card__icon">
-              <FilePlus2 size={20} />
+              <FilePlus2 size={22} />
             </span>
             <div className="dash-action-card__copy">
               <strong>Apply for Grant</strong>
               <span>Start new application or complete draft</span>
             </div>
-            <ArrowRight size={16} className="dash-action-card__arrow" />
+            <ArrowRight size={18} className="dash-action-card__arrow" />
           </Link>
 
           <Link to="/beneficiary/applications" className="dash-action-card">
             <span className="dash-action-card__icon">
-              <ClipboardList size={20} />
+              <ClipboardList size={22} />
             </span>
             <div className="dash-action-card__copy">
               <strong>My Applications</strong>
               <span>Track officer stages and decisions</span>
             </div>
-            <ArrowRight size={16} className="dash-action-card__arrow" />
+            <ArrowRight size={18} className="dash-action-card__arrow" />
           </Link>
 
           <Link to="/beneficiary/profile" className="dash-action-card">
             <span className="dash-action-card__icon">
-              <UserRound size={20} />
+              <UserRound size={22} />
             </span>
             <div className="dash-action-card__copy">
               <strong>My Profile</strong>
               <span>Manage contact and jurisdiction</span>
             </div>
-            <ArrowRight size={16} className="dash-action-card__arrow" />
+            <ArrowRight size={18} className="dash-action-card__arrow" />
           </Link>
 
           <Link to="/beneficiary/notifications" className="dash-action-card">
             <span className="dash-action-card__icon">
-              <Bell size={20} />
+              <Bell size={22} />
             </span>
             <div className="dash-action-card__copy">
               <strong>Notifications</strong>
@@ -352,7 +378,7 @@ function BeneficiaryDashboardHome() {
                   : "View all notification history"}
               </span>
             </div>
-            <ArrowRight size={16} className="dash-action-card__arrow" />
+            <ArrowRight size={18} className="dash-action-card__arrow" />
           </Link>
         </div>
       </div>
@@ -360,9 +386,14 @@ function BeneficiaryDashboardHome() {
       {/* Notifications Preview & Recent Applications Section */}
       <div className="dash-split-section">
         {/* Left / Main: Recent Applications */}
-        <div className="dash-section dash-split-section__main">
-          <div className="dash-section__header">
-            <h3 className="dash-section__title">Recent Applications</h3>
+        <section className="saas-panel">
+          <div className="saas-panel__header">
+            <div>
+              <h3 className="saas-panel__title">Recent Applications &amp; Disbursement</h3>
+              <p className="saas-panel__subtitle">
+                Your latest grant submissions, installment release status, and direct links
+              </p>
+            </div>
             {applications.length > 0 && (
               <Link
                 to="/beneficiary/applications"
@@ -462,15 +493,15 @@ function BeneficiaryDashboardHome() {
               </table>
             </div>
           )}
-        </div>
+        </section>
 
         {/* Right / Sidebar: Recent Notifications Widget */}
-        <div className="dash-section dash-split-section__side">
-          <div className="dash-section__header">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <h3 className="dash-section__title">Recent Alerts</h3>
+        <section className="saas-panel saas-panel--tinted-lavender">
+          <div className="saas-panel__header">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <h3 className="saas-panel__title">Recent Alerts</h3>
               {unreadNotifCount > 0 && (
-                <span className="dash-badge dash-badge--warning">
+                <span className="saas-badge saas-badge--warning">
                   {unreadNotifCount} new
                 </span>
               )}
@@ -484,7 +515,7 @@ function BeneficiaryDashboardHome() {
             </Link>
           </div>
 
-          <div className="dash-notif-preview-card">
+          <div>
             {recentNotifications.length === 0 ? (
               <div className="dash-notif-empty">
                 <Bell size={24} style={{ color: "var(--color-text-muted)" }} />
@@ -527,7 +558,7 @@ function BeneficiaryDashboardHome() {
               </div>
             )}
           </div>
-        </div>
+        </section>
       </div>
     </section>
   );
