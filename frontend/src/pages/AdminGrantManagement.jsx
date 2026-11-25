@@ -75,6 +75,17 @@ function formatDate(dt) {
   }
 }
 
+function formatFileSize(bytes) {
+  const n = Number(bytes);
+  if (!bytes || isNaN(n) || n <= 0) return "Not configured";
+  if (n >= 1024 * 1024) {
+    const mb = n / (1024 * 1024);
+    return `${mb.toFixed(n % (1024 * 1024) === 0 ? 1 : 2)} MB`;
+  }
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
 export default function AdminGrantManagement() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get("tab") || "overview";
@@ -432,8 +443,14 @@ export default function AdminGrantManagement() {
       return;
     }
     const maxBytes = Number(newReqForm.maxFileSizeBytes);
-    if (isNaN(maxBytes) || maxBytes < 1024 || maxBytes > 10485760) {
-      setError("Max File Size must be between 1,024 bytes (1 KB) and 10,485,760 bytes (10 MB).");
+    if (
+      newReqForm.maxFileSizeBytes === "" ||
+      isNaN(maxBytes) ||
+      !Number.isInteger(maxBytes) ||
+      maxBytes < 1024 ||
+      maxBytes > 10485760
+    ) {
+      setError("Max File Size must be a whole number between 1,024 bytes (1 KB) and 10,485,760 bytes (10 MB).");
       return;
     }
     setError("");
@@ -607,9 +624,6 @@ export default function AdminGrantManagement() {
       }
 
       // Milestone and compliance prerequisites
-      if (inst.allVerified) {
-        return { isReady: true, reason: "Ready for release" };
-      }
       const ms = inst.milestones || [];
       if (ms.length === 0) {
         return { isReady: true, reason: "Ready for release (No milestones required)" };
@@ -617,21 +631,24 @@ export default function AdminGrantManagement() {
 
       const allMilestonesReady = ms.every((m) => {
         if (m.nonCompliant) return false;
-        if (m.status === "COMPLETED" || Number(m.progressPercentage) === 100) return true;
         const comps = m.compliances || [];
-        if (comps.length > 0) {
-          return comps.every(
+        const compliancesSatisfied =
+          comps.length === 0 ||
+          comps.every(
             (c) =>
-              !c.isRequired ||
+              c.required === false ||
               c.status === "APPROVED" ||
               c.status === "VERIFIED" ||
               c.status === "WAIVED"
           );
-        }
-        return false;
+        if (!compliancesSatisfied) return false;
+        return (
+          m.status === "COMPLETED" &&
+          (m.progressPercentage == null || Number(m.progressPercentage) === 100)
+        );
       });
 
-      if (!allMilestonesReady) {
+      if (!allMilestonesReady || !inst.allVerified) {
         return { isReady: false, reason: "Milestones / Compliance incomplete" };
       }
 
@@ -910,9 +927,9 @@ export default function AdminGrantManagement() {
                   <tbody>
                     {schemes.map((s) => {
                       const schemeFund = (fundUtilization?.schemes || []).find(
-                        (fs) => fs.schemeId === s.id
+                        (fs) => String(fs.schemeId) === String(s.id)
                       );
-                      const schemePlans = plans.filter((p) => p.schemeId === s.id);
+                      const schemePlans = plans.filter((p) => String(p.schemeId) === String(s.id));
                       const budget = Number(
                         schemeFund?.allocatedFunds ??
                           s.allocatedFunds ??
@@ -935,7 +952,7 @@ export default function AdminGrantManagement() {
                             0
                           )
                       );
-                      const pct = budget > 0 ? Math.min(100, (released / budget) * 100) : 0;
+                      const pct = committed > 0 ? Math.min(100, (released / committed) * 100) : 0;
 
                       return (
                         <tr key={s.id}>
@@ -957,7 +974,7 @@ export default function AdminGrantManagement() {
                                 />
                               </div>
                               <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-                                {pct.toFixed(0)}%
+                                {pct.toFixed(1)}%
                               </span>
                             </div>
                           </td>
@@ -1239,11 +1256,7 @@ export default function AdminGrantManagement() {
                             )}
                           </td>
                           <td>{req.allowedFormats || "Any"}</td>
-                          <td>
-                            {req.maxFileSizeBytes
-                              ? `${(req.maxFileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
-                              : "10 MB"}
-                          </td>
+                          <td>{formatFileSize(req.maxFileSizeBytes)}</td>
                           <td>
                             <span
                               className={`mgmt-status-badge status-${
@@ -2289,7 +2302,7 @@ export default function AdminGrantManagement() {
                       onChange={(e) =>
                         setNewReqForm({
                           ...newReqForm,
-                          maxFileSizeBytes: Number(e.target.value),
+                          maxFileSizeBytes: e.target.value,
                         })
                       }
                     />

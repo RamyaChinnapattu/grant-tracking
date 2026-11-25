@@ -45,6 +45,17 @@ function formatDate(dt) {
   }
 }
 
+function formatFileSize(bytes) {
+  const n = Number(bytes);
+  if (!bytes || isNaN(n) || n <= 0) return "Not configured";
+  if (n >= 1024 * 1024) {
+    const mb = n / (1024 * 1024);
+    return `${mb.toFixed(n % (1024 * 1024) === 0 ? 1 : 2)} MB`;
+  }
+  if (n >= 1024) return `${Math.round(n / 1024)} KB`;
+  return `${n} B`;
+}
+
 export default function BeneficiaryMyGrant() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get("tab") || "schedule";
@@ -196,10 +207,10 @@ export default function BeneficiaryMyGrant() {
       return;
     }
 
-    const maxBytes = item.maxFileSizeBytes || 10485760;
+    const maxBytes = item.maxFileSizeBytes > 0 ? item.maxFileSizeBytes : 10485760;
     if (file.size > maxBytes) {
       setError(
-        `File exceeds maximum allowed size of ${(maxBytes / (1024 * 1024)).toFixed(1)} MB.`
+        `File exceeds maximum allowed size of ${formatFileSize(maxBytes)}.`
       );
       return;
     }
@@ -595,9 +606,7 @@ export default function BeneficiaryMyGrant() {
                         <span>
                           Max Size:{" "}
                           <strong>
-                            {item.maxFileSizeBytes
-                              ? `${(item.maxFileSizeBytes / (1024 * 1024)).toFixed(1)} MB`
-                              : "10 MB"}
+                            {formatFileSize(item.maxFileSizeBytes)}
                           </strong>
                         </span>
                       </div>

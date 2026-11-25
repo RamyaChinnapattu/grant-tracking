@@ -19,5 +19,6 @@ public record MilestoneComplianceResponse(
     String submittedByName,
     String verifiedByName,
     LocalDateTime verifiedAt,
-    String verificationRemarks
+    String verificationRemarks,
+    boolean required
 ) {}

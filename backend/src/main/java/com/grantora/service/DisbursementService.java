@@ -3,6 +3,7 @@ package com.grantora.service;
 import com.grantora.dto.*;
 import com.grantora.entity.*;
 import com.grantora.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -28,6 +29,7 @@ public class DisbursementService {
     private final DisbursementInstallmentRepository installmentRepository;
     private final DisbursementMilestoneRepository milestoneRepository;
     private final MilestoneComplianceRepository complianceRepository;
+    private final ComplianceRequirementRepository requirementRepository;
     private final DisbursementReminderConfigRepository reminderConfigRepository;
     private final GrantApplicationRepository applicationRepository;
     private final SchemeRepository schemeRepository;
@@ -44,10 +46,27 @@ public class DisbursementService {
             SchemeRepository schemeRepository,
             UserRepository userRepository,
             WorkflowAutomationService workflowAutomationService) {
+        this(planRepository, installmentRepository, milestoneRepository, complianceRepository, null,
+                reminderConfigRepository, applicationRepository, schemeRepository, userRepository, workflowAutomationService);
+    }
+
+    @Autowired
+    public DisbursementService(
+            DisbursementPlanRepository planRepository,
+            DisbursementInstallmentRepository installmentRepository,
+            DisbursementMilestoneRepository milestoneRepository,
+            MilestoneComplianceRepository complianceRepository,
+            ComplianceRequirementRepository requirementRepository,
+            DisbursementReminderConfigRepository reminderConfigRepository,
+            GrantApplicationRepository applicationRepository,
+            SchemeRepository schemeRepository,
+            UserRepository userRepository,
+            WorkflowAutomationService workflowAutomationService) {
         this.planRepository = planRepository;
         this.installmentRepository = installmentRepository;
         this.milestoneRepository = milestoneRepository;
         this.complianceRepository = complianceRepository;
+        this.requirementRepository = requirementRepository;
         this.reminderConfigRepository = reminderConfigRepository;
         this.applicationRepository = applicationRepository;
         this.schemeRepository = schemeRepository;
@@ -227,12 +246,27 @@ public class DisbursementService {
                 milestone.setProgressPercentage(0);
                 milestone.setNonCompliant(false);
 
-                MilestoneCompliance compliance = new MilestoneCompliance();
-                compliance.setMilestone(milestone);
-                compliance.setRequirementTitle("Stage " + installment.getInstallmentNumber() + " Utilization Certificate & Invoices");
-                compliance.setDescription("Submit expenditure verification documents and progress report");
-                compliance.setStatus(ComplianceStatus.PENDING);
-                milestone.addCompliance(compliance);
+                List<ComplianceRequirement> adminReqs = findMatchingRequirementsForApplication(scheme, application);
+                if (!adminReqs.isEmpty()) {
+                    for (ComplianceRequirement req : adminReqs) {
+                        MilestoneCompliance compliance = new MilestoneCompliance();
+                        compliance.setMilestone(milestone);
+                        compliance.setRequirement(req);
+                        compliance.setRequirementTitle(req.getTitle());
+                        compliance.setDescription(req.getDescription());
+                        compliance.setRequired(req.isRequired());
+                        compliance.setSubmissionDeadline(req.getSubmissionDeadline() != null ? req.getSubmissionDeadline() : milestone.getDueDate());
+                        compliance.setStatus(ComplianceStatus.PENDING);
+                        milestone.addCompliance(compliance);
+                    }
+                } else {
+                    MilestoneCompliance compliance = new MilestoneCompliance();
+                    compliance.setMilestone(milestone);
+                    compliance.setRequirementTitle("Stage " + installment.getInstallmentNumber() + " Utilization Certificate & Invoices");
+                    compliance.setDescription("Submit expenditure verification documents and progress report");
+                    compliance.setStatus(ComplianceStatus.PENDING);
+                    milestone.addCompliance(compliance);
+                }
 
                 installment.addMilestone(milestone);
             }
@@ -278,14 +312,42 @@ public class DisbursementService {
                 }
             }
         } else {
-            MilestoneCompliance defaultCompliance = new MilestoneCompliance();
-            defaultCompliance.setMilestone(milestone);
-            defaultCompliance.setRequirementTitle("Milestone Completion Certificate");
-            defaultCompliance.setStatus(ComplianceStatus.PENDING);
-            milestone.addCompliance(defaultCompliance);
+            Scheme planScheme = installment.getPlan() != null ? installment.getPlan().getScheme() : null;
+            GrantApplication planApp = installment.getPlan() != null ? installment.getPlan().getApplication() : null;
+            List<ComplianceRequirement> adminReqs = findMatchingRequirementsForApplication(planScheme, planApp);
+            if (!adminReqs.isEmpty()) {
+                for (ComplianceRequirement req : adminReqs) {
+                    MilestoneCompliance compliance = new MilestoneCompliance();
+                    compliance.setMilestone(milestone);
+                    compliance.setRequirement(req);
+                    compliance.setRequirementTitle(req.getTitle());
+                    compliance.setDescription(req.getDescription());
+                    compliance.setRequired(req.isRequired());
+                    compliance.setSubmissionDeadline(req.getSubmissionDeadline() != null ? req.getSubmissionDeadline() : milestone.getDueDate());
+                    compliance.setStatus(ComplianceStatus.PENDING);
+                    milestone.addCompliance(compliance);
+                }
+            } else {
+                MilestoneCompliance defaultCompliance = new MilestoneCompliance();
+                defaultCompliance.setMilestone(milestone);
+                defaultCompliance.setRequirementTitle("Milestone Completion Certificate");
+                defaultCompliance.setStatus(ComplianceStatus.PENDING);
+                milestone.addCompliance(defaultCompliance);
+            }
         }
 
         return milestone;
+    }
+
+    private List<ComplianceRequirement> findMatchingRequirementsForApplication(Scheme scheme, GrantApplication application) {
+        if (requirementRepository == null || scheme == null) {
+            return Collections.emptyList();
+        }
+        return requirementRepository.findByActiveTrue().stream()
+                .filter(r -> r != null && r.getScheme() != null && Objects.equals(r.getScheme().getId(), scheme.getId()))
+                .filter(r -> r.getApplication() == null || (application != null && Objects.equals(r.getApplication().getId(), application.getId())))
+                .filter(r -> r.getMilestone() == null)
+                .toList();
     }
 
     @Transactional(readOnly = true)
@@ -684,9 +746,14 @@ public class DisbursementService {
                             plan.getTotalApprovedAmount().toPlainString()));
         }
 
-        // FINANCIAL SAFETY: Ensure all milestone compliances are VERIFIED and milestones are COMPLETED with 100% progress
+        // FINANCIAL SAFETY: Ensure all active milestone compliances are VERIFIED and milestones are COMPLETED with 100% progress
         for (DisbursementMilestone m : installment.getMilestones()) {
-            boolean allCompliancesSatisfied = m.getCompliances() != null && !m.getCompliances().isEmpty() && m.getCompliances().stream().allMatch(c ->
+            List<MilestoneCompliance> activeCompliances = m.getCompliances() == null
+                    ? Collections.emptyList()
+                    : m.getCompliances().stream()
+                        .filter(c -> c != null && (c.getRequirement() == null || c.getRequirement().isActive()))
+                        .toList();
+            boolean allCompliancesSatisfied = !activeCompliances.isEmpty() && activeCompliances.stream().allMatch(c ->
                     !c.isRequired() || c.getStatus() == ComplianceStatus.APPROVED || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.WAIVED
             );
             if (allCompliancesSatisfied && !Boolean.TRUE.equals(m.getNonCompliant())) {
@@ -710,7 +777,7 @@ public class DisbursementService {
                         String.format("Cannot release disbursement: Milestone '%s' is flagged as non-compliant (%s).",
                                 m.getTitle(), m.getNonComplianceReason()));
             }
-            for (MilestoneCompliance c : m.getCompliances()) {
+            for (MilestoneCompliance c : activeCompliances) {
                 if (c.isRequired() && c.getStatus() != ComplianceStatus.VERIFIED
                         && c.getStatus() != ComplianceStatus.APPROVED && c.getStatus() != ComplianceStatus.WAIVED) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
@@ -858,7 +925,7 @@ public class DisbursementService {
             totalAllocated = totalAllocated.add(schemeAllocated);
 
             List<GrantApplication> sApps = approvedApps.stream()
-                    .filter(a -> a.getScheme().getId().equals(s.getId()))
+                    .filter(a -> a.getScheme() != null && Objects.equals(a.getScheme().getId(), s.getId()))
                     .collect(Collectors.toList());
 
             BigDecimal sApproved = sApps.stream()
@@ -867,7 +934,7 @@ public class DisbursementService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             List<DisbursementPlan> sPlans = allPlans.stream()
-                    .filter(p -> p.getScheme().getId().equals(s.getId()) && p.getPlanStatus() != DisbursementPlanStatus.CANCELLED)
+                    .filter(p -> p.getScheme() != null && Objects.equals(p.getScheme().getId(), s.getId()) && p.getPlanStatus() != DisbursementPlanStatus.CANCELLED)
                     .collect(Collectors.toList());
 
             BigDecimal sScheduled = sPlans.stream()
@@ -885,8 +952,8 @@ public class DisbursementService {
                     .reduce(BigDecimal.ZERO, BigDecimal::add);
 
             BigDecimal sRemaining = schemeAllocated.subtract(sApproved).max(BigDecimal.ZERO);
-            BigDecimal sUtilizationPct = schemeAllocated.compareTo(BigDecimal.ZERO) > 0
-                    ? sDisbursed.multiply(BigDecimal.valueOf(100)).divide(schemeAllocated, 2, RoundingMode.HALF_UP)
+            BigDecimal sUtilizationPct = sApproved.compareTo(BigDecimal.ZERO) > 0
+                    ? sDisbursed.multiply(BigDecimal.valueOf(100)).divide(sApproved, 2, RoundingMode.HALF_UP)
                     : BigDecimal.ZERO;
 
             schemeBreakdowns.add(new SchemeFundUtilizationResponse(
@@ -903,11 +970,11 @@ public class DisbursementService {
             ));
         }
 
-        BigDecimal remainingAllocated = totalAllocated.subtract(totalDisbursed);
+        BigDecimal remainingAllocated = totalAllocated.subtract(totalApproved).max(BigDecimal.ZERO);
         BigDecimal remainingApproved = totalApproved.subtract(totalDisbursed).max(BigDecimal.ZERO);
 
-        BigDecimal overallUtilization = totalAllocated.compareTo(BigDecimal.ZERO) > 0
-                ? totalDisbursed.multiply(BigDecimal.valueOf(100)).divide(totalAllocated, 2, RoundingMode.HALF_UP)
+        BigDecimal overallUtilization = totalApproved.compareTo(BigDecimal.ZERO) > 0
+                ? totalDisbursed.multiply(BigDecimal.valueOf(100)).divide(totalApproved, 2, RoundingMode.HALF_UP)
                 : BigDecimal.ZERO;
 
         // Installment status breakdown
@@ -1099,11 +1166,16 @@ public class DisbursementService {
                 .map(this::toMilestoneResponse)
                 .collect(Collectors.toList());
 
-        boolean allVerified = !milestones.isEmpty() && milestones.stream().allMatch(m ->
-                !Boolean.TRUE.equals(m.getNonCompliant()) && (m.getCompliances() == null ? Collections.<MilestoneCompliance>emptyList() : m.getCompliances()).stream().allMatch(c -> !c.isRequired()
-                        || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.APPROVED
-                        || c.getStatus() == ComplianceStatus.WAIVED)
-        );
+        boolean allVerified = !milestones.isEmpty() && milestones.stream().allMatch(m -> {
+            List<MilestoneCompliance> activeCompliances = m.getCompliances() == null
+                    ? Collections.emptyList()
+                    : m.getCompliances().stream()
+                        .filter(c -> c != null && (c.getRequirement() == null || c.getRequirement().isActive()))
+                        .toList();
+            return !Boolean.TRUE.equals(m.getNonCompliant()) && activeCompliances.stream().allMatch(c -> !c.isRequired()
+                    || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.APPROVED
+                    || c.getStatus() == ComplianceStatus.WAIVED);
+        });
 
         return new DisbursementInstallmentResponse(
                 inst.getId(),
@@ -1130,13 +1202,16 @@ public class DisbursementService {
         GrantApplication app = plan != null ? plan.getApplication() : null;
         Beneficiary ben = app != null ? app.getBeneficiary() : null;
 
-        List<MilestoneCompliance> compliances = m.getCompliances() == null ? Collections.emptyList() : m.getCompliances();
+        List<MilestoneCompliance> allCompliances = m.getCompliances() == null ? Collections.emptyList() : m.getCompliances();
+        List<MilestoneCompliance> activeCompliances = allCompliances.stream()
+                .filter(c -> c != null && (c.getRequirement() == null || c.getRequirement().isActive()))
+                .toList();
 
-        List<MilestoneComplianceResponse> compResponses = compliances.stream()
+        List<MilestoneComplianceResponse> compResponses = activeCompliances.stream()
                 .map(this::toComplianceResponse)
                 .collect(Collectors.toList());
 
-        boolean allSatisfied = !compliances.isEmpty() && compliances.stream().allMatch(c ->
+        boolean allSatisfied = !activeCompliances.isEmpty() && activeCompliances.stream().allMatch(c ->
                 !c.isRequired() || c.getStatus() == ComplianceStatus.APPROVED
                         || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.WAIVED
         );
@@ -1187,7 +1262,8 @@ public class DisbursementService {
                 c.getSubmittedBy() != null ? c.getSubmittedBy().getFullName() : null,
                 c.getVerifiedBy() != null ? c.getVerifiedBy().getFullName() : null,
                 c.getVerifiedAt(),
-                c.getVerificationRemarks()
+                c.getVerificationRemarks(),
+                c.isRequired()
         );
     }
 

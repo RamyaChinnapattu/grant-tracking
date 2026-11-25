@@ -62,7 +62,7 @@ class ComplianceOperationsServiceTest {
         when(milestoneRepo.findById(31L)).thenReturn(Optional.of(compliance.getMilestone()));when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
         when(requirementRepo.save(any())).thenAnswer(inv->{ComplianceRequirement r=inv.getArgument(0);r.setId(8L);return r;});
         when(planRepo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of());
-        var response=service.createRequirement(new ComplianceRequirementRequest(20L,31L,null,"Progress report","Submit progress",true,LocalDate.now().plusDays(5),"pdf,png",1048576),admin.getEmail());
+        var response=service.createRequirement(new ComplianceRequirementRequest(20L,31L,null,"Progress report","Submit progress",true,LocalDate.now().plusDays(5),"pdf,png",1048576L),admin.getEmail());
         assertEquals("Progress report",response.title());assertEquals("pdf,png",response.allowedFormats());verify(requirementRepo).save(any());
     }
 
@@ -345,5 +345,146 @@ class ComplianceOperationsServiceTest {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> service.submit(41L, "Invalid script", file, beneficiaryUser.getEmail()));
         assertTrue(ex.getReason().contains("This file format is not allowed"));
+    }
+
+    @Test
+    void officerApprovalCompletesMilestoneOnlyWhenAllMandatoryRequirementsApproved() {
+        DisbursementMilestone milestone = compliance.getMilestone();
+        MilestoneCompliance second = new MilestoneCompliance();
+        second.setId(42L);
+        second.setMilestone(milestone);
+        second.setRequirementTitle("Site Photo");
+        second.setStatus(ComplianceStatus.SUBMITTED);
+        second.setRequired(true);
+        second.setDocumentData("%PDF-1.7 photo".getBytes());
+        milestone.addCompliance(second);
+
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.findById(42L)).thenReturn(Optional.of(second));
+        when(complianceRepo.findByMilestone_Id(31L)).thenReturn(List.of(compliance, second));
+        when(complianceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        // Approve first -> 50% progress, PENDING (not COMPLETED)
+        service.review(41L, new ComplianceReviewRequest("APPROVED", "Looks good"), officer.getEmail());
+        assertEquals(50, milestone.getProgressPercentage());
+        assertEquals(MilestoneStatus.PENDING, milestone.getStatus());
+
+        // Approve second -> 100% progress, COMPLETED
+        service.review(42L, new ComplianceReviewRequest("APPROVED", "Photo verified"), officer.getEmail());
+        assertEquals(100, milestone.getProgressPercentage());
+        assertEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
+        assertNotNull(milestone.getCompletedAt());
+    }
+
+    @Test
+    void syncCleansUpUnsubmittedDefaultPlaceholderWhenAdminRequirementExists() {
+        DisbursementMilestone milestone = compliance.getMilestone();
+        DisbursementInstallment installment = milestone.getInstallment();
+        DisbursementPlan plan = installment.getPlan();
+        plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+        plan.addInstallment(installment);
+        installment.addMilestone(milestone);
+
+        ComplianceRequirement adminReq = new ComplianceRequirement();
+        adminReq.setId(77L);
+        adminReq.setScheme(scheme);
+        adminReq.setTitle("fgrf");
+        adminReq.setRequired(true);
+        adminReq.setActive(true);
+
+        MilestoneCompliance defaultPlaceholder = new MilestoneCompliance();
+        defaultPlaceholder.setId(99L);
+        defaultPlaceholder.setMilestone(milestone);
+        defaultPlaceholder.setRequirement(null);
+        defaultPlaceholder.setRequirementTitle("Stage 1 Utilization Certificate & Invoices");
+        defaultPlaceholder.setStatus(ComplianceStatus.PENDING);
+
+        MilestoneCompliance adminItem = new MilestoneCompliance();
+        adminItem.setId(100L);
+        adminItem.setMilestone(milestone);
+        adminItem.setRequirement(adminReq);
+        adminItem.setRequirementTitle("fgrf");
+        adminItem.setStatus(ComplianceStatus.PENDING);
+
+        milestone.setCompliances(List.of(defaultPlaceholder, adminItem));
+
+        when(userRepo.findByEmail(beneficiaryUser.getEmail())).thenReturn(Optional.of(beneficiaryUser));
+        when(requirementRepo.findByActiveTrue()).thenReturn(List.of(adminReq));
+        when(planRepo.findAllByOrderByCreatedAtDesc()).thenReturn(List.of(plan));
+        when(complianceRepo.existsByRequirement_IdAndMilestone_Id(77L, 31L)).thenReturn(true);
+        when(complianceRepo.findByMilestone_Id(31L)).thenReturn(List.of(defaultPlaceholder, adminItem));
+        when(nonComplianceRepo.findByCompliance_Id(99L)).thenReturn(Optional.empty());
+        when(complianceRepo.findAll()).thenReturn(List.of(adminItem));
+
+        var mine = service.getMine(beneficiaryUser.getEmail());
+        verify(complianceRepo).delete(defaultPlaceholder);
+        assertEquals(1, mine.size());
+        assertEquals("fgrf", mine.get(0).requirementTitle());
+    }
+
+    @Test
+    void inactiveRequirementsAreHiddenFromBeneficiaryAndDoNotBlockCompletion() {
+        DisbursementMilestone milestone = compliance.getMilestone();
+        ComplianceRequirement activeReq = new ComplianceRequirement();
+        activeReq.setId(80L);
+        activeReq.setScheme(scheme);
+        activeReq.setTitle("Active Doc");
+        activeReq.setRequired(true);
+        activeReq.setActive(true);
+        compliance.setRequirement(activeReq);
+        compliance.setStatus(ComplianceStatus.SUBMITTED);
+
+        ComplianceRequirement inactiveReq = new ComplianceRequirement();
+        inactiveReq.setId(81L);
+        inactiveReq.setScheme(scheme);
+        inactiveReq.setTitle("Inactive Doc");
+        inactiveReq.setRequired(true);
+        inactiveReq.setActive(false);
+
+        MilestoneCompliance inactiveItem = new MilestoneCompliance();
+        inactiveItem.setId(49L);
+        inactiveItem.setMilestone(milestone);
+        inactiveItem.setRequirement(inactiveReq);
+        inactiveItem.setRequirementTitle("Inactive Doc");
+        inactiveItem.setStatus(ComplianceStatus.PENDING);
+        inactiveItem.setRequired(true);
+        milestone.addCompliance(inactiveItem);
+
+        when(userRepo.findByEmail(beneficiaryUser.getEmail())).thenReturn(Optional.of(beneficiaryUser));
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
+        when(complianceRepo.findAll()).thenReturn(List.of(compliance, inactiveItem));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.findByMilestone_Id(31L)).thenReturn(List.of(compliance, inactiveItem));
+        when(complianceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        var mine = service.getMine(beneficiaryUser.getEmail());
+        assertEquals(1, mine.size());
+        assertEquals("Progress report", mine.get(0).requirementTitle());
+
+        service.review(41L, new ComplianceReviewRequest("APPROVED", "Valid"), officer.getEmail());
+        assertEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
+        assertEquals(100, milestone.getProgressPercentage());
+    }
+
+    @Test
+    void createRequirementRejectsZeroOrMissingFileSizeAndRejectionBlocksMilestone() {
+        when(userRepo.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(schemeRepo.findById(20L)).thenReturn(Optional.of(scheme));
+        assertThrows(ResponseStatusException.class, () -> service.createRequirement(
+                new ComplianceRequirementRequest(20L, null, null, "Req", "Desc", true, null, "pdf", 0L),
+                admin.getEmail()));
+
+        DisbursementMilestone milestone = compliance.getMilestone();
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.findByMilestone_Id(31L)).thenReturn(List.of(compliance));
+        when(complianceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        service.review(41L, new ComplianceReviewRequest("REJECTED", "Blurry scan"), officer.getEmail());
+        assertNotEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
+        assertTrue(milestone.getNonCompliant());
+        assertEquals(0, milestone.getProgressPercentage());
     }
 }

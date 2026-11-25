@@ -48,7 +48,7 @@ public class ComplianceOperationsService {
         requirement.setScheme(scheme);
         requirement.setTitle(req.title().trim()); requirement.setDescription(req.description()); requirement.setRequired(req.required());
         requirement.setSubmissionDeadline(req.submissionDeadline()); requirement.setAllowedFormats(normalizeFormats(req.allowedFormats()));
-        if(req.maxFileSizeBytes()<1 || req.maxFileSizeBytes()>10485760L) throw bad("Maximum file size must be between 1 byte and 10 MB.");
+        if(req.maxFileSizeBytes()==null || req.maxFileSizeBytes()<1024 || req.maxFileSizeBytes()>10485760L) throw bad("Maximum file size must be between 1 KB (1024 bytes) and 10 MB (10485760 bytes).");
         requirement.setMaxFileSizeBytes(req.maxFileSizeBytes()); requirement.setCreatedBy(actor);
         if(req.applicationId()!=null){
             GrantApplication app=applications.findById(req.applicationId()).orElseThrow(()->notFound("Application not found."));
@@ -86,15 +86,37 @@ public class ComplianceOperationsService {
         user(email,Role.ADMIN);
         ComplianceRequirement item=requirements.findById(id).orElseThrow(()->notFound("Compliance requirement not found."));
         item.setActive(false);
-        return toRequirement(requirements.save(item));
+        ComplianceRequirement saved = requirements.save(item);
+        compliances.findAll().stream()
+                .filter(c -> c.getRequirement() != null && Objects.equals(c.getRequirement().getId(), saved.getId()))
+                .map(MilestoneCompliance::getMilestone)
+                .filter(Objects::nonNull)
+                .distinct()
+                .forEach(m -> recalculateMilestoneState(m, null));
+        return toRequirement(saved);
     }
 
     @Transactional
     public List<ComplianceItemResponse> getMine(String email) {
         User actor=user(email, Role.BENEFICIARY);
         syncRequirements();
-        return compliances.findAll().stream().filter(c->beneficiary(c).map(b->Objects.equals(b.getId(), actor.getId())).orElse(false))
+        return compliances.findAll().stream()
+                .filter(c->beneficiary(c).map(b->Objects.equals(b.getId(), actor.getId())).orElse(false))
+                .filter(this::isVisibleToBeneficiary)
                 .map(this::toItem).toList();
+    }
+
+    private boolean isVisibleToBeneficiary(MilestoneCompliance c) {
+        if (c == null) return false;
+        if (c.getRequirement() != null && !c.getRequirement().isActive()) {
+            ComplianceStatus st = c.getStatus();
+            return st == ComplianceStatus.SUBMITTED
+                    || st == ComplianceStatus.UNDER_REVIEW
+                    || st == ComplianceStatus.APPROVED
+                    || st == ComplianceStatus.VERIFIED
+                    || st == ComplianceStatus.WAIVED;
+        }
+        return true;
     }
 
     @Transactional
@@ -112,13 +134,15 @@ public class ComplianceOperationsService {
         User actor=user(email,Role.BENEFICIARY);
         MilestoneCompliance item=compliances.findById(id).orElseThrow(()->notFound("Compliance requirement not found."));
         if(!beneficiary(item).map(b->Objects.equals(b.getId(),actor.getId())).orElse(false)) throw denied("You can submit documents only for your own grant requirements.");
+        if(item.getRequirement() != null && !item.getRequirement().isActive())
+            throw new ResponseStatusException(HttpStatus.CONFLICT,"This compliance requirement is inactive and no longer accepts submissions.");
         if(item.getStatus()!=ComplianceStatus.PENDING && item.getStatus()!=ComplianceStatus.OVERDUE && item.getStatus()!=ComplianceStatus.REJECTED && item.getStatus()!=ComplianceStatus.CORRECTION_REQUIRED)
             throw new ResponseStatusException(HttpStatus.CONFLICT,"This requirement is not accepting a submission or replacement.");
         if(file==null || file.isEmpty()) throw bad("A supporting document is required.");
         String allowed = item.getRequirement() != null && item.getRequirement().getAllowedFormats() != null
                 ? item.getRequirement().getAllowedFormats()
                 : "pdf,png,jpg,jpeg";
-        long maxBytes = item.getRequirement() != null
+        long maxBytes = item.getRequirement() != null && item.getRequirement().getMaxFileSizeBytes() > 0
                 ? item.getRequirement().getMaxFileSizeBytes()
                 : 10485760L;
         String filename = Optional.ofNullable(file.getOriginalFilename()).orElse("").replace('\\', '/');
@@ -206,54 +230,23 @@ public class ComplianceOperationsService {
         item.setStatus(decision.equals("APPROVED")?ComplianceStatus.APPROVED:decision.equals("REJECTED")?ComplianceStatus.REJECTED:ComplianceStatus.CORRECTION_REQUIRED);
         item.setVerifiedBy(actor); item.setVerifiedAt(LocalDateTime.now()); item.setVerificationRemarks(req.remarks());
         history(item,actor,decision,req.remarks(),null);
+        MilestoneCompliance saved = compliances.save(item);
 
-        DisbursementMilestone m = item.getMilestone();
+        DisbursementMilestone m = saved.getMilestone();
         if (m != null) {
-            if (decision.equals("APPROVED")) {
-                boolean allSatisfied = m.getCompliances().stream().allMatch(c ->
-                        !c.isRequired() || c.getId().equals(item.getId())
-                        || c.getStatus() == ComplianceStatus.APPROVED
-                        || c.getStatus() == ComplianceStatus.VERIFIED
-                        || c.getStatus() == ComplianceStatus.WAIVED
-                );
-                if (allSatisfied) {
-                    m.setNonCompliant(false);
-                    m.setNonComplianceReason(null);
-                    m.setStatus(MilestoneStatus.COMPLETED);
-                    m.setProgressPercentage(100);
-                    m.setCompletedAt(LocalDateTime.now());
-                } else {
-                    long totalReq = m.getCompliances().stream().filter(MilestoneCompliance::isRequired).count();
-                    long completedReq = m.getCompliances().stream().filter(c ->
-                            c.isRequired() && (c.getId().equals(item.getId()) || c.getStatus() == ComplianceStatus.APPROVED || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.WAIVED)
-                    ).count();
-                    int progress = totalReq > 0 ? (int) ((completedReq * 100) / totalReq) : 50;
-                    m.setProgressPercentage(progress);
-                    if (m.getStatus() == MilestoneStatus.PLANNED) {
-                        m.setStatus(MilestoneStatus.PENDING);
-                    }
-                }
-            } else {
-                m.setNonCompliant(true);
-                m.setNonComplianceReason("Compliance " + decision.toLowerCase(Locale.ROOT) + ": " + (req.remarks() != null ? req.remarks() : "Requirements not satisfied"));
-                if (m.getStatus() == MilestoneStatus.COMPLETED) {
-                    m.setStatus(MilestoneStatus.PENDING);
-                    m.setProgressPercentage(50);
-                }
-            }
-            milestones.save(m);
+            recalculateMilestoneState(m, saved);
         }
 
-        long correctionCount=item.getReviewHistory().stream().filter(h->h.getAction().equals("REJECTED")||h.getAction().equals("CORRECTION_REQUIRED")).count();
-        if(!decision.equals("APPROVED") && correctionCount>=3) createNonCompliance(item,LocalDate.now(),"Repeated unsuccessful compliance submissions.","HIGH");
-        DisbursementMilestone rm = item.getMilestone();
+        long correctionCount=saved.getReviewHistory().stream().filter(h->h.getAction().equals("REJECTED")||h.getAction().equals("CORRECTION_REQUIRED")).count();
+        if(!decision.equals("APPROVED") && correctionCount>=3) createNonCompliance(saved,LocalDate.now(),"Repeated unsuccessful compliance submissions.","HIGH");
+        DisbursementMilestone rm = saved.getMilestone();
         if (rm != null && rm.getInstallment() != null && rm.getInstallment().getPlan() != null) {
             GrantApplication app = rm.getInstallment().getPlan().getApplication();
             if (app != null && app.getBeneficiary() != null && app.getBeneficiary().getUser() != null) {
-                notifications.notify(app.getBeneficiary().getUser(), "compliance_review:" + id + ":" + item.getVerifiedAt(), "Your compliance submission was " + decision.toLowerCase(Locale.ROOT) + "." + (req.remarks() == null ? "" : " Remarks: " + req.remarks()), app.getId());
+                notifications.notify(app.getBeneficiary().getUser(), "compliance_review:" + id + ":" + saved.getVerifiedAt(), "Your compliance submission was " + decision.toLowerCase(Locale.ROOT) + "." + (req.remarks() == null ? "" : " Remarks: " + req.remarks()), app.getId());
             }
         }
-        return toItem(compliances.save(item));
+        return toItem(saved);
     }
 
     @Transactional
@@ -263,25 +256,13 @@ public class ComplianceOperationsService {
         if(item.getStatus()==ComplianceStatus.VERIFIED || item.getStatus()==ComplianceStatus.APPROVED || item.getStatus()==ComplianceStatus.WAIVED) throw new ResponseStatusException(HttpStatus.CONFLICT,"This requirement is already closed.");
         item.setStatus(ComplianceStatus.WAIVED);item.setVerifiedBy(actor);item.setVerifiedAt(LocalDateTime.now());item.setVerificationRemarks(req.remarks());
         history(item,actor,"WAIVED",req.remarks(),null);
+        MilestoneCompliance saved = compliances.save(item);
 
-        DisbursementMilestone m = item.getMilestone();
+        DisbursementMilestone m = saved.getMilestone();
         if (m != null) {
-            boolean allSatisfied = m.getCompliances().stream().allMatch(c ->
-                    !c.isRequired() || c.getId().equals(item.getId())
-                    || c.getStatus() == ComplianceStatus.APPROVED
-                    || c.getStatus() == ComplianceStatus.VERIFIED
-                    || c.getStatus() == ComplianceStatus.WAIVED
-            );
-            if (allSatisfied) {
-                m.setNonCompliant(false);
-                m.setNonComplianceReason(null);
-                m.setStatus(MilestoneStatus.COMPLETED);
-                m.setProgressPercentage(100);
-                m.setCompletedAt(LocalDateTime.now());
-                milestones.save(m);
-            }
+            recalculateMilestoneState(m, saved);
         }
-        return toItem(compliances.save(item));
+        return toItem(saved);
     }
 
     @Transactional(readOnly=true)
@@ -366,11 +347,127 @@ public class ComplianceOperationsService {
                         c.setRequired(r.isRequired());
                         c.setSubmissionDeadline(r.getSubmissionDeadline() != null ? r.getSubmissionDeadline() : m.getDueDate());
                         c.setStatus(ComplianceStatus.PENDING);
-                        compliances.save(c);
+                        MilestoneCompliance saved = compliances.save(c);
+                        if (saved != null && m.getCompliances() != null && m.getCompliances().stream().noneMatch(existing -> Objects.equals(existing.getId(), saved.getId()))) {
+                            m.getCompliances().add(saved);
+                        }
                     }
+                    cleanupDefaultPlaceholders(m);
                 }
             }
         }
+    }
+
+    private void cleanupDefaultPlaceholders(DisbursementMilestone m) {
+        if (m == null) return;
+        List<MilestoneCompliance> milestoneCompliances = getMilestoneCompliances(m, null);
+        boolean hasActiveAdminReq = milestoneCompliances.stream()
+                .anyMatch(c -> c.getRequirement() != null && c.getRequirement().isActive());
+        if (!hasActiveAdminReq) return;
+
+        List<MilestoneCompliance> placeholders = milestoneCompliances.stream()
+                .filter(this::isUnsubmittedDefaultPlaceholder)
+                .filter(c -> c.getId() == null || nonCompliances.findByCompliance_Id(c.getId()).isEmpty())
+                .toList();
+        if (placeholders.isEmpty()) return;
+
+        for (MilestoneCompliance placeholder : placeholders) {
+            if (m.getCompliances() != null) {
+                m.getCompliances().removeIf(existing -> existing == placeholder || (existing.getId() != null && Objects.equals(existing.getId(), placeholder.getId())));
+            }
+            if (placeholder.getId() != null) {
+                compliances.delete(placeholder);
+            }
+        }
+        recalculateMilestoneState(m, null);
+    }
+
+    private boolean isUnsubmittedDefaultPlaceholder(MilestoneCompliance c) {
+        if (c == null || c.getRequirement() != null) return false;
+        if (c.getDocumentData() != null && c.getDocumentData().length > 0) return false;
+        if (c.getStatus() != ComplianceStatus.PENDING && c.getStatus() != ComplianceStatus.OVERDUE) return false;
+        if (c.getReviewHistory() != null && !c.getReviewHistory().isEmpty()) return false;
+        String title = c.getRequirementTitle();
+        if (title == null) return false;
+        return (title.startsWith("Stage ") && title.endsWith("Utilization Certificate & Invoices"))
+                || title.equals("Milestone Completion Certificate");
+    }
+
+    private List<MilestoneCompliance> getMilestoneCompliances(DisbursementMilestone m, MilestoneCompliance updatedItem) {
+        List<MilestoneCompliance> fromRepo = (m.getId() != null) ? compliances.findByMilestone_Id(m.getId()) : Collections.emptyList();
+        List<MilestoneCompliance> base = (fromRepo != null && !fromRepo.isEmpty())
+                ? new ArrayList<>(fromRepo)
+                : (m.getCompliances() != null ? new ArrayList<>(m.getCompliances()) : new ArrayList<>());
+        if (updatedItem != null && updatedItem.getId() != null) {
+            boolean replaced = false;
+            for (int idx = 0; idx < base.size(); idx++) {
+                if (Objects.equals(base.get(idx).getId(), updatedItem.getId())) {
+                    base.set(idx, updatedItem);
+                    replaced = true;
+                    break;
+                }
+            }
+            if (!replaced) {
+                base.add(updatedItem);
+            }
+        }
+        return base;
+    }
+
+    private boolean isActiveObligation(MilestoneCompliance c) {
+        return c != null && (c.getRequirement() == null || c.getRequirement().isActive());
+    }
+
+    private void recalculateMilestoneState(DisbursementMilestone m, MilestoneCompliance updatedItem) {
+        List<MilestoneCompliance> milestoneCompliances = getMilestoneCompliances(m, updatedItem).stream()
+                .filter(this::isActiveObligation)
+                .toList();
+        if (milestoneCompliances.isEmpty()) return;
+
+        boolean hasRejected = updatedItem != null
+                && (updatedItem.getStatus() == ComplianceStatus.REJECTED || updatedItem.getStatus() == ComplianceStatus.CORRECTION_REQUIRED);
+
+        if (hasRejected) {
+            m.setNonCompliant(true);
+            m.setNonComplianceReason("Compliance " + updatedItem.getStatus().name().toLowerCase(Locale.ROOT) + ": "
+                    + (updatedItem.getVerificationRemarks() != null ? updatedItem.getVerificationRemarks() : "Requirements not satisfied"));
+        }
+
+        boolean anyRejected = milestoneCompliances.stream()
+                .anyMatch(c -> c.isRequired() && (c.getStatus() == ComplianceStatus.REJECTED || c.getStatus() == ComplianceStatus.CORRECTION_REQUIRED));
+
+        boolean allSatisfied = !anyRejected && milestoneCompliances.stream().allMatch(c ->
+                !c.isRequired()
+                || c.getStatus() == ComplianceStatus.APPROVED
+                || c.getStatus() == ComplianceStatus.VERIFIED
+                || c.getStatus() == ComplianceStatus.WAIVED
+        );
+
+        if (allSatisfied) {
+            m.setNonCompliant(false);
+            m.setNonComplianceReason(null);
+            m.setStatus(MilestoneStatus.COMPLETED);
+            m.setProgressPercentage(100);
+            if (m.getCompletedAt() == null) {
+                m.setCompletedAt(LocalDateTime.now());
+            }
+        } else {
+            long totalReq = milestoneCompliances.stream().filter(MilestoneCompliance::isRequired).count();
+            long completedReq = milestoneCompliances.stream().filter(c ->
+                    c.isRequired() && (c.getStatus() == ComplianceStatus.APPROVED
+                            || c.getStatus() == ComplianceStatus.VERIFIED
+                            || c.getStatus() == ComplianceStatus.WAIVED)
+            ).count();
+            int progress = totalReq > 0 ? (int) ((completedReq * 100) / totalReq) : 0;
+            m.setProgressPercentage(progress);
+            if (m.getStatus() == MilestoneStatus.COMPLETED) {
+                m.setStatus(MilestoneStatus.PENDING);
+                m.setCompletedAt(null);
+            } else if (m.getStatus() == MilestoneStatus.PLANNED && (completedReq > 0 || anyRejected)) {
+                m.setStatus(MilestoneStatus.PENDING);
+            }
+        }
+        milestones.save(m);
     }
     private void createNonCompliance(MilestoneCompliance c,LocalDate today,String reason,String severity) {
         if(nonCompliances.findByCompliance_Id(c.getId()).isPresent()) return;
@@ -449,7 +546,9 @@ public class ComplianceOperationsService {
         User benUser = ben != null ? ben.getUser() : null;
 
         String format = c != null && c.getRequirement() != null ? c.getRequirement().getAllowedFormats() : "pdf,png,jpg,jpeg";
-        long max = c != null && c.getRequirement() != null ? c.getRequirement().getMaxFileSizeBytes() : 10485760L;
+        long max = c != null && c.getRequirement() != null && c.getRequirement().getMaxFileSizeBytes() > 0
+                ? c.getRequirement().getMaxFileSizeBytes()
+                : 10485760L;
 
         return new ComplianceItemResponse(
                 c != null ? c.getId() : null,

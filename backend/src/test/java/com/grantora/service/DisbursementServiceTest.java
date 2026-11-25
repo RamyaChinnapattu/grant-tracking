@@ -911,4 +911,101 @@ class DisbursementServiceTest {
         assertEquals(1, result.size());
         assertEquals(101L, result.get(0).id());
     }
+
+    @Test
+    void createPlanUsesAdminConfiguredRequirementsInsteadOfDefaultPlaceholder() {
+        ComplianceRequirementRepository reqRepo = mock(ComplianceRequirementRepository.class);
+        DisbursementService serviceWithReqRepo = new DisbursementService(
+                planRepository, installmentRepository, milestoneRepository, complianceRepository, reqRepo,
+                reminderConfigRepository, applicationRepository, schemeRepository, userRepository, workflowAutomationService);
+
+        ComplianceRequirement adminReq = new ComplianceRequirement();
+        adminReq.setId(50L);
+        adminReq.setScheme(scheme);
+        adminReq.setTitle("fgrf");
+        adminReq.setDescription("Admin configured requirement");
+        adminReq.setRequired(true);
+        adminReq.setActive(true);
+
+        ReflectionTestUtils.setField(application, "id", 1L);
+        when(userRepository.findByEmail(adminUser.getEmail())).thenReturn(Optional.of(adminUser));
+        when(applicationRepository.findById(1L)).thenReturn(Optional.of(application));
+        when(planRepository.existsByApplication_Id(1L)).thenReturn(false);
+        when(reqRepo.findByActiveTrue()).thenReturn(List.of(adminReq));
+        when(planRepository.save(any())).thenAnswer(inv -> {
+            DisbursementPlan p = inv.getArgument(0);
+            p.setId(99L);
+            return p;
+        });
+
+        DisbursementPlanRequest req = new DisbursementPlanRequest(
+                1L, "Notes",
+                List.of(new InstallmentRequest(1, "Stage 1", BigDecimal.valueOf(100), BigDecimal.valueOf(80000), LocalDate.now(), List.of()))
+        );
+
+        DisbursementPlanResponse resp = serviceWithReqRepo.createPlan(req, adminUser.getEmail());
+        var compliances = resp.installments().get(0).milestones().get(0).compliances();
+        assertEquals(1, compliances.size());
+        assertEquals("fgrf", compliances.get(0).requirementTitle());
+        assertTrue(compliances.get(0).required());
+    }
+
+    @Test
+    void fundUtilizationCalculatesDisbursementProgressOverCommittedAndHandlesZeroCommitted() {
+        Scheme agriScheme = new Scheme();
+        agriScheme.setId(20L);
+        agriScheme.setSchemeName("Agriculture Development Grant");
+        agriScheme.setDepartment("Agriculture");
+        agriScheme.setAllocatedFunds(BigDecimal.valueOf(1000000));
+
+        Scheme emptyScheme = new Scheme();
+        emptyScheme.setId(21L);
+        emptyScheme.setSchemeName("Zero Committed Scheme");
+        emptyScheme.setDepartment("Education");
+        emptyScheme.setAllocatedFunds(BigDecimal.valueOf(500000));
+
+        application.setScheme(agriScheme);
+        application.setRequestedAmount(BigDecimal.valueOf(45000));
+        application.setStatus(GrantApplicationStatus.APPROVED);
+
+        DisbursementPlan plan = new DisbursementPlan();
+        plan.setId(1L);
+        plan.setScheme(agriScheme);
+        plan.setApplication(application);
+        plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+
+        DisbursementInstallment inst1 = new DisbursementInstallment();
+        inst1.setPlan(plan);
+        inst1.setInstallmentNumber(1);
+        inst1.setAmount(BigDecimal.valueOf(17500));
+        inst1.setStatus(InstallmentStatus.DISBURSED);
+
+        DisbursementInstallment inst2 = new DisbursementInstallment();
+        inst2.setPlan(plan);
+        inst2.setInstallmentNumber(2);
+        inst2.setAmount(BigDecimal.valueOf(27500));
+        inst2.setStatus(InstallmentStatus.PLANNED);
+
+        plan.setInstallments(List.of(inst1, inst2));
+
+        when(schemeRepository.findAll()).thenReturn(List.of(agriScheme, emptyScheme));
+        when(applicationRepository.findAllByOrderByIdDesc()).thenReturn(List.of(application));
+        when(planRepository.findAll()).thenReturn(List.of(plan));
+        when(installmentRepository.findAll()).thenReturn(List.of(inst1, inst2));
+
+        FundUtilizationSummaryResponse summary = disbursementService.getFundUtilizationSummary();
+        assertEquals(0, BigDecimal.valueOf(1500000).compareTo(summary.totalAllocatedFunds()));
+        assertEquals(0, BigDecimal.valueOf(45000).compareTo(summary.totalApprovedAmount()));
+        assertEquals(0, BigDecimal.valueOf(17500).compareTo(summary.totalDisbursedAmount()));
+        assertEquals(0, BigDecimal.valueOf(1455000).compareTo(summary.remainingAllocatedAmount()));
+
+        SchemeFundUtilizationResponse agriRow = summary.schemes().stream()
+                .filter(r -> r.schemeId().equals(20L)).findFirst().orElseThrow();
+        // 17500 / 45000 * 100 = 38.89%
+        assertEquals(0, new BigDecimal("38.89").compareTo(agriRow.utilizationPercentage()));
+
+        SchemeFundUtilizationResponse zeroRow = summary.schemes().stream()
+                .filter(r -> r.schemeId().equals(21L)).findFirst().orElseThrow();
+        assertEquals(0, BigDecimal.ZERO.compareTo(zeroRow.utilizationPercentage()));
+    }
 }
