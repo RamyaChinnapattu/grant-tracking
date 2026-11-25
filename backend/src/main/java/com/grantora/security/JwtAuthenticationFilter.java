@@ -24,89 +24,95 @@ import java.util.List;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    private final JwtService jwtService;
-    private final UserRepository userRepository;
+        private final JwtService jwtService;
+        private final UserRepository userRepository;
 
-    public JwtAuthenticationFilter(
-            JwtService jwtService,
-            UserRepository userRepository) {
+        public JwtAuthenticationFilter(
+                        JwtService jwtService,
+                        UserRepository userRepository) {
 
-        this.jwtService = jwtService;
-        this.userRepository = userRepository;
-    }
-
-    @Override
-    protected boolean shouldNotFilter(HttpServletRequest request) {
-
-        String path = request.getServletPath();
-
-        boolean skip = path.equals("/api/auth/login")
-                || path.equals("/api/auth/register");
-
-        System.out.println("JWT SHOULD SKIP: " + path + " = " + skip);
-
-        return skip;
-    }
-
-    @Override
-    protected void doFilterInternal(
-            HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain)
-            throws ServletException, IOException {
-
-        System.out.println(
-                "JWT FILTER: " + request.getMethod()
-                + " " + request.getServletPath());
-
-        String authHeader = request.getHeader("Authorization");
-
-        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
-            filterChain.doFilter(request, response);
-            return;
+                this.jwtService = jwtService;
+                this.userRepository = userRepository;
         }
 
-        String token = authHeader.substring(7);
+        @Override
+        protected boolean shouldNotFilter(HttpServletRequest request) {
 
-        try {
-            String email = jwtService.extractEmail(token);
+                String path = request.getServletPath();
 
-            if (SecurityContextHolder.getContext()
-                    .getAuthentication() == null) {
+                boolean skip = path.equals("/api/auth/login")
+                                || path.equals("/api/auth/register");
 
-                User user = userRepository.findByEmail(email)
-                        .orElse(null);
+                System.out.println("JWT SHOULD SKIP: " + path + " = " + skip);
 
-                if (user != null
-                        && Boolean.TRUE.equals(user.getActive())
-                        && jwtService.isTokenValid(token, email)) {
+                return skip;
+        }
 
-                    var authorities = List.of(
-                            new SimpleGrantedAuthority(
-                                    "ROLE_" + user.getRole().name()));
+        @Override
+        protected void doFilterInternal(
+                        HttpServletRequest request,
+                        HttpServletResponse response,
+                        FilterChain filterChain)
+                        throws ServletException, IOException {
 
-                    var authentication =
-                            new UsernamePasswordAuthenticationToken(
-                                    user.getEmail(),
-                                    null,
-                                    authorities);
+                System.out.println(
+                                "JWT FILTER: " + request.getMethod()
+                                                + " " + request.getServletPath());
 
-                    SecurityContextHolder.getContext()
-                            .setAuthentication(authentication);
+                String authHeader = request.getHeader("Authorization");
+
+                if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+                        filterChain.doFilter(request, response);
+                        return;
                 }
-            }
 
-        } catch (JwtException | IllegalArgumentException ex) {
+                String token = authHeader.substring(7);
 
-            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
-            response.setContentType("application/json");
+                try {
+                        String email = jwtService.extractEmail(token);
 
-            response.getWriter().write(
-                    "{\"error\":\"Invalid or expired JWT token\"}");
+                        if (SecurityContextHolder.getContext()
+                                        .getAuthentication() == null) {
 
-            return;
+                                User user = userRepository.findByEmail(email)
+                                                .orElse(null);
+
+                                if (user != null
+                                                && Boolean.TRUE.equals(user.getActive())
+                                                && jwtService.isTokenValid(token, email)) {
+
+                                        List<SimpleGrantedAuthority> authorities = new java.util.ArrayList<>();
+                                        authorities.add(new SimpleGrantedAuthority(
+                                                        "ROLE_" + user.getRole().name()));
+                                        if (user.getRole() == com.grantora.entity.Role.OFFICER
+                                                        && user.getOfficerLevel() != null
+                                                        && !user.getOfficerLevel().isBlank()) {
+                                                authorities.add(new SimpleGrantedAuthority(
+                                                                "LEVEL_" + user.getOfficerLevel().trim()
+                                                                                .toUpperCase(java.util.Locale.ROOT)));
+                                        }
+
+                                        var authentication = new UsernamePasswordAuthenticationToken(
+                                                        user.getEmail(),
+                                                        null,
+                                                        authorities);
+
+                                        SecurityContextHolder.getContext()
+                                                        .setAuthentication(authentication);
+                                }
+                        }
+
+                } catch (JwtException | IllegalArgumentException ex) {
+
+                        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                        response.setContentType("application/json");
+
+                        response.getWriter().write(
+                                        "{\"error\":\"Invalid or expired JWT token\"}");
+
+                        return;
+                }
+
+                filterChain.doFilter(request, response);
         }
-
-        filterChain.doFilter(request, response);
-    }
 }

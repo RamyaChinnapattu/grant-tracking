@@ -20,5 +20,31 @@ public record MilestoneComplianceResponse(
     String verifiedByName,
     LocalDateTime verifiedAt,
     String verificationRemarks,
-    boolean required
-) {}
+    boolean required,
+    String currentReviewStage,
+    Integer currentReviewCycle
+) {
+    public MilestoneComplianceResponse(
+        Long id,
+        Long milestoneId,
+        String milestoneTitle,
+        String requirementTitle,
+        String description,
+        String submissionNotes,
+        ComplianceStatus status,
+        String documentFileName,
+        String documentContentType,
+        Long documentFileSize,
+        boolean hasDocument,
+        LocalDateTime submittedAt,
+        String submittedByName,
+        String verifiedByName,
+        LocalDateTime verifiedAt,
+        String verificationRemarks,
+        boolean required
+    ) {
+        this(id, milestoneId, milestoneTitle, requirementTitle, description, submissionNotes, status,
+             documentFileName, documentContentType, documentFileSize, hasDocument, submittedAt,
+             submittedByName, verifiedByName, verifiedAt, verificationRemarks, required, null, null);
+    }
+}

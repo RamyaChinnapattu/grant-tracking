@@ -33,6 +33,7 @@ class DisbursementServiceTest {
 
         private User adminUser;
         private User officerUser;
+        private User financeOfficerUser;
         private User beneficiaryUser;
         private Beneficiary beneficiary;
         private Scheme scheme;
@@ -71,7 +72,18 @@ class DisbursementServiceTest {
                 officerUser.setId(2L);
                 officerUser.setEmail("officer@grantora.gov");
                 officerUser.setRole(Role.OFFICER);
+                officerUser.setOfficerLevel("FIELD");
                 officerUser.setFullName("Field Officer");
+
+                financeOfficerUser = new User();
+                financeOfficerUser.setId(4L);
+                financeOfficerUser.setEmail("finance@grantora.gov");
+                financeOfficerUser.setRole(Role.OFFICER);
+                financeOfficerUser.setOfficerLevel("FINANCE");
+                financeOfficerUser.setJurisdictionState("Karnataka");
+                financeOfficerUser.setActive(true);
+                financeOfficerUser.setFullName("Finance Officer");
+                when(userRepository.findByEmail("finance@grantora.gov")).thenReturn(Optional.of(financeOfficerUser));
 
                 beneficiaryUser = new User();
                 beneficiaryUser.setId(3L);
@@ -291,9 +303,10 @@ class DisbursementServiceTest {
                 DisburseFundsRequest req = new DisburseFundsRequest("TXN12345678", "PFMS", "Stage 1 payment");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
-                assertTrue(ex.getReason().contains("All compliances must be VERIFIED before fund release"));
+                assertTrue(ex.getReason().contains(
+                                "All required reviews (Field, District, Finance) must be approved before fund release"));
         }
 
         @Test
@@ -320,7 +333,18 @@ class DisbursementServiceTest {
 
                 MilestoneCompliance compliance = new MilestoneCompliance();
                 compliance.setRequirementTitle("Vendor Bill");
-                compliance.setStatus(ComplianceStatus.VERIFIED);
+                compliance.setStatus(ComplianceStatus.PAYMENT_ELIGIBLE);
+                compliance.setCurrentReviewCycle(1);
+                for (VerificationStage st : List.of(VerificationStage.FIELD, VerificationStage.DISTRICT,
+                                VerificationStage.FINANCE)) {
+                        ComplianceStageReview sr = new ComplianceStageReview();
+                        sr.setReviewCycle(1);
+                        sr.setStage(st);
+                        sr.setDecision("APPROVED");
+                        sr.setReviewer(financeOfficerUser);
+                        sr.setReviewerOfficerLevel(st.name());
+                        compliance.addStageReview(sr);
+                }
                 milestone.addCompliance(compliance);
 
                 installment1.addMilestone(milestone);
@@ -342,7 +366,7 @@ class DisbursementServiceTest {
                                 "Released after audit");
 
                 DisbursementInstallmentResponse response = disbursementService.disburseInstallment(11L, req,
-                                "admin@grantora.gov");
+                                "finance@grantora.gov");
 
                 assertEquals(InstallmentStatus.DISBURSED, response.status());
                 assertEquals("UTR-2026-998877", response.paymentReference());
@@ -373,7 +397,7 @@ class DisbursementServiceTest {
                 DisburseFundsRequest req = new DisburseFundsRequest("UTR-ALREADY-DONE", "NEFT", "Duplicate test");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason().contains("already been disbursed"));
         }
@@ -511,7 +535,7 @@ class DisbursementServiceTest {
                                 "Attempting stage 2 first");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(12L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(12L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason()
                                 .contains("Previous installments must be disbursed before releasing installment #2"));
@@ -542,7 +566,7 @@ class DisbursementServiceTest {
                                 "Disburse on cancelled");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason().contains("Cannot disburse installment: disbursement plan is CANCELLED"));
         }
@@ -572,7 +596,7 @@ class DisbursementServiceTest {
                                 "Excess amount");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason().contains("exceeds total approved grant amount"));
         }
@@ -603,7 +627,7 @@ class DisbursementServiceTest {
                                 "Unapproved app");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason().contains("Application has not received final Finance Officer approval"));
         }
@@ -634,7 +658,7 @@ class DisbursementServiceTest {
                                 "Final single stage");
 
                 DisbursementInstallmentResponse response = disbursementService.disburseInstallment(11L, req,
-                                "admin@grantora.gov");
+                                "finance@grantora.gov");
 
                 assertEquals(InstallmentStatus.DISBURSED, response.status());
                 assertEquals(DisbursementPlanStatus.COMPLETED, plan.getPlanStatus());
@@ -669,7 +693,7 @@ class DisbursementServiceTest {
                                 "Replay attack");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason().contains("already been recorded for another disbursement"));
         }
@@ -747,7 +771,7 @@ class DisbursementServiceTest {
                                 "Early attempt");
 
                 ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
 
                 assertTrue(ex.getReason().contains("is not completed"));
         }
@@ -1077,6 +1101,165 @@ class DisbursementServiceTest {
                 SchemeFundUtilizationResponse zeroRow = summary.schemes().stream()
                                 .filter(r -> r.schemeId().equals(21L)).findFirst().orElseThrow();
                 assertEquals(0, BigDecimal.ZERO.compareTo(zeroRow.utilizationPercentage()));
+        }
+
+        @Test
+        void adminAndNonFinanceOfficersCannotDisburseInstallment() {
+                when(userRepository.findByEmail("admin@grantora.gov")).thenReturn(Optional.of(adminUser));
+                when(userRepository.findByEmail("officer@grantora.gov")).thenReturn(Optional.of(officerUser));
+                DisburseFundsRequest req = new DisburseFundsRequest("UTR-999", "DBT_PFMS", "Release");
+
+                ResponseStatusException adminEx = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(11L, req, "admin@grantora.gov"));
+                assertEquals(HttpStatus.FORBIDDEN, adminEx.getStatusCode());
+
+                ResponseStatusException fieldEx = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(11L, req, "officer@grantora.gov"));
+                assertEquals(HttpStatus.FORBIDDEN, fieldEx.getStatusCode());
+        }
+
+        @Test
+        void disburseInstallmentSucceedsWithSequentialPaymentEligibleStageReviews() {
+                DisbursementPlan plan = new DisbursementPlan();
+                plan.setId(5L);
+                plan.setApplication(application);
+                plan.setScheme(scheme);
+                plan.setTotalApprovedAmount(BigDecimal.valueOf(80000));
+                plan.setTotalDisbursedAmount(BigDecimal.ZERO);
+                plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+
+                DisbursementInstallment inst = new DisbursementInstallment();
+                inst.setId(11L);
+                inst.setPlan(plan);
+                inst.setInstallmentNumber(1);
+                inst.setTitle("Stage 1");
+                inst.setAmount(BigDecimal.valueOf(32000));
+                inst.setPercentage(BigDecimal.valueOf(40));
+                inst.setStatus(InstallmentStatus.READY_FOR_DISBURSEMENT);
+
+                DisbursementMilestone m = new DisbursementMilestone();
+                m.setId(21L);
+                m.setInstallment(inst);
+                m.setTitle("Stage 1 Milestone");
+                m.setStatus(MilestoneStatus.COMPLETED);
+                m.setProgressPercentage(100);
+                m.setNonCompliant(false);
+
+                MilestoneCompliance c = new MilestoneCompliance();
+                c.setId(31L);
+                c.setMilestone(m);
+                c.setRequirementTitle("Land Document");
+                c.setRequired(true);
+                c.setStatus(ComplianceStatus.PAYMENT_ELIGIBLE);
+                c.setCurrentReviewCycle(1);
+                for (VerificationStage st : List.of(VerificationStage.FIELD, VerificationStage.DISTRICT,
+                                VerificationStage.FINANCE)) {
+                        ComplianceStageReview sr = new ComplianceStageReview();
+                        sr.setReviewCycle(1);
+                        sr.setStage(st);
+                        sr.setDecision("APPROVED");
+                        sr.setReviewer(financeOfficerUser);
+                        sr.setReviewerOfficerLevel(st.name());
+                        c.addStageReview(sr);
+                }
+                m.addCompliance(c);
+                inst.addMilestone(m);
+                plan.addInstallment(inst);
+
+                when(installmentRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(inst));
+                when(installmentRepository.existsByPaymentReference("UTR-SEQ-001")).thenReturn(false);
+                when(installmentRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+                when(planRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+                DisbursementInstallmentResponse resp = disbursementService.disburseInstallment(
+                                11L, new DisburseFundsRequest("UTR-SEQ-001", "DBT_PFMS", "All 3 stages verified"),
+                                "finance@grantora.gov");
+                assertEquals(InstallmentStatus.DISBURSED, resp.status());
+                assertEquals("UTR-SEQ-001", resp.paymentReference());
+                assertEquals("Finance Officer", resp.disbursedByName());
+        }
+
+        @Test
+        void legacyApprovedOrVerifiedComplianceCannotBypassThreeStageWorkflow() {
+                DisbursementPlan plan = new DisbursementPlan();
+                plan.setId(5L);
+                plan.setApplication(application);
+                plan.setScheme(scheme);
+                plan.setTotalApprovedAmount(BigDecimal.valueOf(80000));
+                plan.setTotalDisbursedAmount(BigDecimal.ZERO);
+                plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+
+                DisbursementInstallment inst = new DisbursementInstallment();
+                inst.setId(11L);
+                inst.setPlan(plan);
+                inst.setInstallmentNumber(1);
+                inst.setTitle("Stage 1");
+                inst.setAmount(BigDecimal.valueOf(32000));
+                inst.setStatus(InstallmentStatus.READY_FOR_DISBURSEMENT);
+
+                DisbursementMilestone m = new DisbursementMilestone();
+                m.setId(21L);
+                m.setInstallment(inst);
+                m.setTitle("Stage 1 Milestone");
+                m.setStatus(MilestoneStatus.COMPLETED);
+                m.setProgressPercentage(100);
+
+                MilestoneCompliance legacyApproved = new MilestoneCompliance();
+                legacyApproved.setId(31L);
+                legacyApproved.setMilestone(m);
+                legacyApproved.setRequirementTitle("Legacy Doc");
+                legacyApproved.setRequired(true);
+                legacyApproved.setStatus(ComplianceStatus.APPROVED);
+                m.addCompliance(legacyApproved);
+                inst.addMilestone(m);
+                plan.addInstallment(inst);
+
+                when(installmentRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(inst));
+                DisburseFundsRequest req = new DisburseFundsRequest("UTR-LEGACY-BYPASS", "DBT_PFMS", "Attempt bypass");
+
+                ResponseStatusException approvedEx = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
+                assertEquals(HttpStatus.BAD_REQUEST, approvedEx.getStatusCode());
+
+                legacyApproved.setStatus(ComplianceStatus.VERIFIED);
+                ResponseStatusException verifiedEx = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(11L, req, "finance@grantora.gov"));
+                assertEquals(HttpStatus.BAD_REQUEST, verifiedEx.getStatusCode());
+        }
+
+        @Test
+        void financeOfficerWithMissingOrMismatchedStateCannotDisburse() {
+                DisbursementPlan plan = new DisbursementPlan();
+                plan.setId(5L);
+                plan.setApplication(application);
+                plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+                DisbursementInstallment inst = new DisbursementInstallment();
+                inst.setId(11L);
+                inst.setPlan(plan);
+                inst.setInstallmentNumber(1);
+                inst.setAmount(BigDecimal.valueOf(32000));
+                inst.setStatus(InstallmentStatus.READY_FOR_DISBURSEMENT);
+                when(installmentRepository.findByIdForUpdate(11L)).thenReturn(Optional.of(inst));
+
+                User otherStateFinance = new User();
+                otherStateFinance.setId(9L);
+                otherStateFinance.setEmail("finance-other@grantora.gov");
+                otherStateFinance.setRole(Role.OFFICER);
+                otherStateFinance.setOfficerLevel("FINANCE");
+                otherStateFinance.setJurisdictionState("Maharashtra");
+                otherStateFinance.setActive(true);
+                when(userRepository.findByEmail("finance-other@grantora.gov"))
+                                .thenReturn(Optional.of(otherStateFinance));
+
+                DisburseFundsRequest req = new DisburseFundsRequest("UTR-STATE-FAIL", "DBT_PFMS", "Release");
+                ResponseStatusException ex1 = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(11L, req, "finance-other@grantora.gov"));
+                assertEquals(HttpStatus.FORBIDDEN, ex1.getStatusCode());
+
+                otherStateFinance.setJurisdictionState(null);
+                ResponseStatusException ex2 = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(11L, req, "finance-other@grantora.gov"));
+                assertEquals(HttpStatus.FORBIDDEN, ex2.getStatusCode());
         }
 
         @Test

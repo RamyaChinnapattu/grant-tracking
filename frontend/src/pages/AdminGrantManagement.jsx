@@ -49,6 +49,7 @@ import {
   getNonComplianceCases,
   reviewCompliance,
   waiveCompliance,
+  reopenCompliance,
   getComplianceDocumentFile,
 } from "../services/complianceService";
 import { getSchemes } from "../services/schemeService";
@@ -533,16 +534,13 @@ export default function AdminGrantManagement() {
     }
   };
 
-  // Verify / Waive Compliance handler
+  // Waive / Reopen Compliance handler (Admin performs justified waivers or explicit reopening of rejected/legacy items)
   const handleVerifySubmit = async (e) => {
     e.preventDefault();
     if (!showVerifyModal) return;
 
-    if (
-      (verifyForm.decision === "REJECTED" || verifyForm.decision === "CORRECTION_REQUIRED") &&
-      !verifyForm.remarks.trim()
-    ) {
-      setError("Remarks are required when rejecting or requesting correction.");
+    if (!verifyForm.remarks.trim()) {
+      setError("Mandatory audit remarks / reason are required.");
       return;
     }
 
@@ -550,20 +548,17 @@ export default function AdminGrantManagement() {
     setSuccessMsg("");
 
     try {
-      if (verifyForm.decision === "WAIVED") {
-        await waiveCompliance(showVerifyModal.id, verifyForm.remarks || "Waived by Administrator");
-        setSuccessMsg("Compliance requirement waived.");
+      if (verifyForm.decision === "REOPEN") {
+        await reopenCompliance(showVerifyModal.id, verifyForm.remarks.trim());
+        setSuccessMsg("Compliance submission reopened for a new Field review cycle.");
       } else {
-        await reviewCompliance(showVerifyModal.id, {
-          decision: verifyForm.decision,
-          remarks: verifyForm.remarks,
-        });
-        setSuccessMsg(`Compliance reviewed as ${verifyForm.decision}.`);
+        await waiveCompliance(showVerifyModal.id, verifyForm.remarks.trim());
+        setSuccessMsg("Compliance requirement waived.");
       }
       setShowVerifyModal(null);
       await loadAllData(true);
     } catch (err) {
-      setError(err.response?.data?.message || "Failed to update compliance review.");
+      setError(err.response?.data?.message || "Failed to process compliance action.");
     }
   };
 
@@ -1530,18 +1525,45 @@ export default function AdminGrantManagement() {
                             )}
                           </td>
                           <td>
-                            <button
-                              className="mgmt-btn primary"
-                              style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
-                              onClick={() => {
-                                setShowVerifyModal(item);
-                                setVerifyForm({ decision: "APPROVED", remarks: item.verificationRemarks || "" });
-                              }}
-                            >
-                              {item.status === "SUBMITTED" || item.status === "UNDER_REVIEW"
-                                ? "Review / Waive"
-                                : "Update Review"}
-                            </button>
+                            {["REJECTED", "APPROVED", "VERIFIED"].includes(item.status) ? (
+                              <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+                                <button
+                                  className="mgmt-btn secondary"
+                                  style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                                  onClick={() => {
+                                    setShowVerifyModal(item);
+                                    setVerifyForm({ decision: "REOPEN", remarks: "" });
+                                  }}
+                                >
+                                  Reopen
+                                </button>
+                                <button
+                                  className="mgmt-btn secondary"
+                                  style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                                  onClick={() => {
+                                    setShowVerifyModal(item);
+                                    setVerifyForm({ decision: "WAIVED", remarks: "" });
+                                  }}
+                                >
+                                  Waive
+                                </button>
+                              </div>
+                            ) : !["PAYMENT_ELIGIBLE", "WAIVED"].includes(item.status) ? (
+                              <button
+                                className="mgmt-btn secondary"
+                                style={{ padding: "0.3rem 0.6rem", fontSize: "0.8rem" }}
+                                onClick={() => {
+                                  setShowVerifyModal(item);
+                                  setVerifyForm({ decision: "WAIVED", remarks: "" });
+                                }}
+                              >
+                                Waive (Admin)
+                              </button>
+                            ) : (
+                              <span style={{ color: "#64748b", fontSize: "0.8rem" }}>
+                                {item.currentReviewStage ? `At ${item.currentReviewStage}` : "Completed"}
+                              </span>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -1751,21 +1773,15 @@ export default function AdminGrantManagement() {
                                 {inst.paymentReference && <div>Ref: {inst.paymentReference}</div>}
                               </div>
                             ) : isReady ? (
-                              <button
-                                className="mgmt-btn success"
-                                style={{ padding: "0.35rem 0.75rem", fontSize: "0.8rem" }}
-                                onClick={() => {
-                                  setShowDisburseModal(inst);
-                                  setDisburseForm({
-                                    paymentReference: "",
-                                    paymentMethod: "DBT_PFMS",
-                                    disbursementDate: new Date().toISOString().split("T")[0],
-                                    disbursementRemarks: "",
-                                  });
+                              <span
+                                style={{
+                                  fontSize: "0.78rem",
+                                  color: "#0369a1",
+                                  fontWeight: 600,
                                 }}
                               >
-                                Release Payment
-                              </button>
+                                Ready for Finance Officer Release
+                              </span>
                             ) : (
                               <span
                                 style={{
@@ -2505,7 +2521,7 @@ export default function AdminGrantManagement() {
             style={{ maxHeight: "90vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
           >
             <div className="mgmt-modal__header" style={{ flexShrink: 0 }}>
-              <h2>Review Compliance Evidence</h2>
+              <h2>Admin Compliance Waiver</h2>
               <button
                 onClick={() => setShowVerifyModal(null)}
                 style={{ background: "none", border: "none", cursor: "pointer" }}
@@ -2554,36 +2570,24 @@ export default function AdminGrantManagement() {
                 </div>
 
                 <div className="mgmt-form-group">
-                  <label>Review Decision *</label>
-                  <select
-                    value={verifyForm.decision}
-                    onChange={(e) =>
-                      setVerifyForm({ ...verifyForm, decision: e.target.value })
+                  <label>Action</label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      verifyForm.decision === "REOPEN"
+                        ? "REOPEN — Restart Compliance Review Cycle at Field"
+                        : "WAIVED — Administrator Discretionary Waiver"
                     }
-                  >
-                    <option value="APPROVED">APPROVE - Evidence Validated</option>
-                    <option value="CORRECTION_REQUIRED">
-                      CORRECTION REQUIRED - Beneficiary Must Resubmit
-                    </option>
-                    <option value="REJECTED">REJECT - Non-Compliant</option>
-                    <option value="WAIVED">WAIVE - Administrator Discretionary Waiver</option>
-                  </select>
+                  />
                 </div>
 
                 <div className="mgmt-form-group">
-                  <label>
-                    Review Remarks{" "}
-                    {(verifyForm.decision === "REJECTED" ||
-                      verifyForm.decision === "CORRECTION_REQUIRED") &&
-                      "*"}
-                  </label>
+                  <label>Justification / Audit Remarks *</label>
                   <textarea
                     rows="3"
-                    required={
-                      verifyForm.decision === "REJECTED" ||
-                      verifyForm.decision === "CORRECTION_REQUIRED"
-                    }
-                    placeholder="Enter audit remarks or feedback for beneficiary…"
+                    required
+                    placeholder="Enter mandatory justification for waiving this compliance requirement…"
                     value={verifyForm.remarks}
                     onChange={(e) =>
                       setVerifyForm({ ...verifyForm, remarks: e.target.value })
@@ -2601,7 +2605,7 @@ export default function AdminGrantManagement() {
                   Cancel
                 </button>
                 <button type="submit" className="mgmt-btn primary">
-                  Save Review Decision
+                  Confirm Waiver
                 </button>
               </div>
             </form>

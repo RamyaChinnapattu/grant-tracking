@@ -45,18 +45,6 @@ export async function getCompliancesByMilestone(milestoneId) {
   return api.get(`/disbursements/milestones/${milestoneId}/compliances`);
 }
 
-export async function submitCompliance(milestoneId, formData) {
-  return api.post(`/disbursements/milestones/${milestoneId}/compliance`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-    },
-  });
-}
-
-export async function verifyCompliance(complianceId, verifyData) {
-  return api.post(`/disbursements/compliance/${complianceId}/verify`, verifyData);
-}
-
 export async function downloadComplianceDocument(complianceId) {
   return api.get(`/disbursements/compliance/${complianceId}/document`, {
     responseType: "blob",

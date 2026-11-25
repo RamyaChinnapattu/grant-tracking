@@ -5,6 +5,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -21,6 +22,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 @Configuration
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
@@ -113,8 +115,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/compliance/mine").hasRole("BENEFICIARY")
                         .requestMatchers(HttpMethod.POST, "/api/compliance/submissions/*").hasRole("BENEFICIARY")
                         .requestMatchers(HttpMethod.GET, "/api/compliance/review-queue", "/api/compliance/non-compliances").hasAnyRole("ADMIN", "OFFICER")
-                        .requestMatchers(HttpMethod.PATCH, "/api/compliance/submissions/*/review", "/api/compliance/non-compliances/*").hasAnyRole("ADMIN", "OFFICER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/compliance/submissions/*/review").hasRole("OFFICER")
+                        .requestMatchers(HttpMethod.PATCH, "/api/compliance/non-compliances/*").hasAnyRole("ADMIN", "OFFICER")
                         .requestMatchers(HttpMethod.PATCH, "/api/compliance/submissions/*/waive").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.PATCH, "/api/compliance/submissions/*/reopen").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/compliance/submissions/*/document").hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
                         .requestMatchers("/api/compliance/**").authenticated()
 
@@ -134,10 +138,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/disbursements/milestones/*/compliance").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.PATCH, "/api/disbursements/plans/*/deactivate").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/disbursements/plans/mine").hasRole("BENEFICIARY")
-                        .requestMatchers(HttpMethod.GET, "/api/disbursements/plans/**").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/plans/**").hasAnyAuthority("ROLE_ADMIN", "LEVEL_FINANCE")
                         .requestMatchers(HttpMethod.GET, "/api/disbursements/compliance/*/document").hasAnyRole("ADMIN", "OFFICER", "BENEFICIARY")
-                        .requestMatchers(HttpMethod.GET, "/api/disbursements/compliances", "/api/disbursements/milestones", "/api/disbursements/milestones/*/compliances").hasRole("ADMIN")
-                        .requestMatchers(HttpMethod.POST, "/api/disbursements/installments/*/disburse").hasRole("ADMIN")
+                        .requestMatchers(HttpMethod.GET, "/api/disbursements/compliances", "/api/disbursements/milestones", "/api/disbursements/milestones/*/compliances").hasAnyAuthority("ROLE_ADMIN", "LEVEL_FINANCE")
+                        .requestMatchers(HttpMethod.POST, "/api/disbursements/installments/*/disburse").hasAuthority("LEVEL_FINANCE")
                         .requestMatchers(HttpMethod.PUT, "/api/disbursements/reminders/config").hasRole("ADMIN")
                         .requestMatchers("/api/disbursements/eligible-applications").hasRole("ADMIN")
                         .requestMatchers(HttpMethod.GET, "/api/disbursements/fund-utilization").hasAnyRole("ADMIN", "OFFICER")

@@ -75,6 +75,21 @@ public class MilestoneCompliance {
     @OrderBy("occurredAt ASC")
     private List<ComplianceReviewHistory> reviewHistory = new ArrayList<>();
 
+    @Column(name = "current_review_cycle", nullable = false)
+    private Integer currentReviewCycle = 0;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "current_review_stage", length = 20)
+    private VerificationStage currentReviewStage;
+
+    @OneToMany(mappedBy = "compliance", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("reviewCycle ASC, reviewedAt ASC")
+    private List<ComplianceStageReview> stageReviews = new ArrayList<>();
+
+    @OneToMany(mappedBy = "compliance", cascade = CascadeType.ALL, orphanRemoval = true)
+    @OrderBy("versionNumber ASC")
+    private List<ComplianceDocumentVersion> documentVersions = new ArrayList<>();
+
     public MilestoneCompliance() {}
 
     public Long getId() { return id; }
@@ -129,4 +144,16 @@ public class MilestoneCompliance {
     public void setVerificationRemarks(String verificationRemarks) { this.verificationRemarks = verificationRemarks; }
     public List<ComplianceReviewHistory> getReviewHistory() { return reviewHistory; }
     public void addHistory(ComplianceReviewHistory entry) { entry.setCompliance(this); reviewHistory.add(entry); }
+
+    public Integer getCurrentReviewCycle() { return currentReviewCycle != null ? currentReviewCycle : 0; }
+    public void setCurrentReviewCycle(Integer currentReviewCycle) { this.currentReviewCycle = currentReviewCycle; }
+
+    public VerificationStage getCurrentReviewStage() { return currentReviewStage; }
+    public void setCurrentReviewStage(VerificationStage currentReviewStage) { this.currentReviewStage = currentReviewStage; }
+
+    public List<ComplianceStageReview> getStageReviews() { return stageReviews; }
+    public void addStageReview(ComplianceStageReview review) { review.setCompliance(this); stageReviews.add(review); }
+
+    public List<ComplianceDocumentVersion> getDocumentVersions() { return documentVersions; }
+    public void addDocumentVersion(ComplianceDocumentVersion version) { version.setCompliance(this); documentVersions.add(version); }
 }

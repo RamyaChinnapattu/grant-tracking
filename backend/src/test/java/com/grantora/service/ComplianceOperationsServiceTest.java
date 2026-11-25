@@ -31,7 +31,7 @@ class ComplianceOperationsServiceTest {
     private WorkflowAutomationService notificationService;
     private DisbursementReminderConfigRepository configRepo;
     private ComplianceOperationsService service;
-    private User admin, officer, beneficiaryUser;
+    private User admin, officer, districtOfficer, financeOfficer, beneficiaryUser;
     private Scheme scheme;
     private GrantApplication application;
     private MilestoneCompliance compliance;
@@ -43,16 +43,20 @@ class ComplianceOperationsServiceTest {
         schemeRepo=mock(SchemeRepository.class);applicationRepo=mock(GrantApplicationRepository.class);userRepo=mock(UserRepository.class);
         notificationService=mock(WorkflowAutomationService.class);configRepo=mock(DisbursementReminderConfigRepository.class);
         service=new ComplianceOperationsService(requirementRepo,complianceRepo,reminderRepo,nonComplianceRepo,milestoneRepo,planRepo,schemeRepo,applicationRepo,userRepo,notificationService,configRepo);
-        admin=user(1L,Role.ADMIN);officer=user(2L,Role.OFFICER);beneficiaryUser=user(3L,Role.BENEFICIARY);
+        admin=user(1L,Role.ADMIN);
+        officer=user(2L,Role.OFFICER);officer.setOfficerLevel("FIELD");officer.setJurisdictionState("Karnataka");officer.setJurisdictionDistrict("Mysuru");
+        districtOfficer=user(4L,Role.OFFICER);districtOfficer.setEmail("district@example.test");districtOfficer.setOfficerLevel("DISTRICT");districtOfficer.setJurisdictionState("Karnataka");districtOfficer.setJurisdictionDistrict("Mysuru");
+        financeOfficer=user(5L,Role.OFFICER);financeOfficer.setEmail("finance@example.test");financeOfficer.setOfficerLevel("FINANCE");financeOfficer.setJurisdictionState("Karnataka");
+        beneficiaryUser=user(3L,Role.BENEFICIARY);
         scheme=new Scheme();scheme.setId(20L);scheme.setSchemeName("Farm grant");
-        Beneficiary beneficiary=new Beneficiary();beneficiary.setUser(beneficiaryUser);
+        Beneficiary beneficiary=new Beneficiary();beneficiary.setUser(beneficiaryUser);beneficiary.setState("Karnataka");beneficiary.setDistrict("Mysuru");
         application=new GrantApplication();application.setBeneficiary(beneficiary);application.setScheme(scheme);
         application.setRequestedAmount(BigDecimal.valueOf(1000));application.setStatus(GrantApplicationStatus.APPROVED);
         application.setAssignedOfficer(officer);
         DisbursementPlan plan=new DisbursementPlan();plan.setApplication(application);plan.setScheme(scheme);
         DisbursementInstallment installment=new DisbursementInstallment();installment.setPlan(plan);
         DisbursementMilestone milestone=new DisbursementMilestone();milestone.setId(31L);milestone.setTitle("Progress report");milestone.setInstallment(installment);
-        compliance=new MilestoneCompliance();compliance.setId(41L);compliance.setMilestone(milestone);compliance.setRequirementTitle("Progress report");compliance.setStatus(ComplianceStatus.SUBMITTED);
+        compliance=new MilestoneCompliance();compliance.setId(41L);compliance.setMilestone(milestone);compliance.setRequirementTitle("Progress report");compliance.setStatus(ComplianceStatus.FIELD_PENDING);compliance.setCurrentReviewCycle(1);compliance.setCurrentReviewStage(VerificationStage.FIELD);
         compliance.setDocumentData("%PDF-1.7 dummy".getBytes());
         milestone.addCompliance(compliance);
     }
@@ -71,9 +75,10 @@ class ComplianceOperationsServiceTest {
         when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
         when(complianceRepo.save(any())).thenAnswer(inv->inv.getArgument(0));
         var response=service.review(41L,new ComplianceReviewRequest("APPROVED",null),officer.getEmail());
-        assertEquals(ComplianceStatus.APPROVED,response.status());assertEquals("APPROVED",response.reviewHistory().get(0).action());
-        User stranger=user(9L,Role.OFFICER);when(userRepo.findByEmail(stranger.getEmail())).thenReturn(Optional.of(stranger));
-        compliance.setStatus(ComplianceStatus.SUBMITTED);
+        assertEquals(ComplianceStatus.DISTRICT_PENDING,response.status());assertEquals("FIELD_APPROVED",response.reviewHistory().get(0).action());
+        User stranger=user(9L,Role.OFFICER);stranger.setOfficerLevel("FIELD");stranger.setJurisdictionState("OtherState");stranger.setJurisdictionDistrict("OtherDistrict");
+        when(userRepo.findByEmail(stranger.getEmail())).thenReturn(Optional.of(stranger));
+        compliance.setStatus(ComplianceStatus.FIELD_PENDING);compliance.setCurrentReviewStage(VerificationStage.FIELD);
         assertThrows(ResponseStatusException.class,()->service.review(41L,new ComplianceReviewRequest("APPROVED",null),stranger.getEmail()));
     }
 
@@ -90,8 +95,9 @@ class ComplianceOperationsServiceTest {
         MultipartFile file=mock(MultipartFile.class);when(file.isEmpty()).thenReturn(false);when(file.getOriginalFilename()).thenReturn("corrected.pdf");
         when(file.getContentType()).thenReturn("application/pdf");when(file.getSize()).thenReturn(8L);when(file.getBytes()).thenReturn("%PDF-1.7".getBytes());
         var response=service.submit(41L,"Updated statement",file,beneficiaryUser.getEmail());
-        assertEquals(ComplianceStatus.SUBMITTED,response.status());assertEquals("corrected.pdf",response.documentFileName());
+        assertEquals(ComplianceStatus.FIELD_PENDING,response.status());assertEquals("corrected.pdf",response.documentFileName());
         assertEquals("SUBMITTED",response.reviewHistory().get(0).action());
+        assertEquals(2,response.currentReviewCycle());
     }
 
     @Test void beneficiaryCannotReadAnotherBeneficiarysCompliance(){
@@ -144,15 +150,42 @@ class ComplianceOperationsServiceTest {
 
     @Test void officerReviewApprovalCompletesMilestone(){
         when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(userRepo.findByEmail(districtOfficer.getEmail())).thenReturn(Optional.of(districtOfficer));
+        when(userRepo.findByEmail(financeOfficer.getEmail())).thenReturn(Optional.of(financeOfficer));
         when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
         when(complianceRepo.save(any())).thenAnswer(inv->inv.getArgument(0));
 
-        service.review(41L,new ComplianceReviewRequest("APPROVED","Approved by officer"),officer.getEmail());
+        var r1 = service.review(41L,new ComplianceReviewRequest("APPROVED","Field ok"),officer.getEmail());
+        assertEquals(ComplianceStatus.DISTRICT_PENDING, r1.status());
+        assertNotEquals(MilestoneStatus.COMPLETED, compliance.getMilestone().getStatus());
+
+        var r2 = service.review(41L,new ComplianceReviewRequest("APPROVED","District ok"),districtOfficer.getEmail());
+        assertEquals(ComplianceStatus.FINANCE_PENDING, r2.status());
+        assertNotEquals(MilestoneStatus.COMPLETED, compliance.getMilestone().getStatus());
+
+        var r3 = service.review(41L,new ComplianceReviewRequest("APPROVED","Finance ok"),financeOfficer.getEmail());
+        assertEquals(ComplianceStatus.PAYMENT_ELIGIBLE, r3.status());
+        assertEquals(3, r3.stageReviews().size());
 
         assertEquals(MilestoneStatus.COMPLETED, compliance.getMilestone().getStatus());
         assertEquals(100, compliance.getMilestone().getProgressPercentage());
         assertFalse(compliance.getMilestone().getNonCompliant());
-        verify(milestoneRepo).save(compliance.getMilestone());
+        verify(milestoneRepo, atLeastOnce()).save(compliance.getMilestone());
+    }
+
+    @Test void wrongOfficerLevelAndAdminAreRejectedForSequentialComplianceReview() {
+        when(userRepo.findByEmail(districtOfficer.getEmail())).thenReturn(Optional.of(districtOfficer));
+        when(userRepo.findByEmail(financeOfficer.getEmail())).thenReturn(Optional.of(financeOfficer));
+        when(userRepo.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+
+        // FIELD_PENDING cannot be reviewed by DISTRICT, FINANCE, or ADMIN
+        assertThrows(ResponseStatusException.class,
+                () -> service.review(41L, new ComplianceReviewRequest("APPROVED", "Skip"), districtOfficer.getEmail()));
+        assertThrows(ResponseStatusException.class,
+                () -> service.review(41L, new ComplianceReviewRequest("APPROVED", "Skip"), financeOfficer.getEmail()));
+        assertThrows(ResponseStatusException.class,
+                () -> service.review(41L, new ComplianceReviewRequest("APPROVED", "Admin approve"), admin.getEmail()));
     }
 
     @Test void officerReviewRejectionFlagsMilestoneNonCompliant(){
@@ -303,7 +336,7 @@ class ComplianceOperationsServiceTest {
 
         var response = service.submit(41L, "Milestone progress image", file, beneficiaryUser.getEmail());
         assertNotNull(response);
-        assertEquals(ComplianceStatus.SUBMITTED, response.status());
+        assertEquals(ComplianceStatus.FIELD_PENDING, response.status());
         assertEquals("photo.png", response.documentFileName());
     }
 
@@ -355,24 +388,30 @@ class ComplianceOperationsServiceTest {
         second.setId(42L);
         second.setMilestone(milestone);
         second.setRequirementTitle("Site Photo");
-        second.setStatus(ComplianceStatus.SUBMITTED);
+        second.setStatus(ComplianceStatus.FINANCE_PENDING);
+        second.setCurrentReviewCycle(1);
+        second.setCurrentReviewStage(VerificationStage.FINANCE);
         second.setRequired(true);
         second.setDocumentData("%PDF-1.7 photo".getBytes());
         milestone.addCompliance(second);
 
-        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        compliance.setStatus(ComplianceStatus.FINANCE_PENDING);
+        compliance.setCurrentReviewCycle(1);
+        compliance.setCurrentReviewStage(VerificationStage.FINANCE);
+
+        when(userRepo.findByEmail(financeOfficer.getEmail())).thenReturn(Optional.of(financeOfficer));
         when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
         when(complianceRepo.findById(42L)).thenReturn(Optional.of(second));
         when(complianceRepo.findByMilestone_Id(31L)).thenReturn(List.of(compliance, second));
         when(complianceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
         // Approve first -> 50% progress, PENDING (not COMPLETED)
-        service.review(41L, new ComplianceReviewRequest("APPROVED", "Looks good"), officer.getEmail());
+        service.review(41L, new ComplianceReviewRequest("APPROVED", "Looks good"), financeOfficer.getEmail());
         assertEquals(50, milestone.getProgressPercentage());
         assertEquals(MilestoneStatus.PENDING, milestone.getStatus());
 
         // Approve second -> 100% progress, COMPLETED
-        service.review(42L, new ComplianceReviewRequest("APPROVED", "Photo verified"), officer.getEmail());
+        service.review(42L, new ComplianceReviewRequest("APPROVED", "Photo verified"), financeOfficer.getEmail());
         assertEquals(100, milestone.getProgressPercentage());
         assertEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
         assertNotNull(milestone.getCompletedAt());
@@ -454,8 +493,12 @@ class ComplianceOperationsServiceTest {
         inactiveItem.setRequired(true);
         milestone.addCompliance(inactiveItem);
 
+        compliance.setStatus(ComplianceStatus.FINANCE_PENDING);
+        compliance.setCurrentReviewCycle(1);
+        compliance.setCurrentReviewStage(VerificationStage.FINANCE);
+
         when(userRepo.findByEmail(beneficiaryUser.getEmail())).thenReturn(Optional.of(beneficiaryUser));
-        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(userRepo.findByEmail(financeOfficer.getEmail())).thenReturn(Optional.of(financeOfficer));
         when(requirementRepo.findByActiveTrue()).thenReturn(List.of());
         when(complianceRepo.findAll()).thenReturn(List.of(compliance, inactiveItem));
         when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
@@ -466,7 +509,7 @@ class ComplianceOperationsServiceTest {
         assertEquals(1, mine.size());
         assertEquals("Progress report", mine.get(0).requirementTitle());
 
-        service.review(41L, new ComplianceReviewRequest("APPROVED", "Valid"), officer.getEmail());
+        service.review(41L, new ComplianceReviewRequest("APPROVED", "Valid"), financeOfficer.getEmail());
         assertEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
         assertEquals(100, milestone.getProgressPercentage());
     }
@@ -489,6 +532,69 @@ class ComplianceOperationsServiceTest {
         assertNotEquals(MilestoneStatus.COMPLETED, milestone.getStatus());
         assertTrue(milestone.getNonCompliant());
         assertEquals(0, milestone.getProgressPercentage());
+    }
+
+    @Test
+    void resubmissionPreservesAllDocumentVersionsAndRejectedRequiresExplicitReopen() throws Exception {
+        ComplianceRequirement req = new ComplianceRequirement();
+        req.setId(8L);
+        req.setAllowedFormats("pdf");
+        req.setMaxFileSizeBytes(1048576L);
+        req.setActive(true);
+        compliance.setRequirement(req);
+        compliance.setStatus(ComplianceStatus.PENDING);
+        compliance.setCurrentReviewCycle(0);
+        compliance.setCurrentReviewStage(null);
+        compliance.setDocumentData(null);
+
+        when(userRepo.findByEmail(beneficiaryUser.getEmail())).thenReturn(Optional.of(beneficiaryUser));
+        when(userRepo.findByEmail(officer.getEmail())).thenReturn(Optional.of(officer));
+        when(userRepo.findByEmail(admin.getEmail())).thenReturn(Optional.of(admin));
+        when(complianceRepo.findById(41L)).thenReturn(Optional.of(compliance));
+        when(complianceRepo.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        byte[] v1Bytes = "%PDF-1.7 version-one".getBytes();
+        MultipartFile file1 = mock(MultipartFile.class);
+        when(file1.isEmpty()).thenReturn(false);
+        when(file1.getOriginalFilename()).thenReturn("v1.pdf");
+        when(file1.getContentType()).thenReturn("application/pdf");
+        when(file1.getSize()).thenReturn((long) v1Bytes.length);
+        when(file1.getBytes()).thenReturn(v1Bytes);
+
+        var s1 = service.submit(41L, "Initial upload", file1, beneficiaryUser.getEmail());
+        assertEquals(ComplianceStatus.FIELD_PENDING, s1.status());
+        assertEquals(1, s1.documentVersions().size());
+
+        // Reject at Field stage
+        var r1 = service.review(41L, new ComplianceReviewRequest("REJECTED", "Invalid scan"), officer.getEmail());
+        assertEquals(ComplianceStatus.REJECTED, r1.status());
+        assertEquals(1, r1.stageReviews().get(0).documentVersionNumber());
+
+        // Beneficiary cannot directly resubmit a REJECTED submission
+        byte[] v2Bytes = "%PDF-1.7 version-two".getBytes();
+        MultipartFile file2 = mock(MultipartFile.class);
+        when(file2.isEmpty()).thenReturn(false);
+        when(file2.getOriginalFilename()).thenReturn("v2.pdf");
+        when(file2.getContentType()).thenReturn("application/pdf");
+        when(file2.getSize()).thenReturn((long) v2Bytes.length);
+        when(file2.getBytes()).thenReturn(v2Bytes);
+
+        ResponseStatusException blockedEx = assertThrows(ResponseStatusException.class,
+                () -> service.submit(41L, "Direct retry", file2, beneficiaryUser.getEmail()));
+        assertEquals(409, blockedEx.getStatusCode().value());
+
+        // Admin explicitly reopens with reason
+        var reopened = service.reopen(41L, new com.grantora.dto.ComplianceReopenRequest("Beneficiary provided verified replacement"), admin.getEmail());
+        assertEquals(ComplianceStatus.CORRECTION_REQUIRED, reopened.status());
+        assertTrue(reopened.reviewHistory().stream().anyMatch(h -> "REOPENED".equals(h.action())));
+
+        // Now beneficiary can upload v2 starting cycle 2 at FIELD_PENDING, preserving v1 bytes
+        var s2 = service.submit(41L, "Reopened upload", file2, beneficiaryUser.getEmail());
+        assertEquals(ComplianceStatus.FIELD_PENDING, s2.status());
+        assertEquals(2, s2.currentReviewCycle());
+        assertEquals(2, s2.documentVersions().size());
+        assertArrayEquals(v1Bytes, service.document(41L, 1, beneficiaryUser.getEmail()));
+        assertArrayEquals(v2Bytes, service.document(41L, 2, officer.getEmail()));
     }
 
     @Test

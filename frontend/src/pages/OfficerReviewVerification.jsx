@@ -28,6 +28,10 @@ import {
   getUtilizationReviewQueue,
   reviewUtilization,
 } from "../services/fundAnalyticsService";
+import {
+  getDisbursementPlans,
+  disburseInstallment,
+} from "../services/disbursementService";
 import { AlertBanner, PageHeader } from "../components/ui/SaaSPrimitives";
 import "../styles/OfficerReviewVerification.css";
 import "../styles/AdminGrantManagement.css";
@@ -81,6 +85,18 @@ export default function OfficerReviewVerification() {
   // Expenditure (utilization) items
   const [utilizationQueue, setUtilizationQueue] = useState([]);
 
+  // Finance Officer payment releases
+  const officerLevel = (localStorage.getItem("officerLevel") || "").toUpperCase();
+  const isFinanceOfficer = officerLevel === "FINANCE";
+  const [plans, setPlans] = useState([]);
+  const [disburseModalInst, setDisburseModalInst] = useState(null);
+  const [disburseForm, setDisburseForm] = useState({
+    paymentReference: "",
+    paymentMethod: "DBT_PFMS",
+    remarks: "",
+  });
+  const [disbursingId, setDisbursingId] = useState(null);
+
   // Review form states
   const [complianceDecisions, setComplianceDecisions] = useState({});
   const [complianceRemarks, setComplianceRemarks] = useState({});
@@ -97,15 +113,17 @@ export default function OfficerReviewVerification() {
     setError("");
 
     try {
-      const [compRes, caseRes, utilRes] = await Promise.all([
+      const [compRes, caseRes, utilRes, plansRes] = await Promise.all([
         getComplianceReviewQueue().catch(() => ({ data: [] })),
         getNonComplianceCases().catch(() => ({ data: [] })),
         getUtilizationReviewQueue().catch(() => ({ data: [] })),
+        isFinanceOfficer ? getDisbursementPlans().catch(() => ({ data: [] })) : Promise.resolve({ data: [] }),
       ]);
 
       setComplianceQueue(compRes.data || []);
       setNonComplianceCases(caseRes.data || []);
       setUtilizationQueue(utilRes.data || []);
+      setPlans(Array.isArray(plansRes.data) ? plansRes.data : plansRes.data?.content || []);
     } catch (err) {
       console.error("Failed to load review queue:", err);
       setError("Failed to load verification queue. Please refresh.");
@@ -236,6 +254,15 @@ export default function OfficerReviewVerification() {
             <span className="officer-badge">{utilizationQueue.length}</span>
           )}
         </button>
+        {isFinanceOfficer && (
+          <button
+            className={`officer-tab-btn ${activeTab === "releases" ? "active" : ""}`}
+            onClick={() => switchTab("releases")}
+          >
+            <ShieldCheck size={18} />
+            Payment Releases
+          </button>
+        )}
       </nav>
 
       {/* ========================================================================= */}
@@ -297,6 +324,27 @@ export default function OfficerReviewVerification() {
                           }}
                         >
                           <strong>Beneficiary Note:</strong> {item.submissionNotes}
+                        </div>
+                      )}
+
+                      {item.stageReviews && item.stageReviews.length > 0 && (
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            padding: "0.55rem 0.75rem",
+                            borderRadius: "6px",
+                            fontSize: "0.8rem",
+                            marginBottom: "0.75rem",
+                          }}
+                        >
+                          <strong>Prior Stage Reviews (Cycle #{item.currentReviewCycle || 1}):</strong>
+                          {item.stageReviews.map((sr, idx) => (
+                            <div key={idx} style={{ marginTop: "0.25rem", color: "#334155" }}>
+                              Cycle #{sr.reviewCycle} · <strong>{sr.stage}</strong>: {sr.decision} by {sr.reviewerName} ({formatDate(sr.reviewedAt)})
+                              {sr.remarks && <span style={{ fontStyle: "italic", color: "#475569" }}> — "{sr.remarks}"</span>}
+                            </div>
+                          ))}
                         </div>
                       )}
 
@@ -581,6 +629,183 @@ export default function OfficerReviewVerification() {
             )}
           </div>
         </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: FINANCE OFFICER PAYMENT RELEASES                                   */}
+      {/* ========================================================================= */}
+      {isFinanceOfficer && activeTab === "releases" && (
+        <section>
+          <div className="officer-card">
+            <div className="officer-card-header">
+              <h2>Finance Payment Releases (Simulation)</h2>
+              <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
+                Record simulated payments for installments whose Field, District, and Finance compliance reviews are all approved.
+              </span>
+            </div>
+            {plans.filter((p) => p.planStatus === "ACTIVE").length === 0 ? (
+              <div style={{ textAlign: "center", padding: "2rem", color: "#64748b" }}>
+                No active disbursement plans available.
+              </div>
+            ) : (
+              <div className="mgmt-table-wrap">
+                <table className="mgmt-table">
+                  <thead>
+                    <tr>
+                      <th>Application</th>
+                      <th>Stage</th>
+                      <th>Amount</th>
+                      <th>Compliance Gate</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {plans
+                      .filter((p) => p.planStatus === "ACTIVE")
+                      .flatMap((p) =>
+                        (p.installments || []).map((inst) => ({
+                          ...inst,
+                          applicationId: p.applicationId,
+                          beneficiaryName: p.beneficiaryName,
+                          schemeName: p.schemeName,
+                        }))
+                      )
+                      .map((inst) => (
+                        <tr key={inst.id}>
+                          <td>
+                            <strong>#{inst.applicationId}</strong> · {inst.beneficiaryName}
+                            <div style={{ fontSize: "0.75rem", color: "#64748b" }}>{inst.schemeName}</div>
+                          </td>
+                          <td>
+                            <strong>Stage {inst.installmentNumber}</strong> · {inst.title}
+                          </td>
+                          <td><strong>{formatCurrency(inst.amount)}</strong></td>
+                          <td>
+                            {inst.allCompliancesVerified ? (
+                              <span style={{ color: "#15803d", fontWeight: 600, fontSize: "0.8rem" }}>
+                                All 3 Reviews Approved
+                              </span>
+                            ) : (
+                              <span style={{ color: "#b45309", fontSize: "0.8rem" }}>
+                                Pending Compliance Reviews
+                              </span>
+                            )}
+                          </td>
+                          <td>
+                            <span className={`mgmt-status-badge status-${inst.status?.toLowerCase()}`}>
+                              {inst.status}
+                            </span>
+                          </td>
+                          <td>
+                            {inst.status === "DISBURSED" ? (
+                              <span style={{ fontSize: "0.75rem", color: "#15803d" }}>
+                                Ref: {inst.paymentReference}
+                              </span>
+                            ) : inst.allCompliancesVerified ? (
+                              <button
+                                type="button"
+                                className="mgmt-btn success"
+                                style={{ padding: "0.3rem 0.65rem", fontSize: "0.8rem" }}
+                                onClick={() => {
+                                  setDisburseModalInst(inst);
+                                  setDisburseForm({ paymentReference: "", paymentMethod: "DBT_PFMS", remarks: "" });
+                                }}
+                              >
+                                Record Payment
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: "0.75rem", color: "#94a3b8" }}>Blocked</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {disburseModalInst && (
+        <div className="mgmt-modal-overlay" onClick={() => setDisburseModalInst(null)}>
+          <div className="mgmt-modal" onClick={(e) => e.stopPropagation()} role="dialog">
+            <div className="mgmt-modal__header">
+              <h2>Record Installment Payment (Stage {disburseModalInst.installmentNumber})</h2>
+              <button onClick={() => setDisburseModalInst(null)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (!disburseForm.paymentReference.trim()) {
+                  setError("Payment reference / UTR is required.");
+                  return;
+                }
+                setDisbursingId(disburseModalInst.id);
+                setError("");
+                setSuccessMsg("");
+                try {
+                  await disburseInstallment(disburseModalInst.id, {
+                    paymentReference: disburseForm.paymentReference.trim(),
+                    paymentMethod: disburseForm.paymentMethod,
+                    remarks: disburseForm.remarks,
+                  });
+                  setSuccessMsg(`Stage ${disburseModalInst.installmentNumber} payment recorded successfully.`);
+                  setDisburseModalInst(null);
+                  await loadData(true);
+                } catch (err) {
+                  setError(err.response?.data?.message || "Failed to record installment payment.");
+                } finally {
+                  setDisbursingId(null);
+                }
+              }}
+            >
+              <div className="mgmt-modal__body">
+                <div className="mgmt-form-group">
+                  <label>Payment Method *</label>
+                  <select
+                    value={disburseForm.paymentMethod}
+                    onChange={(e) => setDisburseForm({ ...disburseForm, paymentMethod: e.target.value })}
+                  >
+                    <option value="DBT_PFMS">Direct Benefit Transfer (DBT / PFMS)</option>
+                    <option value="BANK_TRANSFER">Bank NEFT / RTGS</option>
+                    <option value="UPI">UPI</option>
+                    <option value="CHEQUE">Treasury Cheque</option>
+                  </select>
+                </div>
+                <div className="mgmt-form-group">
+                  <label>Payment Reference (UTR / Transaction ID) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. UTR1234567890"
+                    value={disburseForm.paymentReference}
+                    onChange={(e) => setDisburseForm({ ...disburseForm, paymentReference: e.target.value })}
+                  />
+                </div>
+                <div className="mgmt-form-group">
+                  <label>Remarks</label>
+                  <textarea
+                    rows="2"
+                    value={disburseForm.remarks}
+                    onChange={(e) => setDisburseForm({ ...disburseForm, remarks: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="mgmt-modal__footer">
+                <button type="button" className="mgmt-btn secondary" onClick={() => setDisburseModalInst(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="mgmt-btn success" disabled={disbursingId === disburseModalInst.id}>
+                  {disbursingId === disburseModalInst.id ? "Recording…" : "Confirm Payment"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );

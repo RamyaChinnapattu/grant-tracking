@@ -5,7 +5,7 @@ public class InAppNotification {
  @Id @GeneratedValue(strategy=GenerationType.IDENTITY) private Long id;
  @ManyToOne(optional=false) @JoinColumn(name="user_id") private User user;
  @Column(name="event_key",nullable=false,length=180) private String eventKey;
- @Column(nullable=false,length=300) private String message;
+ @Column(nullable=false, columnDefinition="TEXT") private String message;
  @Column(name="application_id") private Long applicationId;
  @Column(nullable=false) private LocalDateTime createdAt=LocalDateTime.now();
  @Column(name="read_at") private LocalDateTime readAt;

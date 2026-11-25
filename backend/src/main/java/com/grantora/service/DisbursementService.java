@@ -94,7 +94,7 @@ public class DisbursementService {
                     "Disbursement plans can only be created for applications with APPROVED status.");
         }
 
-        if (planRepository.existsByApplication_Id(application.getId())) {
+        if (planRepository.existsByApplication_IdAndPlanStatusNot(application.getId(), DisbursementPlanStatus.CANCELLED)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "An active disbursement plan already exists for this application.");
         }
@@ -381,13 +381,33 @@ public class DisbursementService {
     }
 
     @Transactional(readOnly = true)
-    public Page<DisbursementPlanResponse> getAllPlans(Pageable pageable) {
-        return planRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toPlanResponse);
+    public Page<DisbursementPlanResponse> getAllPlans(Pageable pageable, String email) {
+        User actor = getUser(email);
+        if (actor.getRole() == Role.ADMIN) {
+            return planRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toPlanResponse);
+        }
+        requireFinanceOfficer(actor);
+        List<DisbursementPlanResponse> filtered = planRepository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(p -> matchesFinanceState(actor, p))
+                .map(this::toPlanResponse)
+                .toList();
+        int start = (int) pageable.getOffset();
+        int end = Math.min(start + pageable.getPageSize(), filtered.size());
+        List<DisbursementPlanResponse> slice = start >= filtered.size() ? Collections.emptyList() : filtered.subList(start, end);
+        return new org.springframework.data.domain.PageImpl<>(slice, pageable, filtered.size());
     }
 
     @Transactional(readOnly = true)
-    public List<DisbursementPlanResponse> getAllPlansList() {
+    public List<DisbursementPlanResponse> getAllPlansList(String email) {
+        User actor = getUser(email);
+        if (actor.getRole() == Role.ADMIN) {
+            return planRepository.findAllByOrderByCreatedAtDesc().stream()
+                    .map(this::toPlanResponse)
+                    .collect(Collectors.toList());
+        }
+        requireFinanceOfficer(actor);
         return planRepository.findAllByOrderByCreatedAtDesc().stream()
+                .filter(p -> matchesFinanceState(actor, p))
                 .map(this::toPlanResponse)
                 .collect(Collectors.toList());
     }
@@ -422,17 +442,31 @@ public class DisbursementService {
     }
 
     @Transactional(readOnly = true)
-    public DisbursementPlanResponse getPlanById(Long id) {
+    public DisbursementPlanResponse getPlanById(Long id, String email) {
         DisbursementPlan plan = planRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Disbursement plan not found."));
+        User actor = getUser(email);
+        if (actor.getRole() != Role.ADMIN) {
+            requireFinanceOfficer(actor);
+            if (!matchesFinanceState(actor, plan)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Plan is outside the Finance Officer's state jurisdiction.");
+            }
+        }
         return toPlanResponse(plan);
     }
 
     @Transactional(readOnly = true)
-    public DisbursementPlanResponse getPlanByApplicationId(Long applicationId) {
+    public DisbursementPlanResponse getPlanByApplicationId(Long applicationId, String email) {
         DisbursementPlan plan = planRepository.findByApplication_Id(applicationId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
                         "Disbursement plan not found for application #" + applicationId));
+        User actor = getUser(email);
+        if (actor.getRole() != Role.ADMIN) {
+            requireFinanceOfficer(actor);
+            if (!matchesFinanceState(actor, plan)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Plan is outside the Finance Officer's state jurisdiction.");
+            }
+        }
         return toPlanResponse(plan);
     }
 
@@ -440,7 +474,7 @@ public class DisbursementService {
     public List<GrantApplicationResponse> getEligibleApplicationsWithoutPlan() {
         List<GrantApplication> approvedApps = applicationRepository.findAllByOrderByIdDesc().stream()
                 .filter(a -> a.getStatus() == GrantApplicationStatus.APPROVED)
-                .filter(a -> !planRepository.existsByApplication_Id(a.getId()))
+                .filter(a -> !planRepository.existsByApplication_IdAndPlanStatusNot(a.getId(), DisbursementPlanStatus.CANCELLED))
                 .collect(Collectors.toList());
 
         return approvedApps.stream().map(this::toAppResponse).collect(Collectors.toList());
@@ -756,11 +790,13 @@ public class DisbursementService {
     // ==========================================
 
     public DisbursementInstallmentResponse disburseInstallment(
-            Long installmentId, DisburseFundsRequest request, String adminEmail) {
-        User admin = getUser(adminEmail);
-        if (admin.getRole() != Role.ADMIN) {
+            Long installmentId, DisburseFundsRequest request, String financeOfficerEmail) {
+        User financeOfficer = getUser(financeOfficerEmail);
+        if (financeOfficer.getRole() != Role.OFFICER
+                || !"FINANCE".equalsIgnoreCase(financeOfficer.getOfficerLevel())
+                || !Boolean.TRUE.equals(financeOfficer.getActive())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN,
-                    "Only authorized administrators can disburse funds.");
+                    "Only authorized Finance Officers can disburse funds.");
         }
 
         DisbursementInstallment installment = installmentRepository.findByIdForUpdate(installmentId)
@@ -770,6 +806,18 @@ public class DisbursementService {
         if (plan == null) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR,
                     "Installment is not associated with a disbursement plan.");
+        }
+
+        if (plan.getApplication() != null && plan.getApplication().getBeneficiary() != null) {
+            String benState = plan.getApplication().getBeneficiary().getState();
+            String officerState = financeOfficer.getJurisdictionState();
+            if (benState != null && !benState.isBlank()) {
+                if (officerState == null || officerState.isBlank()
+                        || !benState.replaceAll("\\s+", "").equalsIgnoreCase(officerState.replaceAll("\\s+", ""))) {
+                    throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                            "Application is outside the Finance Officer's state jurisdiction.");
+                }
+            }
         }
 
         if (plan.getPlanStatus() != DisbursementPlanStatus.ACTIVE) {
@@ -817,8 +865,7 @@ public class DisbursementService {
                             .filter(this::isEffectiveCompliance)
                             .toList();
             boolean allCompliancesSatisfied = !activeCompliances.isEmpty() && activeCompliances.stream()
-                    .allMatch(c -> !c.isRequired() || c.getStatus() == ComplianceStatus.APPROVED
-                            || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.WAIVED);
+                    .allMatch(c -> isComplianceSatisfiedForDisbursement(c));
             if (allCompliancesSatisfied && !Boolean.TRUE.equals(m.getNonCompliant())) {
                 if (m.getStatus() != MilestoneStatus.COMPLETED || m.getProgressPercentage() == null
                         || m.getProgressPercentage() < 100) {
@@ -845,11 +892,10 @@ public class DisbursementService {
                                 m.getTitle(), m.getNonComplianceReason()));
             }
             for (MilestoneCompliance c : activeCompliances) {
-                if (c.isRequired() && c.getStatus() != ComplianceStatus.VERIFIED
-                        && c.getStatus() != ComplianceStatus.APPROVED && c.getStatus() != ComplianceStatus.WAIVED) {
+                if (!isComplianceSatisfiedForDisbursement(c)) {
                     throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                             String.format(
-                                    "Cannot release disbursement: Compliance '%s' is in status '%s'. All compliances must be VERIFIED before fund release.",
+                                    "Cannot release disbursement: Compliance '%s' is in status '%s'. All required reviews (Field, District, Finance) must be approved before fund release.",
                                     c.getRequirementTitle(), c.getStatus()));
                 }
             }
@@ -872,14 +918,14 @@ public class DisbursementService {
         installment.setPaymentReference(paymentRef);
         installment.setPaymentMethod(
                 request.paymentMethod() != null ? request.paymentMethod().trim() : "DIRECT_BENEFIT_TRANSFER");
-        installment.setDisbursedBy(admin);
+        installment.setDisbursedBy(financeOfficer);
         installment.setDisbursementRemarks(request.remarks());
 
         // Update plan disbursed totals
         plan.setTotalDisbursedAmount(newTotalDisbursed);
         plan.addAuditEntry(new DisbursementPlanAudit(
                 plan,
-                admin,
+                financeOfficer,
                 "DISBURSED",
                 String.format("Disbursed installment #%d (₹%s) with payment reference: %s",
                         installment.getInstallmentNumber(),
@@ -1253,9 +1299,7 @@ public class DisbursementService {
                             .toList();
             return !Boolean.TRUE.equals(m.getNonCompliant())
                     && !activeCompliances.isEmpty()
-                    && activeCompliances.stream().allMatch(c -> !c.isRequired()
-                            || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.APPROVED
-                            || c.getStatus() == ComplianceStatus.WAIVED);
+                    && activeCompliances.stream().allMatch(this::isComplianceSatisfiedForDisbursement);
         });
 
         return new DisbursementInstallmentResponse(
@@ -1293,8 +1337,7 @@ public class DisbursementService {
                 .collect(Collectors.toList());
 
         boolean allSatisfied = !activeCompliances.isEmpty() && activeCompliances.stream()
-                .allMatch(c -> !c.isRequired() || c.getStatus() == ComplianceStatus.APPROVED
-                        || c.getStatus() == ComplianceStatus.VERIFIED || c.getStatus() == ComplianceStatus.WAIVED);
+                .allMatch(this::isComplianceSatisfiedForDisbursement);
         MilestoneStatus status = m.getStatus();
         Integer progress = m.getProgressPercentage();
         if (allSatisfied && !Boolean.TRUE.equals(m.getNonCompliant())) {
@@ -1342,7 +1385,53 @@ public class DisbursementService {
                 c.getVerifiedBy() != null ? c.getVerifiedBy().getFullName() : null,
                 c.getVerifiedAt(),
                 c.getVerificationRemarks(),
-                c.isRequired());
+                c.isRequired(),
+                c.getCurrentReviewStage() != null ? c.getCurrentReviewStage().name() : null,
+                c.getCurrentReviewCycle());
+    }
+
+    private boolean isComplianceSatisfiedForDisbursement(MilestoneCompliance c) {
+        if (c == null) return false;
+        if (!c.isRequired()) return true;
+        ComplianceStatus st = c.getStatus();
+        if (st == ComplianceStatus.WAIVED) {
+            return true;
+        }
+        if (st != ComplianceStatus.PAYMENT_ELIGIBLE) {
+            return false;
+        }
+        int cycle = c.getCurrentReviewCycle();
+        if (cycle <= 0 || c.getStageReviews() == null || c.getStageReviews().isEmpty()) {
+            return false;
+        }
+        boolean hasField = c.getStageReviews().stream().anyMatch(r ->
+                Objects.equals(r.getReviewCycle(), cycle) && r.getStage() == VerificationStage.FIELD && "APPROVED".equals(r.getDecision()));
+        boolean hasDistrict = c.getStageReviews().stream().anyMatch(r ->
+                Objects.equals(r.getReviewCycle(), cycle) && r.getStage() == VerificationStage.DISTRICT && "APPROVED".equals(r.getDecision()));
+        boolean hasFinance = c.getStageReviews().stream().anyMatch(r ->
+                Objects.equals(r.getReviewCycle(), cycle) && r.getStage() == VerificationStage.FINANCE && "APPROVED".equals(r.getDecision()));
+        return hasField && hasDistrict && hasFinance;
+    }
+
+    private void requireFinanceOfficer(User actor) {
+        if (actor == null || actor.getRole() != Role.OFFICER
+                || !"FINANCE".equalsIgnoreCase(actor.getOfficerLevel())
+                || !Boolean.TRUE.equals(actor.getActive())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only administrators or active Finance Officers can access disbursement plans.");
+        }
+    }
+
+    private boolean matchesFinanceState(User financeOfficer, DisbursementPlan plan) {
+        if (plan == null || plan.getApplication() == null || plan.getApplication().getBeneficiary() == null) {
+            return false;
+        }
+        String benState = plan.getApplication().getBeneficiary().getState();
+        String offState = financeOfficer.getJurisdictionState();
+        if (benState == null || benState.isBlank() || offState == null || offState.isBlank()) {
+            return false;
+        }
+        return benState.replaceAll("\\s+", "").equalsIgnoreCase(offState.replaceAll("\\s+", ""));
     }
 
     private GrantApplicationResponse toAppResponse(GrantApplication a) {

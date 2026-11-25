@@ -562,7 +562,7 @@ function GrantApplicationManagement() {
 
     if (
       !window.confirm(
-        isCorrection
+        application.status === "NEEDS_CORRECTION"
           ? "Resubmit this application with its saved corrected information?"
           : "Submit this grant application for verification?"
       )

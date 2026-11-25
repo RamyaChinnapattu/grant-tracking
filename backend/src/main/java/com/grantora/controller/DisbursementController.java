@@ -35,6 +35,7 @@ public class DisbursementController {
     // ==========================================
 
     @PostMapping("/plans")
+    @PreAuthorize("hasRole('ADMIN')")
     public ResponseEntity<DisbursementPlanResponse> createPlan(
             Authentication authentication,
             @Valid @RequestBody DisbursementPlanRequest request) {
@@ -43,39 +44,47 @@ public class DisbursementController {
     }
 
     @GetMapping("/plans/mine")
+    @PreAuthorize("hasRole('BENEFICIARY')")
     public List<DisbursementPlanResponse> getMyPlans(Authentication authentication) {
         return disbursementService.getBeneficiaryPlans(authentication.getName());
     }
 
     @PatchMapping("/plans/{id}/deactivate")
+    @PreAuthorize("hasRole('ADMIN')")
     public DisbursementPlanResponse deactivatePlan(@PathVariable Long id, Authentication authentication) {
         return disbursementService.deactivatePlan(id, authentication.getName());
     }
 
     @GetMapping("/plans")
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('LEVEL_FINANCE')")
     public ResponseEntity<?> getAllPlans(
+            Authentication authentication,
             @RequestParam(required = false, defaultValue = "false") boolean paged,
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         if (paged) {
-            Page<DisbursementPlanResponse> page = disbursementService.getAllPlans(pageable);
+            Page<DisbursementPlanResponse> page = disbursementService.getAllPlans(pageable, authentication.getName());
             return ResponseEntity.ok(page);
         } else {
-            List<DisbursementPlanResponse> list = disbursementService.getAllPlansList();
+            List<DisbursementPlanResponse> list = disbursementService.getAllPlansList(authentication.getName());
             return ResponseEntity.ok(list);
         }
     }
 
     @GetMapping("/plans/{id}")
-    public DisbursementPlanResponse getPlanById(@PathVariable Long id) {
-        return disbursementService.getPlanById(id);
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('LEVEL_FINANCE')")
+    public DisbursementPlanResponse getPlanById(@PathVariable Long id, Authentication authentication) {
+        return disbursementService.getPlanById(id, authentication.getName());
     }
 
     @GetMapping("/plans/by-application/{applicationId}")
-    public DisbursementPlanResponse getPlanByApplicationId(@PathVariable Long applicationId) {
-        return disbursementService.getPlanByApplicationId(applicationId);
+    @PreAuthorize("hasRole('ADMIN') or hasAuthority('LEVEL_FINANCE')")
+    public DisbursementPlanResponse getPlanByApplicationId(@PathVariable Long applicationId,
+            Authentication authentication) {
+        return disbursementService.getPlanByApplicationId(applicationId, authentication.getName());
     }
 
     @GetMapping("/eligible-applications")
+    @PreAuthorize("hasRole('ADMIN')")
     public List<GrantApplicationResponse> getEligibleApplications() {
         return disbursementService.getEligibleApplicationsWithoutPlan();
     }
@@ -111,8 +120,8 @@ public class DisbursementController {
         return disbursementService.getCompliancesByMilestone(id);
     }
 
+    @Deprecated
     @PostMapping(value = "/milestones/{id}/compliance", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    @ResponseStatus(HttpStatus.CREATED)
     public MilestoneComplianceResponse submitCompliance(
             @PathVariable Long id,
             Authentication authentication,
@@ -120,8 +129,9 @@ public class DisbursementController {
             @RequestParam(value = "description", required = false) String description,
             @RequestParam(value = "submissionNotes", required = false) String submissionNotes,
             @RequestPart(value = "file", required = false) MultipartFile file) {
-        ComplianceSubmitRequest req = new ComplianceSubmitRequest(requirementTitle, description, submissionNotes);
-        return disbursementService.submitCompliance(id, req, file, authentication.getName());
+        throw new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.GONE,
+                "Legacy compliance upload endpoint is retired. Use POST /api/compliance/submissions/{id}.");
     }
 
     @GetMapping("/compliance/{id}/document")
@@ -153,12 +163,15 @@ public class DisbursementController {
                 .body(data);
     }
 
+    @Deprecated
     @PostMapping("/compliance/{id}/verify")
     public MilestoneComplianceResponse verifyCompliance(
             @PathVariable Long id,
             Authentication authentication,
             @Valid @RequestBody ComplianceVerifyRequest request) {
-        return disbursementService.verifyCompliance(id, request, authentication.getName());
+        throw new org.springframework.web.server.ResponseStatusException(
+                HttpStatus.GONE,
+                "Legacy compliance verification endpoint is retired. Use PATCH /api/compliance/submissions/{id}/review.");
     }
 
     // ==========================================
@@ -166,6 +179,7 @@ public class DisbursementController {
     // ==========================================
 
     @PostMapping("/installments/{id}/disburse")
+    @PreAuthorize("hasAuthority('LEVEL_FINANCE')")
     public DisbursementInstallmentResponse disburseInstallment(
             @PathVariable Long id,
             Authentication authentication,

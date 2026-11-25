@@ -41,10 +41,10 @@ function formatDate(dt) {
     return isNaN(d.getTime())
       ? "—"
       : d.toLocaleDateString("en-IN", {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-        });
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
   } catch {
     return "—";
   }
@@ -175,10 +175,10 @@ export default function BeneficiaryMyGrant() {
     ).length;
   }, [complianceList]);
 
-  // Open / Download document
-  const openDocument = async (id, fileName) => {
+  // Open / Download document (supports specific versionNumber)
+  const openDocument = async (id, fileName, versionNumber) => {
     try {
-      const { data } = await getComplianceDocumentFile(id);
+      const { data } = await getComplianceDocumentFile(id, versionNumber);
       const url = URL.createObjectURL(data);
       const a = document.createElement("a");
       a.href = url;
@@ -253,7 +253,7 @@ export default function BeneficiaryMyGrant() {
       <HeroBanner
         eyebrow="Citizen Grant Wallet"
         title="My Grant & Payment Schedule"
-        subtitle="Track your staged disbursement plan, verified payout dates, remaining balance, and upload milestone compliance documents."
+        subtitle="Track your approved grant schedule, simulated payment records, remaining amount, and milestone compliance documents."
         badge={
           !loadingCompliance && !errorCompliance && pendingDocsCount > 0 ? (
             <span className="saas-badge saas-badge--warning">
@@ -276,17 +276,41 @@ export default function BeneficiaryMyGrant() {
         {!loadingPlans && !errorPlans && (financialSummary?.totalApproved || 0) > 0 && (
           <div style={{ position: "relative", zIndex: 1, background: "rgba(255,255,255,0.08)", padding: "12px 16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.14)" }}>
             <ProgressMeter
-              label="Grant Release Completion"
+              label="Grant Amount Recorded (Simulation)"
               value={financialSummary?.totalDisbursed || 0}
               max={financialSummary?.totalApproved || 1}
               tone="emerald"
-              sublabel={`${formatCurrency(financialSummary?.totalDisbursed)} released of ${formatCurrency(
+              sublabel={`${formatCurrency(financialSummary?.totalDisbursed)} recorded of ${formatCurrency(
                 financialSummary?.totalApproved
-              )} sanctioned`}
+              )} approved · no money transferred`}
             />
           </div>
         )}
       </HeroBanner>
+
+      <div
+        role="note"
+        className="ben-simulation-notice"
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: "0.65rem",
+          padding: "0.85rem 1rem",
+          margin: "0 0 1rem",
+          border: "1px solid #bfdbfe",
+          borderRadius: "10px",
+          background: "#eff6ff",
+          color: "#1e3a8a",
+          fontSize: "0.88rem",
+          lineHeight: 1.5,
+        }}
+      >
+        <ShieldCheck size={18} style={{ flexShrink: 0, marginTop: "1px" }} />
+        <span>
+          <strong>Payment simulation only:</strong> Grantora records installment details for tracking and demonstration.
+          No money is transferred to a bank account, and these records are not bank-confirmed payments.
+        </span>
+      </div>
 
       <AlertBanner type="error" message={error} onClose={() => setError("")} />
       <AlertBanner type="success" message={successMsg} onClose={() => setSuccessMsg("")} />
@@ -301,36 +325,36 @@ export default function BeneficiaryMyGrant() {
             {loadingPlans
               ? "Loading…"
               : errorPlans
-              ? "—"
-              : formatCurrency(financialSummary?.totalApproved)}
+                ? "—"
+                : formatCurrency(financialSummary?.totalApproved)}
           </strong>
           <small>{errorPlans ? "Unable to load plan data" : "Across approved schemes"}</small>
         </article>
 
         <article className="mgmt-kpi-card">
           <span>
-            <CheckCircle2 size={16} /> Total Disbursed / Released
+            <CheckCircle2 size={16} /> Total Payment Recorded (Simulation)
           </span>
           <strong style={{ color: errorPlans ? "inherit" : "#15803d" }}>
             {loadingPlans
               ? "Loading…"
               : errorPlans
-              ? "—"
-              : formatCurrency(financialSummary?.totalDisbursed)}
+                ? "—"
+                : formatCurrency(financialSummary?.totalDisbursed)}
           </strong>
-          <small>{errorPlans ? "Unable to load plan data" : "Credited installments"}</small>
+          <small>{errorPlans ? "Unable to load plan data" : "Internal records only; not bank-confirmed"}</small>
         </article>
 
         <article className="mgmt-kpi-card">
           <span>
-            <Clock size={16} /> Remaining Balance
+            <Clock size={16} /> Amount Not Yet Recorded
           </span>
           <strong>
             {loadingPlans
               ? "Loading…"
               : errorPlans
-              ? "—"
-              : formatCurrency(financialSummary?.totalRemaining)}
+                ? "—"
+                : formatCurrency(financialSummary?.totalRemaining)}
           </strong>
           <small>{errorPlans ? "Unable to load plan data" : "Pending milestone completion"}</small>
         </article>
@@ -432,7 +456,7 @@ export default function BeneficiaryMyGrant() {
                         <strong style={{ color: "#0f172a" }}>
                           {formatCurrency(plan.totalApprovedAmount)}
                         </strong>{" "}
-                        · Released:{" "}
+                        · Recorded (simulation):{" "}
                         <strong style={{ color: "#16a34a" }}>
                           {formatCurrency(plan.totalDisbursedAmount)}
                         </strong>
@@ -455,7 +479,7 @@ export default function BeneficiaryMyGrant() {
                           <th>Amount</th>
                           <th>Share</th>
                           <th>Scheduled Date</th>
-                          <th>Release Date</th>
+                          <th>Record Date</th>
                           <th>Status</th>
                           <th>Milestone &amp; Conditions</th>
                         </tr>
@@ -474,9 +498,21 @@ export default function BeneficiaryMyGrant() {
                             <td>{formatDate(inst.plannedReleaseDate)}</td>
                             <td>
                               {inst.actualDisbursementDate ? (
-                                <span style={{ color: "#16a34a", fontWeight: 600 }}>
-                                  {formatDate(inst.actualDisbursementDate)}
-                                </span>
+                                <div style={{ display: "grid", gap: "0.2rem" }}>
+                                  <span style={{ color: "#15803d", fontWeight: 600 }}>
+                                    {formatDate(inst.actualDisbursementDate)}
+                                  </span>
+                                  {inst.paymentReference && (
+                                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
+                                      Internal reference: {inst.paymentReference}
+                                    </span>
+                                  )}
+                                  {inst.disbursedByName && (
+                                    <span style={{ color: "#64748b", fontSize: "0.75rem" }}>
+                                      Recorded by: {inst.disbursedByName}
+                                    </span>
+                                  )}
+                                </div>
                               ) : (
                                 "—"
                               )}
@@ -485,7 +521,7 @@ export default function BeneficiaryMyGrant() {
                               <span
                                 className={`mgmt-status-badge status-${inst.status?.toLowerCase()}`}
                               >
-                                {inst.status}
+                                {inst.status === "DISBURSED" ? "RECORDED (SIMULATED)" : inst.status}
                               </span>
                             </td>
                             <td>
@@ -530,7 +566,7 @@ export default function BeneficiaryMyGrant() {
             <div className="mgmt-card-header">
               <h2>Grant Compliance Documents</h2>
               <span style={{ fontSize: "0.85rem", color: "#64748b" }}>
-                Submit required documents to satisfy milestone conditions and unlock installment releases
+                Submit required evidence so the installment can become eligible for simulated payment recording
               </span>
             </div>
 
@@ -565,7 +601,7 @@ export default function BeneficiaryMyGrant() {
                   const canUpload = item.uploadAllowed !== false;
                   const isActionable =
                     canUpload &&
-                    ["PENDING", "OVERDUE", "REJECTED", "CORRECTION_REQUIRED"].includes(item.status);
+                    ["PENDING", "OVERDUE", "CORRECTION_REQUIRED"].includes(item.status);
                   const isBusy = submittingDocId === item.id;
 
                   return (
@@ -689,26 +725,106 @@ export default function BeneficiaryMyGrant() {
                         </div>
                       )}
 
-                      {/* Submitted status banner */}
-                      {item.status === "SUBMITTED" && (
+                      {/* Sequential Review Stage Progress Banner */}
+                      {["SUBMITTED", "FIELD_PENDING", "DISTRICT_PENDING", "FINANCE_PENDING", "PAYMENT_ELIGIBLE"].includes(item.status) && (
                         <div
                           style={{
-                            background: "#eff6ff",
-                            border: "1px solid #bfdbfe",
+                            background: item.status === "PAYMENT_ELIGIBLE" ? "#f0fdf4" : "#eff6ff",
+                            border: item.status === "PAYMENT_ELIGIBLE" ? "1px solid #bbf7d0" : "1px solid #bfdbfe",
                             borderRadius: "6px",
                             padding: "0.6rem 0.85rem",
                             margin: "0.5rem 0",
                             fontSize: "0.85rem",
-                            color: "#1e40af",
+                            color: item.status === "PAYMENT_ELIGIBLE" ? "#166534" : "#1e40af",
                             display: "flex",
                             alignItems: "center",
                             gap: "0.4rem",
                           }}
                         >
-                          <Clock size={16} />
+                          {item.status === "PAYMENT_ELIGIBLE" ? <CheckCircle2 size={16} /> : <Clock size={16} />}
                           <span>
-                            Document submitted and queued for officer verification.
+                            {item.status === "FIELD_PENDING" && "Stage 1/3: Pending Field Officer compliance review."}
+                            {item.status === "DISTRICT_PENDING" && "Stage 2/3: Field approved. Pending District Officer compliance review."}
+                            {item.status === "FINANCE_PENDING" && "Stage 3/3: Field & District approved. Pending Finance Officer final review."}
+                            {item.status === "PAYMENT_ELIGIBLE" && "All 3 compliance reviews (Field, District, Finance) approved. Eligible for Finance payment release."}
+                            {item.status === "SUBMITTED" && "Document submitted and queued for officer verification."}
                           </span>
+                        </div>
+                      )}
+
+                      {/* Stage-by-Stage Review Decisions */}
+                      {item.stageReviews && item.stageReviews.length > 0 && (
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "6px",
+                            padding: "0.6rem 0.85rem",
+                            margin: "0.5rem 0",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          <strong style={{ color: "#1e293b" }}>Sequential Stage Reviews:</strong>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem", marginTop: "0.4rem" }}>
+                            {item.stageReviews.map((sr, idx) => (
+                              <div key={idx} style={{ color: "#334155" }}>
+                                <strong>Cycle #{sr.reviewCycle} · {sr.stage}:</strong>{" "}
+                                <span className={`mgmt-status-badge status-${sr.decision?.toLowerCase()}`} style={{ fontSize: "0.7rem", padding: "0.1rem 0.4rem" }}>
+                                  {sr.decision}
+                                </span>{" "}
+                                by {sr.reviewerName || sr.reviewerOfficerLevel} ({formatDate(sr.reviewedAt)})
+                                {sr.remarks && <div style={{ color: "#475569", fontStyle: "italic" }}>"{sr.remarks}"</div>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {item.status === "REJECTED" && (
+                        <div
+                          style={{
+                            background: "#fef2f2",
+                            border: "1px solid #fecaca",
+                            borderRadius: "6px",
+                            padding: "0.6rem 0.85rem",
+                            margin: "0.5rem 0",
+                            fontSize: "0.85rem",
+                            color: "#991b1b",
+                          }}
+                        >
+                          This submission was <strong>REJECTED</strong>. Resubmission is locked until an authorized administrator explicitly reopens it.
+                        </div>
+                      )}
+
+                      {item.documentVersions && item.documentVersions.length > 0 && (
+                        <div
+                          style={{
+                            background: "#f8fafc",
+                            border: "1px solid #e2e8f0",
+                            borderRadius: "6px",
+                            padding: "0.55rem 0.85rem",
+                            margin: "0.5rem 0",
+                            fontSize: "0.8rem",
+                          }}
+                        >
+                          <strong style={{ color: "#1e293b" }}>Document Versions ({item.documentVersions.length}):</strong>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.3rem", marginTop: "0.35rem" }}>
+                            {item.documentVersions.map((dv) => (
+                              <div key={dv.versionNumber} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "0.5rem" }}>
+                                <span>
+                                  <strong>v{dv.versionNumber}</strong> · {dv.documentFileName} ({formatDate(dv.uploadedAt)})
+                                </span>
+                                <button
+                                  type="button"
+                                  className="mgmt-btn secondary"
+                                  style={{ padding: "0.15rem 0.5rem", fontSize: "0.75rem" }}
+                                  onClick={() => openDocument(item.id, `v${dv.versionNumber}-${dv.documentFileName}`, dv.versionNumber)}
+                                >
+                                  <Download size={12} /> v{dv.versionNumber}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       )}
 
@@ -862,8 +978,8 @@ export default function BeneficiaryMyGrant() {
                               {isBusy
                                 ? "Uploading…"
                                 : item.status === "PENDING" || item.status === "OVERDUE"
-                                ? "Upload & Submit Document"
-                                : "Replace & Resubmit Document"}
+                                  ? "Upload & Submit Document"
+                                  : "Replace & Resubmit Document"}
                             </button>
                           </div>
                         </div>

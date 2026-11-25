@@ -9,7 +9,9 @@ import java.util.List;
 
 @Entity
 @Table(name = "disbursement_installments", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_disbursement_installment_sequence", columnNames = {"plan_id", "installment_number"})
+        @UniqueConstraint(name = "uk_disbursement_installment_sequence", columnNames = { "plan_id",
+                "installment_number" }),
+        @UniqueConstraint(name = "uk_installment_payment_ref", columnNames = { "payment_reference" })
 })
 public class DisbursementInstallment {
 
@@ -60,48 +62,117 @@ public class DisbursementInstallment {
     @OrderBy("dueDate ASC")
     private List<DisbursementMilestone> milestones = new ArrayList<>();
 
-    public DisbursementInstallment() {}
+    public DisbursementInstallment() {
+    }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public DisbursementPlan getPlan() { return plan; }
-    public void setPlan(DisbursementPlan plan) { this.plan = plan; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public Integer getInstallmentNumber() { return installmentNumber; }
-    public void setInstallmentNumber(Integer installmentNumber) { this.installmentNumber = installmentNumber; }
+    public DisbursementPlan getPlan() {
+        return plan;
+    }
 
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public void setPlan(DisbursementPlan plan) {
+        this.plan = plan;
+    }
 
-    public BigDecimal getPercentage() { return percentage; }
-    public void setPercentage(BigDecimal percentage) { this.percentage = percentage; }
+    public Integer getInstallmentNumber() {
+        return installmentNumber;
+    }
 
-    public BigDecimal getAmount() { return amount; }
-    public void setAmount(BigDecimal amount) { this.amount = amount; }
+    public void setInstallmentNumber(Integer installmentNumber) {
+        this.installmentNumber = installmentNumber;
+    }
 
-    public LocalDate getPlannedReleaseDate() { return plannedReleaseDate; }
-    public void setPlannedReleaseDate(LocalDate plannedReleaseDate) { this.plannedReleaseDate = plannedReleaseDate; }
+    public String getTitle() {
+        return title;
+    }
 
-    public LocalDateTime getActualDisbursementDate() { return actualDisbursementDate; }
-    public void setActualDisbursementDate(LocalDateTime actualDisbursementDate) { this.actualDisbursementDate = actualDisbursementDate; }
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-    public InstallmentStatus getStatus() { return status; }
-    public void setStatus(InstallmentStatus status) { this.status = status; }
+    public BigDecimal getPercentage() {
+        return percentage;
+    }
 
-    public String getPaymentReference() { return paymentReference; }
-    public void setPaymentReference(String paymentReference) { this.paymentReference = paymentReference; }
+    public void setPercentage(BigDecimal percentage) {
+        this.percentage = percentage;
+    }
 
-    public String getPaymentMethod() { return paymentMethod; }
-    public void setPaymentMethod(String paymentMethod) { this.paymentMethod = paymentMethod; }
+    public BigDecimal getAmount() {
+        return amount;
+    }
 
-    public User getDisbursedBy() { return disbursedBy; }
-    public void setDisbursedBy(User disbursedBy) { this.disbursedBy = disbursedBy; }
+    public void setAmount(BigDecimal amount) {
+        this.amount = amount;
+    }
 
-    public String getDisbursementRemarks() { return disbursementRemarks; }
-    public void setDisbursementRemarks(String disbursementRemarks) { this.disbursementRemarks = disbursementRemarks; }
+    public LocalDate getPlannedReleaseDate() {
+        return plannedReleaseDate;
+    }
 
-    public List<DisbursementMilestone> getMilestones() { return milestones; }
+    public void setPlannedReleaseDate(LocalDate plannedReleaseDate) {
+        this.plannedReleaseDate = plannedReleaseDate;
+    }
+
+    public LocalDateTime getActualDisbursementDate() {
+        return actualDisbursementDate;
+    }
+
+    public void setActualDisbursementDate(LocalDateTime actualDisbursementDate) {
+        this.actualDisbursementDate = actualDisbursementDate;
+    }
+
+    public InstallmentStatus getStatus() {
+        return status;
+    }
+
+    public void setStatus(InstallmentStatus status) {
+        this.status = status;
+    }
+
+    public String getPaymentReference() {
+        return paymentReference;
+    }
+
+    public void setPaymentReference(String paymentReference) {
+        this.paymentReference = paymentReference;
+    }
+
+    public String getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(String paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public User getDisbursedBy() {
+        return disbursedBy;
+    }
+
+    public void setDisbursedBy(User disbursedBy) {
+        this.disbursedBy = disbursedBy;
+    }
+
+    public String getDisbursementRemarks() {
+        return disbursementRemarks;
+    }
+
+    public void setDisbursementRemarks(String disbursementRemarks) {
+        this.disbursementRemarks = disbursementRemarks;
+    }
+
+    public List<DisbursementMilestone> getMilestones() {
+        return milestones;
+    }
+
     public void setMilestones(List<DisbursementMilestone> milestones) {
         this.milestones.clear();
         if (milestones != null) {

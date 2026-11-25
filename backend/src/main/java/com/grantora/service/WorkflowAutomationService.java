@@ -123,6 +123,9 @@ public class WorkflowAutomationService {
         }
     }
 
+    /** Maximum length matching the in_app_notifications.message column (VARCHAR 300). */
+    private static final int MAX_NOTIFICATION_LENGTH = 290;
+
     @Transactional
     public void notify(User user, String key, String message, Long app) {
 
@@ -132,10 +135,16 @@ public class WorkflowAutomationService {
             return;
         }
 
+        // Truncate the notification message to fit the DB column limit.
+        // Full remarks are preserved separately in the ApplicationVerification / ComplianceReviewHistory audit tables.
+        String safeMessage = message != null && message.length() > MAX_NOTIFICATION_LENGTH
+                ? message.substring(0, MAX_NOTIFICATION_LENGTH - 1) + "\u2026"
+                : message;
+
         InAppNotification n = new InAppNotification();
         n.setUser(user);
         n.setEventKey(key);
-        n.setMessage(message);
+        n.setMessage(safeMessage);
         n.setApplicationId(app);
 
         notifications.save(n);
