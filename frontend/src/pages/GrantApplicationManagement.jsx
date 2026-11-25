@@ -15,6 +15,13 @@ import {
   downloadApplicationDocument,
 } from "../services/grantApplicationService";
 import { getSchemes } from "../services/schemeService";
+import {
+  formatCurrencyINR,
+  getDisbursementBadgeInfo,
+  getDisbursementSummary,
+  getPendingActionText,
+  getStepState,
+} from "../utils/applicationDisbursement";
 import "../styles/GrantApplicationManagement.css";
 
 const APPLICATION_STATUSES = [
@@ -97,111 +104,6 @@ function getLatestCorrectionRemarks(app) {
 function formatStatus(status) {
   if (!status) return "—";
   return status.replaceAll("_", " ");
-}
-
-function getStepState(app, step) {
-  if (!app) return "";
-  const { status, workflowStage } = app;
-
-  if (status === "REJECTED") {
-    if (step === 2 && (workflowStage === "FIELD" || status === "FIELD_VERIFICATION")) return "grant-stepper__step--rejected";
-    if (step === 3 && (workflowStage === "DISTRICT" || status === "DISTRICT_REVIEW")) return "grant-stepper__step--rejected";
-    if (step === 4 && (workflowStage === "FINANCE" || status === "FINANCE_REVIEW")) return "grant-stepper__step--rejected";
-  }
-
-  if (status === "NEEDS_CORRECTION") {
-    if (step === 2 && (workflowStage === "FIELD" || !workflowStage)) return "grant-stepper__step--warning";
-    if (step === 3 && workflowStage === "DISTRICT") return "grant-stepper__step--warning";
-    if (step === 4 && workflowStage === "FINANCE") return "grant-stepper__step--warning";
-  }
-
-  if (step === 1) {
-    return status === "DRAFT" ? "grant-stepper__step--active" : "grant-stepper__step--completed";
-  }
-
-  if (step === 2) {
-    if (["DISTRICT", "FINANCE"].includes(workflowStage) || ["DISTRICT_REVIEW", "FINANCE_REVIEW", "APPROVED"].includes(status)) {
-      return "grant-stepper__step--completed";
-    }
-    if (workflowStage === "FIELD" || ["SUBMITTED", "UNDER_VERIFICATION", "FIELD_VERIFICATION"].includes(status)) {
-      return "grant-stepper__step--active";
-    }
-    return "";
-  }
-
-  if (status === "APPROVED") {
-    if (step <= 4) return "grant-stepper__step--completed";
-    return ""; // Step 5 is future disbursement stage
-  }
-
-  if (step === 3) {
-    if (workflowStage === "FINANCE" || status === "FINANCE_REVIEW") {
-      return "grant-stepper__step--completed";
-    }
-    if (workflowStage === "DISTRICT" || status === "DISTRICT_REVIEW") {
-      return "grant-stepper__step--active";
-    }
-    return "";
-  }
-
-  if (step === 4) {
-    if (workflowStage === "FINANCE" || status === "FINANCE_REVIEW") {
-      return "grant-stepper__step--active";
-    }
-    return "";
-  }
-
-  if (step === 5) {
-    return "";
-  }
-
-  return "";
-}
-
-function getPendingActionText(app) {
-  if (!app) return "";
-
-  if (app.status === "APPROVED") {
-    return "Congratulations! Your application has received all required verifications and final Finance approval. It is now eligible for the future grant disbursement workflow.";
-  }
-
-  if (app.status === "REJECTED") {
-    return "Your application was not approved. Please see the official rejection remarks below for details.";
-  }
-
-  if (app.status === "WITHDRAWN") {
-    return "This application was withdrawn by you.";
-  }
-
-  if (app.status === "DRAFT") {
-    return "Your application is saved as a draft. Review your answers, upload any required supporting documents, and click Submit when ready.";
-  }
-
-  if (app.status === "NEEDS_CORRECTION") {
-    return "Action Required: The reviewing officer has requested corrections. Please review the remarks below, update your details or attach required documents, and resubmit.";
-  }
-
-  if (
-    app.status === "FINANCE_REVIEW" ||
-    app.workflowStage === "FINANCE"
-  ) {
-    return "District review was successfully completed. Your application is currently under Stage 3: Finance Officer Approval. No action is required from you at this time.";
-  }
-
-  if (app.status === "DISTRICT_REVIEW" || app.workflowStage === "DISTRICT") {
-    return "Field verification was successfully completed. Your application is currently under Stage 2: District Officer Review. No action is required from you at this time.";
-  }
-
-  if (
-    app.status === "SUBMITTED" ||
-    app.status === "UNDER_VERIFICATION" ||
-    app.status === "FIELD_VERIFICATION" ||
-    app.workflowStage === "FIELD"
-  ) {
-    return "Your application has been received and is undergoing Stage 1: Field Officer Verification. No action is required from you at this time.";
-  }
-
-  return "Your application is currently being processed by the administration.";
 }
 
 function GrantApplicationManagement() {
@@ -1348,6 +1250,20 @@ function GrantApplicationManagement() {
                         <span className="grant-applications__status">
                           {formatStatus(application.status)}
                         </span>
+                        {application.status === "APPROVED" && (() => {
+                          const disbInfo = getDisbursementBadgeInfo(application);
+                          const disbSummary = getDisbursementSummary(application);
+                          return disbInfo ? (
+                            <div style={{ fontSize: "0.76rem", color: "#475569", marginTop: "4px" }}>
+                              <strong>{disbInfo.label}</strong>
+                              {disbSummary && (
+                                <div>
+                                  Released: {formatCurrencyINR(disbSummary.disbursedAmount)} / {formatCurrencyINR(disbSummary.totalApprovedAmount)}
+                                </div>
+                              )}
+                            </div>
+                          ) : null;
+                        })()}
                       </td>
 
                       <td>
@@ -1520,6 +1436,14 @@ function GrantApplicationManagement() {
                   <strong>
                     {formatStatus(selectedApplication.status)}
                   </strong>
+                  {selectedApplication.status === "APPROVED" && (() => {
+                    const disbInfo = getDisbursementBadgeInfo(selectedApplication);
+                    return disbInfo ? (
+                      <span style={{ marginLeft: "0.6rem", color: "#0369a1", fontWeight: 600 }}>
+                        · {disbInfo.label}
+                      </span>
+                    ) : null;
+                  })()}
                 </p>
 
                 {/* 5-Stage Verification Progress Stepper */}
@@ -1611,6 +1535,34 @@ function GrantApplicationManagement() {
                         "—"}
                     </dd>
                   </div>
+
+                  {selectedApplication.status === "APPROVED" && (() => {
+                    const disbSummary = getDisbursementSummary(selectedApplication);
+                    const disbInfo = getDisbursementBadgeInfo(selectedApplication);
+                    return disbSummary ? (
+                      <>
+                        <div>
+                          <dt>Disbursement status</dt>
+                          <dd>{disbInfo?.label || "Awaiting Disbursement"}</dd>
+                        </div>
+                        <div>
+                          <dt>Amount released</dt>
+                          <dd>
+                            {formatCurrencyINR(disbSummary.disbursedAmount)} of{" "}
+                            {formatCurrencyINR(disbSummary.totalApprovedAmount)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Remaining balance</dt>
+                          <dd>
+                            {formatCurrencyINR(disbSummary.remainingAmount)}
+                            {disbSummary.totalInstallmentsCount > 0 &&
+                              ` (${disbSummary.releasedInstallmentsCount}/${disbSummary.totalInstallmentsCount} stages released)`}
+                          </dd>
+                        </div>
+                      </>
+                    ) : null;
+                  })()}
                 </dl>
 
                 {selectedApplication.eligibilityEvaluation ? (
@@ -1764,12 +1716,56 @@ function GrantApplicationManagement() {
                       </p>
                     )}
 
-                  {selectedApplication.status === "APPROVED" && (
-                    <p>
-                      This application is approved and available
-                      to the disbursement workflow.
-                    </p>
-                  )}
+                  {selectedApplication.status === "APPROVED" && (() => {
+                    const disbSummary = getDisbursementSummary(selectedApplication);
+                    const disbInfo = getDisbursementBadgeInfo(selectedApplication);
+                    return (
+                      <div style={{ marginTop: "0.5rem" }}>
+                        <p>
+                          <strong>Disbursement Progress:</strong>{" "}
+                          {disbInfo?.label || "Awaiting Disbursement"} — Released{" "}
+                          <strong>{formatCurrencyINR(disbSummary?.disbursedAmount)}</strong> of{" "}
+                          <strong>{formatCurrencyINR(disbSummary?.totalApprovedAmount)}</strong>{" "}
+                          (Remaining:{" "}
+                          <strong>{formatCurrencyINR(disbSummary?.remainingAmount)}</strong>).
+                        </p>
+                        {disbSummary?.installments?.length > 0 && (
+                          <div className="grant-applications__table-wrap" style={{ marginTop: "0.75rem" }}>
+                            <table className="grant-applications__table">
+                              <thead>
+                                <tr>
+                                  <th scope="col">Stage</th>
+                                  <th scope="col">Amount</th>
+                                  <th scope="col">Status</th>
+                                  <th scope="col">Planned Date</th>
+                                  <th scope="col">Release Date</th>
+                                  <th scope="col">Reference</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {disbSummary.installments.map((inst) => (
+                                  <tr key={inst.id}>
+                                    <td>
+                                      Stage {inst.installmentNumber}: {inst.title}
+                                    </td>
+                                    <td>{formatCurrencyINR(inst.amount)}</td>
+                                    <td>{formatStatus(inst.status)}</td>
+                                    <td>{inst.plannedReleaseDate || "—"}</td>
+                                    <td>
+                                      {inst.actualDisbursementDate
+                                        ? new Date(inst.actualDisbursementDate).toLocaleDateString("en-IN")
+                                        : "—"}
+                                    </td>
+                                    <td>{inst.paymentReference || "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {selectedApplication.documents?.length > 0 && (
                     <>

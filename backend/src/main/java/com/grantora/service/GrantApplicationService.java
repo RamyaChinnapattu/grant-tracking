@@ -1,5 +1,6 @@
 package com.grantora.service;
 
+import com.grantora.dto.ApplicationDisbursementSummary;
 import com.grantora.dto.GrantApplicationRequest;
 import com.grantora.dto.GrantApplicationResponse;
 import com.grantora.dto.GrantApplicationStatusRequest;
@@ -13,9 +14,13 @@ import com.grantora.dto.GrantApplicationStatusHistoryResponse;
 import com.grantora.entity.ApplicationDocument;
 import com.grantora.entity.ApplicationVerification;
 import com.grantora.entity.Beneficiary;
+import com.grantora.entity.DisbursementInstallment;
+import com.grantora.entity.DisbursementPlan;
+import com.grantora.entity.DisbursementPlanStatus;
 import com.grantora.entity.GrantApplication;
 import com.grantora.entity.GrantApplicationStatus;
 import com.grantora.entity.GrantApplicationStatusHistory;
+import com.grantora.entity.InstallmentStatus;
 import com.grantora.entity.Role;
 import com.grantora.entity.Scheme;
 import com.grantora.entity.SchemeEligibilityQuestion;
@@ -23,10 +28,12 @@ import com.grantora.entity.User;
 import com.grantora.repository.ApplicationDocumentRepository;
 import com.grantora.repository.ApplicationVerificationRepository;
 import com.grantora.repository.BeneficiaryRepository;
+import com.grantora.repository.DisbursementPlanRepository;
 import com.grantora.repository.GrantApplicationRepository;
 import com.grantora.repository.GrantApplicationStatusHistoryRepository;
 import com.grantora.repository.SchemeRepository;
 import com.grantora.repository.UserRepository;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
@@ -57,6 +64,7 @@ public class GrantApplicationService {
         private final ApplicationVerificationRepository verificationRepository;
         private final ApplicationDocumentRepository documentRepository;
         private final UserRepository userRepository;
+        private DisbursementPlanRepository disbursementPlanRepository;
 
         private static final long MAX_DOCUMENT_SIZE = 10L * 1024 * 1024;
         private static final long MAX_DOCUMENTS_PER_APPLICATION = 20;
@@ -80,6 +88,11 @@ public class GrantApplicationService {
                 this.verificationRepository = verificationRepository;
                 this.documentRepository = documentRepository;
                 this.userRepository = userRepository;
+        }
+
+        @Autowired(required = false)
+        public void setDisbursementPlanRepository(DisbursementPlanRepository disbursementPlanRepository) {
+                this.disbursementPlanRepository = disbursementPlanRepository;
         }
 
         @Transactional(readOnly = true)
@@ -633,7 +646,93 @@ public class GrantApplicationService {
                                                 application.getBeneficiary().getCategory()),
                                 application.getEligibilityEvaluation() == null
                                                 ? null
-                                                : application.getEligibilityEvaluation().eligibilityThreshold());
+                                                : application.getEligibilityEvaluation().eligibilityThreshold(),
+                                buildDisbursementSummary(application));
+        }
+
+        private ApplicationDisbursementSummary buildDisbursementSummary(GrantApplication application) {
+                if (application == null || application.getStatus() != GrantApplicationStatus.APPROVED) {
+                        return null;
+                }
+                DisbursementPlan plan = (disbursementPlanRepository != null && application.getId() != null)
+                                ? disbursementPlanRepository.findByApplication_Id(application.getId()).orElse(null)
+                                : null;
+
+                BigDecimal fallbackApproved = application.getRequestedAmount() != null
+                                ? application.getRequestedAmount()
+                                : BigDecimal.ZERO;
+
+                if (plan == null || plan.getPlanStatus() == DisbursementPlanStatus.CANCELLED) {
+                        return new ApplicationDisbursementSummary(
+                                        "AWAITING_DISBURSEMENT",
+                                        null,
+                                        null,
+                                        fallbackApproved,
+                                        BigDecimal.ZERO,
+                                        fallbackApproved,
+                                        0,
+                                        0,
+                                        List.of());
+                }
+
+                BigDecimal approved = plan.getTotalApprovedAmount() != null
+                                ? plan.getTotalApprovedAmount()
+                                : fallbackApproved;
+
+                List<DisbursementInstallment> applicableInstallments = (plan.getInstallments() == null
+                                ? List.<DisbursementInstallment>of()
+                                : plan.getInstallments()).stream()
+                                .filter(inst -> inst != null && inst.getStatus() != InstallmentStatus.CANCELLED)
+                                .sorted(java.util.Comparator.comparing(
+                                                DisbursementInstallment::getInstallmentNumber,
+                                                java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())))
+                                .toList();
+
+                int totalInstallments = applicableInstallments.size();
+                int releasedCount = (int) applicableInstallments.stream()
+                                .filter(inst -> inst.getStatus() == InstallmentStatus.DISBURSED)
+                                .count();
+
+                BigDecimal disbursedAmount = applicableInstallments.stream()
+                                .filter(inst -> inst.getStatus() == InstallmentStatus.DISBURSED)
+                                .map(DisbursementInstallment::getAmount)
+                                .filter(java.util.Objects::nonNull)
+                                .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+                BigDecimal remainingAmount = approved.subtract(disbursedAmount).max(BigDecimal.ZERO);
+
+                String disbursementStatus;
+                if (totalInstallments > 0 && releasedCount == totalInstallments) {
+                        disbursementStatus = "DISBURSED";
+                } else if (releasedCount > 0) {
+                        disbursementStatus = "PARTIALLY_DISBURSED";
+                } else {
+                        disbursementStatus = "AWAITING_DISBURSEMENT";
+                }
+
+                List<ApplicationDisbursementSummary.InstallmentSummary> installmentSummaries = applicableInstallments
+                                .stream()
+                                .map(inst -> new ApplicationDisbursementSummary.InstallmentSummary(
+                                                inst.getId(),
+                                                inst.getInstallmentNumber(),
+                                                inst.getTitle(),
+                                                inst.getAmount(),
+                                                inst.getStatus() != null ? inst.getStatus().name() : null,
+                                                inst.getPlannedReleaseDate(),
+                                                inst.getActualDisbursementDate(),
+                                                inst.getPaymentReference()))
+                                .toList();
+
+                return new ApplicationDisbursementSummary(
+                                disbursementStatus,
+                                plan.getId(),
+                                plan.getPlanStatus() != null ? plan.getPlanStatus().name() : null,
+                                approved,
+                                disbursedAmount,
+                                remainingAmount,
+                                releasedCount,
+                                totalInstallments,
+                                installmentSummaries);
         }
 
         private VerificationHistoryResponse toHistoryResponse(ApplicationVerification item) {

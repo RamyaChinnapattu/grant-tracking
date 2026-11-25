@@ -23,6 +23,11 @@ import {
 } from "../components/dashboardNavigation";
 import { getMyApplications } from "../services/grantApplicationService";
 import { getNotifications } from "../services/notificationService";
+import {
+  formatCurrencyINR,
+  getDisbursementBadgeInfo,
+  getDisbursementSummary,
+} from "../utils/applicationDisbursement";
 import AdminDashboardHome from "./AdminDashboardHome";
 import OfficerMilestone3Dashboard from "./OfficerMilestone3Dashboard";
 import "../styles/DashboardHome.css";
@@ -69,9 +74,30 @@ function BeneficiaryDashboardHome() {
   }, []);
 
   const totalApps = applications.length;
-  const approvedApps = applications.filter(
+  const approvedApplicationsList = applications.filter(
     (a) => a.status === "APPROVED"
-  ).length;
+  );
+  const approvedApps = approvedApplicationsList.length;
+  const disbursementTotals = approvedApplicationsList.reduce(
+    (acc, app) => {
+      const summary = getDisbursementSummary(app);
+      if (summary) {
+        acc.totalApproved += summary.totalApprovedAmount;
+        acc.totalReleased += summary.disbursedAmount;
+        acc.totalRemaining += summary.remainingAmount;
+        if (summary.disbursementStatus === "DISBURSED") acc.disbursedCount += 1;
+        else if (summary.disbursementStatus === "PARTIALLY_DISBURSED") acc.partialCount += 1;
+      }
+      return acc;
+    },
+    {
+      totalApproved: 0,
+      totalReleased: 0,
+      totalRemaining: 0,
+      disbursedCount: 0,
+      partialCount: 0,
+    }
+  );
   const underReviewApps = applications.filter((a) =>
     [
       "SUBMITTED",
@@ -92,10 +118,18 @@ function BeneficiaryDashboardHome() {
   const recentApplications = applications.slice(0, 5);
   const recentNotifications = notifications.slice(0, 3);
 
-  const getStatusBadge = (status, stage) => {
+  const getStatusBadge = (app) => {
+    const status = app?.status;
+    const stage = app?.workflowStage;
     switch (status) {
-      case "APPROVED":
-        return <span className="dash-badge dash-badge--success">Approved</span>;
+      case "APPROVED": {
+        const disbInfo = getDisbursementBadgeInfo(app);
+        return (
+          <span className={`dash-badge ${disbInfo?.badgeClass || "dash-badge--success"}`}>
+            {disbInfo?.label || "Approved"}
+          </span>
+        );
+      }
       case "NEEDS_CORRECTION":
         return (
           <span className="dash-badge dash-badge--warning">
@@ -185,7 +219,30 @@ function BeneficiaryDashboardHome() {
             <strong className="dash-stat-card__value">
               {loading ? "..." : approvedApps}
             </strong>
-            <span className="dash-stat-card__subtext">Finance approved</span>
+            <span className="dash-stat-card__subtext">
+              {loading
+                ? "..."
+                : approvedApps > 0
+                ? `${disbursementTotals.disbursedCount} disbursed · ${disbursementTotals.partialCount} partial`
+                : "Finance approved"}
+            </span>
+          </div>
+        </div>
+
+        <div className="dash-stat-card">
+          <div className="dash-stat-card__icon dash-stat-card__icon--success">
+            <CheckCircle2 size={22} />
+          </div>
+          <div className="dash-stat-card__data">
+            <span className="dash-stat-card__label">Funds Released</span>
+            <strong className="dash-stat-card__value">
+              {loading ? "..." : formatCurrencyINR(disbursementTotals.totalReleased)}
+            </strong>
+            <span className="dash-stat-card__subtext">
+              {loading
+                ? "..."
+                : `Remaining: ${formatCurrencyINR(disbursementTotals.totalRemaining)}`}
+            </span>
           </div>
         </div>
 
@@ -350,34 +407,57 @@ function BeneficiaryDashboardHome() {
                   </tr>
                 </thead>
                 <tbody>
-                  {recentApplications.map((app) => (
-                    <tr key={app.id}>
-                      <td>
-                        <div className="dash-scheme-cell">
-                          <strong>{app.schemeName || "Grant Scheme"}</strong>
-                          <span>App #{app.id}</span>
-                        </div>
-                      </td>
-                      <td>₹{Number(app.requestedAmount).toLocaleString("en-IN")}</td>
-                      <td>
-                        {app.submittedAt
-                          ? new Date(app.submittedAt).toLocaleDateString()
-                          : "Draft"}
-                      </td>
-                      <td>{getStatusBadge(app.status, app.workflowStage)}</td>
-                      <td>
-                        <Link
-                          to="/beneficiary/applications"
-                          state={{ selectedApplicationId: app.id }}
-                          className="dash-row-link"
-                          title="View application details"
-                        >
-                          Details
-                          <ArrowRight size={14} />
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
+                  {recentApplications.map((app) => {
+                    const disbSummary = getDisbursementSummary(app);
+                    return (
+                      <tr key={app.id}>
+                        <td>
+                          <div className="dash-scheme-cell">
+                            <strong>{app.schemeName || "Grant Scheme"}</strong>
+                            <span>App #{app.id}</span>
+                          </div>
+                        </td>
+                        <td>
+                          <div>{formatCurrencyINR(app.requestedAmount)}</div>
+                          {disbSummary && (
+                            <div style={{ fontSize: "0.75rem", color: "#475569", marginTop: "2px" }}>
+                              Released: {formatCurrencyINR(disbSummary.disbursedAmount)} · Remaining:{" "}
+                              {formatCurrencyINR(disbSummary.remainingAmount)}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          {app.submittedAt
+                            ? new Date(app.submittedAt).toLocaleDateString()
+                            : "Draft"}
+                        </td>
+                        <td>
+                          {getStatusBadge(app)}
+                          {disbSummary && disbSummary.installments.length > 0 && (
+                            <div style={{ fontSize: "0.73rem", color: "#64748b", marginTop: "4px" }}>
+                              {disbSummary.installments
+                                .map(
+                                  (inst) =>
+                                    `S${inst.installmentNumber}: ${inst.status?.replaceAll("_", " ")}`
+                                )
+                                .join(" · ")}
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <Link
+                            to={app.status === "APPROVED" ? "/beneficiary/my-grant" : "/beneficiary/applications"}
+                            state={{ selectedApplicationId: app.id }}
+                            className="dash-row-link"
+                            title={app.status === "APPROVED" ? "View grant disbursements" : "View application details"}
+                          >
+                            {app.status === "APPROVED" ? "My Grant" : "Details"}
+                            <ArrowRight size={14} />
+                          </Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
