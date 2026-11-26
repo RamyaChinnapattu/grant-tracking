@@ -22,6 +22,12 @@ import {
   getComplianceDocumentFile,
 } from "../services/complianceService";
 import {
+  getMyUtilization,
+  submitUtilizationWithDocument,
+  replaceUtilizationWithDocument,
+  downloadUtilizationDocument,
+} from "../services/fundAnalyticsService";
+import {
   AlertBanner,
   HeroBanner,
   ProgressMeter,
@@ -64,19 +70,16 @@ function formatFileSize(bytes) {
 export default function BeneficiaryMyGrant() {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = searchParams.get("tab") || "schedule";
-  const [activeTab, setActiveTab] = useState(
-    currentTab === "expenditure" ? "schedule" : currentTab
-  );
+  const [activeTab, setActiveTab] = useState(currentTab);
 
   useEffect(() => {
     const tabParam = searchParams.get("tab") || "schedule";
-    setActiveTab(tabParam === "expenditure" ? "schedule" : tabParam);
+    setActiveTab(tabParam);
   }, [searchParams]);
 
   const switchTab = (tab) => {
-    const resolvedTab = tab === "expenditure" ? "schedule" : tab;
-    setActiveTab(resolvedTab);
-    setSearchParams({ tab: resolvedTab });
+    setActiveTab(tab);
+    setSearchParams({ tab });
   };
 
   // Independent loading and error states for the 2 sections
@@ -96,6 +99,20 @@ export default function BeneficiaryMyGrant() {
   const [uploadFiles, setUploadFiles] = useState({});
   const [uploadNotes, setUploadNotes] = useState({});
   const [submittingDocId, setSubmittingDocId] = useState(null);
+
+  // Expenditure / utilization reports state
+  const [utilizationList, setUtilizationList] = useState([]);
+  const [loadingUtilization, setLoadingUtilization] = useState(true);
+  const [utilForm, setUtilForm] = useState({
+    installmentId: "",
+    reportedAmount: "",
+    category: "Equipment & Materials",
+    description: "",
+    supportingComplianceIds: [],
+  });
+  const [utilFile, setUtilFile] = useState(null);
+  const [editingUtilId, setEditingUtilId] = useState(null);
+  const [submittingUtil, setSubmittingUtil] = useState(false);
 
   // Independent loaders
   const loadPlans = useCallback(async (isSilent = false) => {
@@ -132,19 +149,34 @@ export default function BeneficiaryMyGrant() {
     }
   }, []);
 
+  const loadUtilization = useCallback(async () => {
+    setLoadingUtilization(true);
+    try {
+      const res = await getMyUtilization();
+      setUtilizationList(res.data || []);
+    } catch (err) {
+      console.error("Failed to load expenditure reports:", err);
+      setUtilizationList([]);
+    } finally {
+      setLoadingUtilization(false);
+    }
+  }, []);
+
   const handleRefreshAll = useCallback(async () => {
     setRefreshing(true);
     await Promise.allSettled([
       loadPlans(true),
       loadCompliance(true),
+      loadUtilization(),
     ]);
     setRefreshing(false);
-  }, [loadPlans, loadCompliance]);
+  }, [loadPlans, loadCompliance, loadUtilization]);
 
   useEffect(() => {
     loadPlans();
     loadCompliance();
-  }, [loadPlans, loadCompliance]);
+    loadUtilization();
+  }, [loadPlans, loadCompliance, loadUtilization]);
 
   // Overall financial summary
   const financialSummary = useMemo(() => {
@@ -397,6 +429,16 @@ export default function BeneficiaryMyGrant() {
           Required Documents
           {!loadingCompliance && !errorCompliance && pendingDocsCount > 0 && (
             <span className="ben-badge">{pendingDocsCount}</span>
+          )}
+        </button>
+        <button
+          className={`ben-tab-btn ${activeTab === "expenditure" ? "active" : ""}`}
+          onClick={() => switchTab("expenditure")}
+        >
+          <FileText size={18} />
+          Expenditure Reports
+          {!loadingUtilization && utilizationList.length > 0 && (
+            <span className="ben-badge">{utilizationList.length}</span>
           )}
         </button>
       </nav>
@@ -1073,6 +1115,285 @@ export default function BeneficiaryMyGrant() {
               })()
             )}
           </div>
+        </section>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 3: EXPENDITURE REPORTS                                                */}
+      {/* ========================================================================= */}
+      {activeTab === "expenditure" && (
+        <section>
+          {(() => {
+            const disbursedInstallments = plans.flatMap((p) =>
+              (p.installments || [])
+                .filter((inst) => inst.status === "DISBURSED")
+                .map((inst) => ({
+                  ...inst,
+                  applicationId: p.applicationId,
+                  schemeName: p.schemeName,
+                }))
+            );
+
+            const handleUtilSubmit = async (e) => {
+              e.preventDefault();
+              const selectedInst = disbursedInstallments.find(
+                (i) => String(i.id) === String(utilForm.installmentId)
+              );
+              if (!selectedInst) {
+                setError("Please select a released installment.");
+                return;
+              }
+              if (!utilForm.reportedAmount || Number(utilForm.reportedAmount) <= 0) {
+                setError("Please enter a valid expenditure amount greater than zero.");
+                return;
+              }
+              if (!utilFile && (!utilForm.supportingComplianceIds || utilForm.supportingComplianceIds.length === 0)) {
+                setError("Please upload a supporting document or select an existing compliance document.");
+                return;
+              }
+
+              setSubmittingUtil(true);
+              setError("");
+              setSuccessMsg("");
+              try {
+                const fd = new FormData();
+                fd.append("applicationId", selectedInst.applicationId);
+                fd.append("installmentId", selectedInst.id);
+                fd.append("reportedAmount", utilForm.reportedAmount);
+                fd.append("category", utilForm.category);
+                fd.append("description", utilForm.description || "");
+                (utilForm.supportingComplianceIds || []).forEach((cid) =>
+                  fd.append("supportingComplianceIds", cid)
+                );
+                if (utilFile) {
+                  fd.append("file", utilFile);
+                }
+                if (editingUtilId) {
+                  await replaceUtilizationWithDocument(editingUtilId, fd);
+                  setSuccessMsg("Corrected expenditure report resubmitted for Field Officer review.");
+                } else {
+                  await submitUtilizationWithDocument(fd);
+                  setSuccessMsg("Expenditure report submitted for Field → District → Finance review.");
+                }
+                setUtilForm({
+                  installmentId: "",
+                  reportedAmount: "",
+                  category: "Equipment & Materials",
+                  description: "",
+                  supportingComplianceIds: [],
+                });
+                setUtilFile(null);
+                setEditingUtilId(null);
+                await loadUtilization();
+              } catch (err) {
+                setError(err.response?.data?.message || "Failed to submit expenditure report.");
+              } finally {
+                setSubmittingUtil(false);
+              }
+            };
+
+            const openUtilDoc = async (reportId, fileName, version) => {
+              try {
+                const { data } = await downloadUtilizationDocument(reportId, version);
+                const url = URL.createObjectURL(data);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = fileName || `utilization-${reportId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+              } catch {
+                setError("Could not download the expenditure document.");
+              }
+            };
+
+            return (
+              <div style={{ display: "grid", gap: "1.25rem" }}>
+                <div className="ben-card">
+                  <h2 style={{ marginTop: 0 }}>
+                    {editingUtilId ? "Resubmit Corrected Expenditure Report" : "Submit Expenditure Report"}
+                  </h2>
+                  {disbursedInstallments.length === 0 ? (
+                    <p style={{ color: "#64748b", margin: 0 }}>
+                      Expenditure reports can be submitted once an installment has been recorded as released by the Finance Officer.
+                    </p>
+                  ) : (
+                    <form onSubmit={handleUtilSubmit} style={{ display: "grid", gap: "0.85rem" }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "0.85rem" }}>
+                        <div className="mgmt-form-group">
+                          <label>Released Installment *</label>
+                          <select
+                            required
+                            disabled={Boolean(editingUtilId)}
+                            value={utilForm.installmentId}
+                            onChange={(e) => setUtilForm({ ...utilForm, installmentId: e.target.value })}
+                          >
+                            <option value="">Select released stage…</option>
+                            {disbursedInstallments.map((inst) => (
+                              <option key={inst.id} value={inst.id}>
+                                App #{inst.applicationId} · Stage {inst.installmentNumber} ({formatCurrency(inst.amount)})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="mgmt-form-group">
+                          <label>Reported Amount (₹) *</label>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            required
+                            value={utilForm.reportedAmount}
+                            onChange={(e) => setUtilForm({ ...utilForm, reportedAmount: e.target.value })}
+                            placeholder="e.g. 8000"
+                          />
+                        </div>
+                        <div className="mgmt-form-group">
+                          <label>Expense Category *</label>
+                          <input
+                            type="text"
+                            required
+                            value={utilForm.category}
+                            onChange={(e) => setUtilForm({ ...utilForm, category: e.target.value })}
+                            placeholder="Equipment, Inputs, Labor..."
+                          />
+                        </div>
+                      </div>
+
+                      <div className="mgmt-form-group">
+                        <label>Utilization Description *</label>
+                        <textarea
+                          rows="2"
+                          required
+                          value={utilForm.description}
+                          onChange={(e) => setUtilForm({ ...utilForm, description: e.target.value })}
+                          placeholder="Describe how the released grant funds were utilized…"
+                        />
+                      </div>
+
+                      <div className="mgmt-form-group">
+                        <label>Supporting Document (PDF, PNG, JPG)</label>
+                        <input
+                          type="file"
+                          accept=".pdf,.png,.jpg,.jpeg"
+                          onChange={(e) => setUtilFile(e.target.files?.[0] || null)}
+                        />
+                      </div>
+
+                      <div style={{ display: "flex", gap: "0.5rem" }}>
+                        <button type="submit" className="mgmt-btn primary" disabled={submittingUtil}>
+                          <FileUp size={16} />
+                          {submittingUtil ? "Submitting…" : editingUtilId ? "Resubmit Report" : "Submit Expenditure Report"}
+                        </button>
+                        {editingUtilId && (
+                          <button
+                            type="button"
+                            className="mgmt-btn secondary"
+                            onClick={() => {
+                              setEditingUtilId(null);
+                              setUtilForm({
+                                installmentId: "",
+                                reportedAmount: "",
+                                category: "Equipment & Materials",
+                                description: "",
+                                supportingComplianceIds: [],
+                              });
+                              setUtilFile(null);
+                            }}
+                          >
+                            Cancel Edit
+                          </button>
+                        )}
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                <div className="ben-card">
+                  <h2 style={{ marginTop: 0 }}>My Submitted Expenditure Reports</h2>
+                  {loadingUtilization ? (
+                    <p style={{ color: "#64748b" }}>Loading expenditure reports…</p>
+                  ) : utilizationList.length === 0 ? (
+                    <p style={{ color: "#64748b", margin: 0 }}>No expenditure reports submitted yet.</p>
+                  ) : (
+                    <div style={{ display: "grid", gap: "0.85rem" }}>
+                      {utilizationList.map((r) => (
+                        <article className="ben-doc-card" key={r.id}>
+                          <div className="ben-doc-header">
+                            <div>
+                              <h3>
+                                {r.category} · {formatCurrency(r.reportedAmount)}
+                              </h3>
+                              <div style={{ fontSize: "0.82rem", color: "#64748b" }}>
+                                {r.schemeName} · Application #{r.applicationId} · Stage {r.installmentNumber} · Submitted {formatDate(r.submittedAt)}
+                              </div>
+                            </div>
+                            <span className={`mgmt-status-badge status-${r.status?.toLowerCase()}`}>
+                              {r.status}
+                            </span>
+                          </div>
+                          {r.description && <p style={{ fontSize: "0.85rem", color: "#475569" }}>{r.description}</p>}
+                          {r.reviewRemarks && (
+                            <div style={{ background: "#fef3c7", padding: "0.55rem 0.75rem", borderRadius: "6px", fontSize: "0.82rem", margin: "0.4rem 0" }}>
+                              <strong>Review Remarks:</strong> {r.reviewRemarks}
+                            </div>
+                          )}
+                          {r.documentVersions && r.documentVersions.length > 0 && (
+                            <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", margin: "0.4rem 0" }}>
+                              {r.documentVersions.map((dv) => (
+                                <button
+                                  key={dv.versionNumber}
+                                  type="button"
+                                  className="mgmt-btn secondary"
+                                  style={{ padding: "0.2rem 0.55rem", fontSize: "0.75rem" }}
+                                  onClick={() => openUtilDoc(r.id, `v${dv.versionNumber}-${dv.documentFileName}`, dv.versionNumber)}
+                                >
+                                  <Download size={12} /> v{dv.versionNumber} ({dv.documentFileName})
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {r.stageReviews && r.stageReviews.length > 0 && (
+                            <div style={{ fontSize: "0.78rem", color: "#334155", background: "#f8fafc", padding: "0.5rem 0.75rem", borderRadius: "6px", marginTop: "0.4rem" }}>
+                              <strong>Sequential Stage Reviews:</strong>
+                              {r.stageReviews.map((sr, idx) => (
+                                <div key={idx}>
+                                  Cycle #{sr.reviewCycle} · {sr.stage}: {sr.decision} by {sr.reviewerName} ({formatDate(sr.reviewedAt)})
+                                  {sr.remarks ? ` — "${sr.remarks}"` : ""}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {r.status === "CORRECTION_REQUIRED" && (
+                            <div style={{ marginTop: "0.5rem" }}>
+                              <button
+                                type="button"
+                                className="mgmt-btn primary"
+                                style={{ padding: "0.3rem 0.65rem", fontSize: "0.8rem" }}
+                                onClick={() => {
+                                  setEditingUtilId(r.id);
+                                  setUtilForm({
+                                    installmentId: String(r.installmentId),
+                                    reportedAmount: String(r.reportedAmount),
+                                    category: r.category,
+                                    description: r.description || "",
+                                    supportingComplianceIds: r.supportingComplianceIds || [],
+                                  });
+                                }}
+                              >
+                                Edit &amp; Resubmit Report
+                              </button>
+                            </div>
+                          )}
+                        </article>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
         </section>
       )}
 

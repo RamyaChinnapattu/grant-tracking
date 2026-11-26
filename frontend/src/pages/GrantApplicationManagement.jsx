@@ -1704,7 +1704,8 @@ function GrantApplicationManagement() {
                   </p>
 
                   {!isBeneficiary &&
-                    selectedApplication.workflowStage && (
+                    selectedApplication.workflowStage &&
+                    !["APPROVED", "REJECTED", "WITHDRAWN", "DRAFT"].includes(selectedApplication.status) && (
                       <p>
                         Current assignee:{" "}
                         {selectedApplication.assignedOfficerName ||

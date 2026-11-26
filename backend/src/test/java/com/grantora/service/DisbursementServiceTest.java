@@ -1263,6 +1263,56 @@ class DisbursementServiceTest {
         }
 
         @Test
+        void nextInstallmentBlockedWhenPriorReleasedInstallmentRequiresApprovedExpenditureReport() {
+                GrantUtilizationRepository utilRepo = mock(GrantUtilizationRepository.class);
+                disbursementService.setUtilizationRepository(utilRepo);
+
+                DisbursementPlan plan = new DisbursementPlan();
+                plan.setId(5L);
+                plan.setApplication(application);
+                plan.setTotalApprovedAmount(BigDecimal.valueOf(80000));
+                plan.setTotalDisbursedAmount(BigDecimal.valueOf(40000));
+                plan.setPlanStatus(DisbursementPlanStatus.ACTIVE);
+
+                DisbursementInstallment inst1 = new DisbursementInstallment();
+                inst1.setId(10L);
+                inst1.setPlan(plan);
+                inst1.setInstallmentNumber(1);
+                inst1.setAmount(BigDecimal.valueOf(40000));
+                inst1.setStatus(InstallmentStatus.DISBURSED);
+                inst1.setExpenditureReportRequired(true);
+
+                DisbursementInstallment inst2 = new DisbursementInstallment();
+                inst2.setId(12L);
+                inst2.setPlan(plan);
+                inst2.setInstallmentNumber(2);
+                inst2.setAmount(BigDecimal.valueOf(40000));
+                inst2.setStatus(InstallmentStatus.READY_FOR_DISBURSEMENT);
+
+                plan.addInstallment(inst1);
+                plan.addInstallment(inst2);
+
+                when(installmentRepository.findByIdForUpdate(12L)).thenReturn(Optional.of(inst2));
+                when(utilRepo.findByInstallment_Id(10L)).thenReturn(Collections.emptyList());
+
+                DisburseFundsRequest req = new DisburseFundsRequest("UTR-STAGE2-GATE", "DBT_PFMS", "Release stage 2");
+                ResponseStatusException blocked = assertThrows(ResponseStatusException.class,
+                                () -> disbursementService.disburseInstallment(12L, req, "finance@grantora.gov"));
+                assertEquals(HttpStatus.BAD_REQUEST, blocked.getStatusCode());
+                assertTrue(blocked.getReason().contains("requires an approved expenditure report first"));
+
+                GrantUtilizationRecord verifiedReport = new GrantUtilizationRecord();
+                verifiedReport.setStatus(GrantUtilizationStatus.VERIFIED);
+                when(utilRepo.findByInstallment_Id(10L)).thenReturn(List.of(verifiedReport));
+                when(installmentRepository.existsByPaymentReference("UTR-STAGE2-GATE")).thenReturn(false);
+                when(installmentRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+                when(planRepository.save(any())).thenAnswer(i -> i.getArgument(0));
+
+                DisbursementInstallmentResponse ok = disbursementService.disburseInstallment(12L, req, "finance@grantora.gov");
+                assertEquals(InstallmentStatus.DISBURSED, ok.status());
+        }
+
+        @Test
         void fundUtilizationPreservesNullAllocatedFundsAsUnconfigured() {
                 Scheme configured = new Scheme();
                 configured.setId(20L);

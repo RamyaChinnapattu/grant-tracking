@@ -58,6 +58,9 @@ public class DisbursementInstallment {
     @Column(name = "disbursement_remarks", columnDefinition = "TEXT")
     private String disbursementRemarks;
 
+    @Column(name = "expenditure_report_required", nullable = false)
+    private boolean expenditureReportRequired = false;
+
     @OneToMany(mappedBy = "installment", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("dueDate ASC")
     private List<DisbursementMilestone> milestones = new ArrayList<>();
@@ -167,6 +170,14 @@ public class DisbursementInstallment {
 
     public void setDisbursementRemarks(String disbursementRemarks) {
         this.disbursementRemarks = disbursementRemarks;
+    }
+
+    public boolean isExpenditureReportRequired() {
+        return expenditureReportRequired;
+    }
+
+    public void setExpenditureReportRequired(boolean expenditureReportRequired) {
+        this.expenditureReportRequired = expenditureReportRequired;
     }
 
     public List<DisbursementMilestone> getMilestones() {

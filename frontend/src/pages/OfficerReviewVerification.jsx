@@ -27,6 +27,7 @@ import {
 import {
   getUtilizationReviewQueue,
   reviewUtilization,
+  downloadUtilizationDocument,
 } from "../services/fundAnalyticsService";
 import {
   getDisbursementPlans,
@@ -507,7 +508,8 @@ export default function OfficerReviewVerification() {
                       )}
 
                       {/* Supporting Evidence Documents */}
-                      {r.supportingComplianceIds && r.supportingComplianceIds.length > 0 && (
+                      {((r.documentVersions && r.documentVersions.length > 0) ||
+                        (r.supportingComplianceIds && r.supportingComplianceIds.length > 0)) && (
                         <div style={{ margin: "0.75rem 0" }}>
                           <label
                             style={{
@@ -521,7 +523,32 @@ export default function OfficerReviewVerification() {
                             Attached Supporting Evidence:
                           </label>
                           <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                            {r.supportingComplianceIds.map((docId, idx) => (
+                            {(r.documentVersions || []).map((dv) => (
+                              <button
+                                key={`uv-${dv.versionNumber}`}
+                                type="button"
+                                className="mgmt-btn secondary"
+                                style={{ padding: "0.25rem 0.5rem", fontSize: "0.75rem" }}
+                                onClick={async () => {
+                                  try {
+                                    const { data } = await downloadUtilizationDocument(r.id, dv.versionNumber);
+                                    const url = URL.createObjectURL(data);
+                                    const a = document.createElement("a");
+                                    a.href = url;
+                                    a.download = `v${dv.versionNumber}-${dv.documentFileName}`;
+                                    document.body.appendChild(a);
+                                    a.click();
+                                    window.URL.revokeObjectURL(url);
+                                    a.remove();
+                                  } catch {
+                                    setError("Could not download the expenditure document.");
+                                  }
+                                }}
+                              >
+                                <Download size={13} /> v{dv.versionNumber} ({dv.documentFileName})
+                              </button>
+                            ))}
+                            {(r.supportingComplianceIds || []).map((docId, idx) => (
                               <button
                                 key={docId}
                                 type="button"
@@ -539,6 +566,18 @@ export default function OfficerReviewVerification() {
                               </button>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {r.stageReviews && r.stageReviews.length > 0 && (
+                        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", padding: "0.55rem 0.75rem", borderRadius: "6px", fontSize: "0.8rem", marginBottom: "0.75rem" }}>
+                          <strong>Prior Stage Reviews (Cycle #{r.currentReviewCycle || 1}):</strong>
+                          {r.stageReviews.map((sr, idx) => (
+                            <div key={idx} style={{ marginTop: "0.25rem", color: "#334155" }}>
+                              Cycle #{sr.reviewCycle} · <strong>{sr.stage}</strong>: {sr.decision} by {sr.reviewerName} ({formatDate(sr.reviewedAt)})
+                              {sr.remarks ? ` — "${sr.remarks}"` : ""}
+                            </div>
+                          ))}
                         </div>
                       )}
 

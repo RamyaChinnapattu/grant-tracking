@@ -32,7 +32,11 @@ public class GrantUtilizationRecord {
     @ManyToOne(fetch=FetchType.LAZY) @JoinColumn(name="verified_by_user_id") private User verifiedBy;
     @Column(name="verified_at") private LocalDateTime verifiedAt;
     @Column(name="review_remarks",columnDefinition="TEXT") private String reviewRemarks;
+    @Column(name="current_review_cycle",nullable=false) private Integer currentReviewCycle=0;
+    @Enumerated(EnumType.STRING) @Column(name="current_review_stage",length=20) private VerificationStage currentReviewStage;
     @OneToMany(mappedBy="utilization",cascade=CascadeType.ALL,orphanRemoval=true) @OrderBy("occurredAt ASC") private List<UtilizationReviewHistory> history=new ArrayList<>();
+    @OneToMany(mappedBy="utilization",cascade=CascadeType.ALL,orphanRemoval=true) @OrderBy("reviewCycle ASC, reviewedAt ASC") private List<UtilizationStageReview> stageReviews=new ArrayList<>();
+    @OneToMany(mappedBy="utilization",cascade=CascadeType.ALL,orphanRemoval=true) @OrderBy("versionNumber ASC") private List<UtilizationDocumentVersion> documentVersions=new ArrayList<>();
     public Long getId(){return id;} public void setId(Long v){id=v;}
     public GrantApplication getApplication(){return application;} public void setApplication(GrantApplication v){application=v;}
     public DisbursementInstallment getInstallment(){return installment;} public void setInstallment(DisbursementInstallment v){installment=v;}
@@ -47,4 +51,8 @@ public class GrantUtilizationRecord {
     public LocalDateTime getVerifiedAt(){return verifiedAt;} public void setVerifiedAt(LocalDateTime v){verifiedAt=v;}
     public String getReviewRemarks(){return reviewRemarks;} public void setReviewRemarks(String v){reviewRemarks=v;}
     public List<UtilizationReviewHistory> getHistory(){return history;} public void addHistory(UtilizationReviewHistory v){v.setUtilization(this);history.add(v);}
+    public Integer getCurrentReviewCycle(){return currentReviewCycle!=null?currentReviewCycle:0;} public void setCurrentReviewCycle(Integer v){currentReviewCycle=v;}
+    public VerificationStage getCurrentReviewStage(){return currentReviewStage;} public void setCurrentReviewStage(VerificationStage v){currentReviewStage=v;}
+    public List<UtilizationStageReview> getStageReviews(){return stageReviews;} public void addStageReview(UtilizationStageReview v){v.setUtilization(this);stageReviews.add(v);}
+    public List<UtilizationDocumentVersion> getDocumentVersions(){return documentVersions;} public void addDocumentVersion(UtilizationDocumentVersion v){v.setUtilization(this);documentVersions.add(v);}
 }

@@ -30,6 +30,11 @@ import {
   submitVerificationDecision,
 } from "../services/grantApplicationService";
 import { PageHeader } from "../components/ui/SaaSPrimitives";
+import {
+  formatCurrencyINR,
+  getDisbursementBadgeInfo,
+  getDisbursementSummary,
+} from "../utils/applicationDisbursement";
 import "../styles/VerificationWorkflow.css";
 
 const emptyOfficer = {
@@ -1233,11 +1238,37 @@ function VerificationWorkflow({ historyOnly = false }) {
                             <UserRound size={14} /> Assigned to{" "}
                             {application.assignedOfficerName}
                           </span>
+                        ) : application.status === "APPROVED" ? (
+                          <span className="verification-assignee-badge verification-assignee-badge--me">
+                            <CheckCircle2 size={14} /> Verification Completed (Approved)
+                          </span>
+                        ) : application.status === "REJECTED" ? (
+                          <span className="verification-assignee-badge">
+                            Verification Closed (Rejected)
+                          </span>
+                        ) : application.status === "WITHDRAWN" || application.status === "DRAFT" ? (
+                          <span className="verification-assignee-badge">
+                            {application.status.replaceAll("_", " ")}
+                          </span>
                         ) : (
                           <span className="verification-assignee-badge verification-assignee-badge--none">
                             Awaiting Officer Assignment
                           </span>
                         )}
+
+                        {application.status === "APPROVED" && (() => {
+                          const disbInfo = getDisbursementBadgeInfo(application);
+                          const disbSummary = getDisbursementSummary(application);
+                          if (!disbInfo) return null;
+                          return (
+                            <span className="verification-assignee-badge">
+                              {disbInfo.label}
+                              {disbSummary && disbSummary.totalApprovedAmount > 0
+                                ? ` · ${formatCurrencyINR(disbSummary.disbursedAmount)} / ${formatCurrencyINR(disbSummary.totalApprovedAmount)}`
+                                : ""}
+                            </span>
+                          );
+                        })()}
 
                         {application.submittedAt && (
                           <span className="verification-card__date">

@@ -1,487 +1,227 @@
 # Grantora (grant-tracking)
 
-Grantora is a web application for managing government grant schemes and beneficiary applications. It provides scheme configuration, eligibility assessment, application status tracking, and a staged officer review process. Administrators manage schemes, accounts, routing rules, and the queue of approved applications awaiting disbursement processing.
+Grantora is a full-stack web application for managing government subsidy and grant schemes, beneficiary applications, multi-stage verification, stage-specific compliance tracking, disbursement planning, simulated installment payment recording, and expenditure/utilization verification.
 
-> Grantora currently identifies applications eligible for the disbursement workflow. It does not integrate with a bank or execute payments.it is the main!!!!
+> [!NOTE]
+> **Payment Simulation Notice:** Grantora records installment disbursements, payment references (UTR/transaction IDs), and payment methods for tracking and audit purposes only. **No real bank, treasury, PFMS, or payment-gateway transfer is executed.**
 
 ## Table of Contents
 
-- [Project Objectives](#project-objectives)
-- [Key Features](#key-features)
-- [System Architecture](#system-architecture)
-- [Application Workflow](#application-workflow)
+- [Project Overview](#project-overview)
+- [Key Features & Modules](#key-features--modules)
 - [Technology Stack](#technology-stack)
-- [Project Structure](#project-structure)
-- [User Roles and Responsibilities](#user-roles-and-responsibilities)
-- [Eligibility Assessment Engine](#eligibility-assessment-engine)
-- [Multi-Level Verification and Approval](#multi-level-verification-and-approval)
-- [Workflow Automation and Escalation](#workflow-automation-and-escalation)
-- [Grant Disbursement](#grant-disbursement)
-- [Database Design](#database-design)
-- [API Documentation](#api-documentation)
-- [Installation and Setup](#installation-and-setup)
-- [Running the Application](#running-the-application)
-- [Testing](#testing)
-- [Development Status](#development-status)
-- [Future Enhancements](#future-enhancements)
-- [License](#license)
+- [System Architecture](#system-architecture)
+- [Folder Structure](#folder-structure)
+- [User Roles & Responsibilities](#user-roles--responsibilities)
+- [Application Verification Workflow](#application-verification-workflow)
+- [Sequential Compliance Workflow & Document Versioning](#sequential-compliance-workflow--document-versioning)
+- [Disbursement Plans & Finance Simulated Payment Process](#disbursement-plans--finance-simulated-payment-process)
+- [Expenditure / Utilization Report Workflow](#expenditure--utilization-report-workflow)
+- [Database Configuration & Key Tables](#database-configuration--key-tables)
+- [Environment Variables](#environment-variables)
+- [Installation & Running Locally](#installation--running-locally)
+- [API Endpoint Overview](#api-endpoint-overview)
+- [Testing & Production Build](#testing--production-build)
+- [Deployment & Migration Notes](#deployment--migration-notes)
 
-## Project Objectives
+## Project Overview
 
-- Provide one place to configure grant schemes and manage applications.
-- Assess applications against scheme-specific mandatory criteria and custom questions.
-- Route submitted applications through jurisdiction-aware officer reviews.
-- Give beneficiaries and staff a record of application status and verification decisions.
+- Provide a centralized platform to configure grant schemes, mandatory eligibility rules, and weighted eligibility questionnaires.
+- Route submitted applications through a jurisdiction-aware three-stage officer verification pipeline (`FIELD` -> `DISTRICT` -> `FINANCE`).
+- Manage staged installment disbursement plans (`Stage 1`, `Stage 2`, `Stage 3`) with stage-specific compliance requirements.
+- Enforce sequential `FIELD -> DISTRICT -> FINANCE` compliance reviews with immutable document version history before Finance Officers record simulated payments.
+- Track post-release beneficiary expenditure/utilization reports through sequential `FIELD -> DISTRICT -> FINANCE` review and gate subsequent installments when required.
 
-## Key Features
+## Key Features & Modules
 
-- User registration and login with JWT-based authentication.
-- Admin-managed user accounts, grant schemes, eligibility rules, and verification routing rules.
-- Beneficiary profiles, scheme discovery, and grant application creation and submission.
-- Mandatory eligibility checks plus configurable, points-based scheme questions.
-- Field, District, and Finance review stages with decision history.
-- Officer assignment based on stage, active status, and beneficiary jurisdiction.
-- Document upload and access checks for supporting evidence.
-- Admin queue for approved applications eligible for disbursement processing.
-- Partial workflow deadline, overdue escalation, and in-app notification support.
+- **Authentication & Security:** JWT bearer authentication (`JwtAuthenticationFilter`), BCrypt password hashing, `@EnableMethodSecurity(prePostEnabled = true)` with DB-derived `ROLE_*` and `LEVEL_*` authorities.
+- **Scheme & Eligibility Engine:** Admin-managed schemes, allocated budgets, maximum grant caps, mandatory criteria (age, income, category), and 100-point weighted eligibility evaluations (`EligibilityScoringService`).
+- **Application Lifecycle:** Draft creation, document uploads, eligibility-gated submission, `NEEDS_CORRECTION` resubmission, withdrawal, and `FIELD -> DISTRICT -> FINANCE` verification (`VerificationWorkflowService`).
+- **Sequential Compliance & Document Versioning:** Stage-targeted `ComplianceRequirement` configuration, immutable `ComplianceDocumentVersion` storage on every upload/resubmission, `ComplianceStageReview` per `(compliance_id, review_cycle, stage)`, `CORRECTION_REQUIRED` vs `REJECTED` (Admin `reopen` with reason), and justified Admin waivers (`ComplianceOperationsService`).
+- **Disbursement & Finance Payment Simulation:** Staged `DisbursementPlan` and `DisbursementInstallment` scheduling, `PESSIMISTIC_WRITE` locking, DB-unique `payment_reference`, and Finance Officer payment recording (`DisbursementService`).
+- **Expenditure / Utilization Reporting:** Beneficiary submission with versioned supporting documents (`GrantUtilizationService`), sequential `FIELD -> DISTRICT -> FINANCE` officer review, and next-installment payment gating when prior released stages require an approved report.
+- **Analytics, Notifications & Audit:** Fund utilization summaries, regional analytics, CSV reports, workflow escalations, and in-app notifications.
+
+## Technology Stack
+
+| Area | Technology |
+|---|---|
+| Backend language | Java 17 |
+| Backend framework | Spring Boot 4.1.2 (Maven) |
+| Security & Auth | Spring Security (`@EnableMethodSecurity`), JWT (`jjwt` 0.12.6) |
+| Persistence | Spring Data JPA, Hibernate, MySQL |
+| Frontend | React 18.3.1, React Router 6.28.1, Axios 1.21.0, Lucide React 0.468.0 |
+| Frontend tooling | Vite 6 (`^6.0.5`), CSS |
 
 ## System Architecture
 
 ```mermaid
 flowchart LR
-    B[Beneficiary]
-    A[Admin]
-    F[Field Officer]
-    D[District Officer]
-    FIN[Finance Officer]
+    B[Beneficiary] --> UI[React + Vite SPA]
+    A[Admin] --> UI
+    F[Field Officer] --> UI
+    D[District Officer] --> UI
+    FIN[Finance Officer] --> UI
 
-    subgraph Client[React and Vite frontend]
-        UI[Role-based pages and dashboards]
-        API[Axios API client<br/>JWT bearer token]
-        UI --> API
-    end
-
-    B --> UI
-    A --> UI
-    F --> UI
-    D --> UI
-    FIN --> UI
-
-    API -->|HTTP JSON / multipart, /api| SEC[Spring Security<br/>JWT filter and role rules]
-    SEC --> CTRL[Spring MVC REST controllers]
-
-    subgraph Services[Spring services]
-        AUTH[Authentication and user management]
-        BEN[Beneficiary management]
-        SCH[Scheme management]
-        APP[Application management]
-        ELIG[Eligibility assessment]
-        VERIFY[Verification and approval]
-        AUTO[Workflow deadlines and overdue scan]
-        ESC[Escalation management]
-        NOTIFY[In-app notifications]
-        DISB[Disbursement eligibility queue]
-    end
-
-    CTRL --> AUTH
-    CTRL --> BEN
-    CTRL --> SCH
-    CTRL --> APP
-    CTRL --> ELIG
-    CTRL --> VERIFY
-    CTRL --> AUTO
-    CTRL --> ESC
-    CTRL --> NOTIFY
-    CTRL --> DISB
-
-    AUTH --> REPO[Spring Data JPA repositories]
-    BEN --> REPO
-    SCH --> REPO
-    APP --> REPO
-    ELIG --> REPO
-    VERIFY --> REPO
-    AUTO --> REPO
-    ESC --> REPO
-    NOTIFY --> REPO
-    DISB --> REPO
+    UI -->|"/api (JWT Bearer)"| SEC[Spring Security + JwtAuthenticationFilter]
+    SEC --> CTRL[REST Controllers]
+    CTRL --> SVC[Services: Application, Compliance, Disbursement, Utilization, Analytics]
+    SVC --> REPO[Spring Data JPA Repositories]
     REPO --> DB[(MySQL)]
 ```
 
-The frontend is a Vite React single-page application. It sends authenticated requests to the Spring Boot API at `/api`. Spring Security validates JWTs and applies role rules before controller and service logic accesses persisted data through Spring Data JPA. The application is configured for MySQL.
-
-## Application Workflow
-
-```mermaid
-flowchart TD
-    R[Beneficiary registration] --> P[Complete beneficiary profile]
-    P --> C[Discover scheme and create application]
-    C --> E{Eligibility evaluation}
-    E -->|Mandatory check fails or score below threshold| I[INELIGIBLE<br/>Cannot submit]
-    E -->|Required data or configuration missing| M[NEEDS_MORE_INFORMATION<br/>Complete information]
-    M --> C
-    E -->|Eligible| SUB[Submit application<br/>SUBMITTED]
-    SUB --> FIELD[Field Officer verification]
-    FIELD -->|Reject with remarks| REJ[REJECTED]
-    FIELD -->|Return with remarks| CORR[NEEDS_CORRECTION]
-    CORR -->|Beneficiary corrects and resubmits| FIELD
-    FIELD -->|Verified checklist and evidence| DIST[District review]
-    DIST -->|Reject with remarks| REJ
-    DIST -->|Return with remarks| CORR2[NEEDS_CORRECTION]
-    CORR2 -->|Beneficiary corrects and resubmits| DIST
-    DIST -->|Approve| FINANCE[Finance Officer review]
-    FINANCE -->|Reject with remarks| REJ
-    FINANCE -->|Approve| APPROVED[APPROVED]
-    APPROVED --> QUEUE[Admin disbursement-eligible queue]
-    QUEUE --> NO_PAY[Payment processing is not integrated]
-    FIELD -.->|Overdue scan creates escalation; does not advance stage| ESC[Escalation record and Admin notification]
-    DIST -.->|Overdue scan creates escalation; does not advance stage| ESC
-    FINANCE -.->|Overdue scan creates escalation; does not advance stage| ESC
-```
-
-The normal progression is Field, then District, then Finance approval. Eligibility is checked before submission; it is not a grant award. An escalation does not approve, reject, or advance an application.
-
-## Technology Stack
-
-| Area | Technology and configured version |
-|---|---|
-| Backend language | Java 17 |
-| Backend framework | Spring Boot 4.1.2 (Maven parent in `backend/pom.xml`) |
-| API and security | Spring MVC, Spring Security, JWT (`jjwt` 0.12.6) |
-| Persistence | Spring Data JPA, Hibernate, MySQL Connector/J (version managed by Spring Boot) |
-| Database | MySQL; configured connection targets MySQL 8-compatible syntax |
-| Frontend | React 18.3.1, JavaScript, React DOM 18.3.1 |
-| Frontend tooling | Vite 6 (package range `^6.0.5`), React Router 6.28.1, Axios (`^1.21.0`), lucide-react 0.468.0 |
-| Styling | CSS |
-
-Node.js and npm versions are not pinned in `package.json`; use a current Node.js LTS release with npm.
-
-## Project Structure
+## Folder Structure
 
 ```text
-Grantora/
+grant-tracking-main/
 ├── backend/
 │   ├── pom.xml
 │   └── src/
 │       ├── main/java/com/grantora/
-│       │   ├── controller/    # REST endpoints
-│       │   ├── dto/           # API request and response types
-│       │   ├── entity/        # JPA entities and enums
-│       │   ├── repository/    # Spring Data repositories
-│       │   ├── security/      # Security chain and JWT filter
-│       │   └── service/       # Business and workflow logic
+│       │   ├── controller/    # REST controllers (Auth, Scheme, Application, Compliance, Disbursement, Utilization, Analytics, Reports, Workflow, Audit)
+│       │   ├── dto/           # Request and response records
+│       │   ├── entity/        # JPA entities and status enums
+│       │   ├── exception/     # GlobalExceptionHandler
+│       │   ├── repository/    # Spring Data JPA repositories
+│       │   ├── security/      # SecurityConfig and JwtAuthenticationFilter
+│       │   └── service/       # Business, workflow, compliance, disbursement, and analytics services
 │       ├── main/resources/
 │       │   └── application.properties
 │       └── test/java/com/grantora/
 ├── frontend/
 │   ├── package.json
 │   └── src/
-│       ├── components/        # Shared navigation and layout
-│       ├── pages/             # Public, Admin, Beneficiary, Officer views
-│       ├── services/          # API service modules
-│       └── styles/            # Page and layout styles
+│       ├── components/        # Layout, navigation, protected routes, UI primitives
+│       ├── pages/             # Role-specific workspaces & dashboards
+│       ├── services/          # Axios API clients
+│       ├── styles/            # Component and page stylesheets
+│       └── utils/             # Formatting, chart, and disbursement summary helpers
 └── README.md
 ```
 
-## User Roles and Responsibilities
+## User Roles & Responsibilities
 
-The application roles are `ADMIN`, `BENEFICIARY`, and `OFFICER`. Officer level is stored separately as `FIELD`, `DISTRICT`, or `FINANCE`.
-
-| Role / level | Responsibilities supported by the application |
+| Role / Level | Responsibilities |
 |---|---|
-| Beneficiary | Manage their profile, browse schemes, create and submit eligible applications, upload documents, and view application progress. |
-| Admin | Manage users, beneficiaries, schemes, routing rules, verification assignments, Finance-stage final decisions, and the disbursement-eligible queue. Admin access is also available to the workflow configuration and escalation APIs. |
-| Field Officer | Review assigned applications at the Field stage, complete the required verification checklist, and return or reject with remarks. |
-| District Officer | Review applications after Field verification and approve, return for correction, or reject. Approval advances to Finance review. |
-| Finance Officer | Review applications after District review, examine prior verification history, and record the final financial approval or rejection. |
+| `BENEFICIARY` | Complete profile, check scheme eligibility, submit applications, upload/resubmit compliance documents (`PENDING`, `OVERDUE`, `CORRECTION_REQUIRED`), submit/resubmit expenditure reports, and view simulated payment records. |
+| `ADMIN` | Manage users, schemes, routing rules, disbursement plans, and stage compliance requirements; monitor queues; perform justified compliance waivers (`WAIVED`) and reopen `REJECTED` compliance submissions with mandatory audit reasons. Cannot perform routine compliance/utilization approvals or record payments. |
+| `OFFICER` (`FIELD`) | Perform Stage 1 application verification and Stage 1 (`FIELD_PENDING`) compliance & expenditure reviews within matching `jurisdictionState` and `jurisdictionDistrict`. |
+| `OFFICER` (`DISTRICT`) | Perform Stage 2 application review and Stage 2 (`DISTRICT_PENDING`) compliance & expenditure reviews within matching `jurisdictionState` and `jurisdictionDistrict`. |
+| `OFFICER` (`FINANCE`) | Perform Stage 3 application approval, Stage 3 (`FINANCE_PENDING`) compliance & expenditure reviews, and record simulated installment payments within matching `jurisdictionState`. |
 
-## Eligibility Assessment Engine
+## Application Verification Workflow
 
-`EligibilityScoringService` evaluates three mandatory conditions: the beneficiary's age against the scheme's minimum and maximum age, annual income against the scheme maximum, and beneficiary category against the scheme's eligible categories. A missing profile value or missing scheme configuration produces an incomplete result; a failed mandatory condition produces `INELIGIBLE`.
+1. Beneficiary completes profile, passes scheme eligibility (`ELIGIBLE`), uploads supporting documents, and submits (`DRAFT` -> `SUBMITTED`).
+2. `VerificationWorkflowService` auto-assigns an active `FIELD` officer in the beneficiary's state and district.
+3. **Field Officer** verifies checklist + documents -> advances to `DISTRICT`.
+4. **District Officer** reviews -> advances to `FINANCE`.
+5. **Finance Officer** (or Admin at Finance stage) grants final `APPROVED` status.
+6. `NEEDS_CORRECTION` returns the application to the beneficiary for updates; `REJECTED` closes the application.
 
-Each scheme has a configurable set of single-answer eligibility questions. Admins can add, remove, reorder, and configure questions and their options in Scheme Management. Each question has an explicit maximum weight, and the maximum weights must total exactly 100 points. Option points cannot be negative or exceed their question weight. Yes/no and single-choice questions are supported; multi-select scoring is rejected because the scoring model awards one selected option per question. Answer options also carry a `meetsEligibilityCondition` flag. The implemented score is:
+## Sequential Compliance Workflow & Document Versioning
 
-```text
-score out of 100 = points earned / maximum available points × 100
-```
+1. Admin creates a `DisbursementPlan` for an `APPROVED` application and configures stage-specific `ComplianceRequirement` items (`targetStage`: `1`, `2`, or `3`).
+2. Beneficiary uploads a supporting document (`POST /api/compliance/submissions/{id}`):
+   - Creates an immutable `ComplianceDocumentVersion` (`versionNumber = currentReviewCycle + 1`).
+   - Transitions `MilestoneCompliance.status` to `FIELD_PENDING` and notifies eligible `FIELD` officers.
+3. **Sequential Review (`PATCH /api/compliance/submissions/{id}/review`):**
+   - `FIELD_PENDING` -> Field Officer `APPROVED` -> `DISTRICT_PENDING`
+   - `DISTRICT_PENDING` -> District Officer `APPROVED` -> `FINANCE_PENDING`
+   - `FINANCE_PENDING` -> Finance Officer `APPROVED` -> `PAYMENT_ELIGIBLE`
+   - Every decision is recorded in `compliance_stage_reviews` with `reviewCycle`, `stage`, `decision`, `reviewer`, `reviewerOfficerLevel`, `remarks`, and `documentVersionNumber`.
+4. **`CORRECTION_REQUIRED` vs `REJECTED`:**
+   - `CORRECTION_REQUIRED` allows the beneficiary to upload a new document version, preserving all prior versions and restarting the new cycle at `FIELD_PENDING`.
+   - `REJECTED` blocks direct beneficiary resubmission (`409 Conflict`) until an Admin explicitly reopens it via `PATCH /api/compliance/submissions/{id}/reopen` with a mandatory reason.
+5. **Admin Waiver:** Admin can issue a justified waiver (`PATCH /api/compliance/submissions/{id}/waive`) with mandatory remarks recorded in `compliance_review_history`.
 
-The division is rounded to two decimal places using half-up rounding. The maximum is built from required questions plus optional questions that the applicant answered. Required unanswered questions, an incomplete 100-point configuration, or missing threshold make the result `NEEDS_MORE_INFORMATION`. After required data and mandatory criteria are satisfied, a score greater than or equal to the scheme threshold yields `ELIGIBLE`; a lower score yields `INELIGIBLE`. The option condition flag is included in the evaluation details, but the scorer adds the selected option's configured points even when that flag is false. Evaluation records retain their question, answer, points, threshold, and timestamp snapshots when scheme configuration is later edited.
+## Disbursement Plans & Finance Simulated Payment Process
 
-Mandatory rules currently cover age, annual income, and beneficiary category. Scheme-specific required document types and document-completeness eligibility gating are not configured by this model; document uploads and officer verification remain part of the existing application workflow.
+- **Plan Management (`ADMIN`):** Admin creates staged percentage/amount plans (`POST /api/disbursements/plans`) within scheme maximum grant and available budget limits. Cancelled plans (`CANCELLED`) can be replaced with a new plan.
+- **Payment Release (`OFFICER` with `LEVEL_FINANCE` only):**
+  - Endpoint: `POST /api/disbursements/installments/{id}/disburse`.
+  - Validates: `FINANCE` officer level + matching state jurisdiction, `ACTIVE` plan, `APPROVED` application, prior installments `DISBURSED`, all required effective compliances `PAYMENT_ELIGIBLE` (with all 3 stage approvals in active cycle) or `WAIVED`, milestone `COMPLETED` (100%), prior released installment expenditure report approved (when required or submitted), and unique `payment_reference` (service + DB constraint).
+  - Updates installment to `DISBURSED` (simulated record only; no bank transfer).
 
-An eligible result only permits submission. It does not guarantee officer approval or payment. Eligibility is evaluated and saved with the application, and submission is rejected unless the evaluation is `ELIGIBLE`.
+## Expenditure / Utilization Report Workflow
 
-## Multi-Level Verification and Approval
+1. After an installment is `DISBURSED`, the beneficiary submits an expenditure report in **My Grant -> Expenditure Reports** (`POST /api/utilization/submit-with-document` or `POST /api/utilization`) with reported amount, category, description, and supporting receipt/bill document (stored as `UtilizationDocumentVersion`).
+2. Reports move sequentially through `FIELD_PENDING` -> `DISTRICT_PENDING` -> `FINANCE_PENDING` -> `VERIFIED`.
+3. Officers review reports in **Review & Verification -> Expenditure Reports** (`PATCH /api/utilization/{id}/review`) within their authorized stage and jurisdiction.
+4. `CORRECTION_REQUIRED` allows beneficiary resubmission (`PUT /api/utilization/{id}/resubmit-with-document`), preserving previous document versions and stage review history.
+5. If a prior released installment has `expenditureReportRequired = true` or has an unverified expenditure report submitted, the next installment cannot be released until the report reaches `VERIFIED`.
 
-- **Field:** reviews identity, address, documents, and application details. A `VERIFIED` decision requires all four checklist confirmations and at least one uploaded supporting document.
-- **District:** reviews the Field-stage result and may approve, reject, or request correction. District approval advances the application to Finance review.
-- **Finance:** reviews previous verification history and records the final approval or rejection. Admin final decisions are restricted to the Finance stage.
-- **Assignment:** automatic selection filters for active `OFFICER` accounts at the needed level and matching beneficiary state; Field and District assignments also match district. Admin reassignment is checked against the same stage and jurisdiction constraints. If no eligible automatic assignee exists, the application remains without an assignee; it is not routed to an unrelated officer.
-- **Routing:** Admin-managed rules match the stored eligibility score and requested amount ranges, and carry priority. Rules are checked when the application is submitted. A matching rule is not a substitute for mandatory Field or District review.
-- **History:** decisions and assignment actions are written to application verification history; overall status changes also have application status history. Rejection and correction require remarks. A correction is resubmitted to the same workflow stage.
+## Database Configuration & Key Tables
 
-Existing applications predating the staged workflow may not have a stage or assignee. The code does not automatically migrate or advance those records.
+Configured for MySQL with `spring.jpa.hibernate.ddl-auto=update`. Core tables include:
+- `users`, `beneficiaries`, `schemes`, `scheme_eligibility_questions`
+- `grant_applications`, `application_documents`, `application_verification_history`, `grant_application_status_history`
+- `verification_routing_rules`, `workflow_deadline_config`, `workflow_escalations`, `in_app_notifications`, `system_audit_logs`
+- `disbursement_plans`, `disbursement_installments`, `disbursement_milestones`, `disbursement_plan_audit`
+- `compliance_requirements`, `milestone_compliances`, `compliance_document_versions`, `compliance_stage_reviews`, `compliance_review_history`, `compliance_non_compliances`
+- `grant_utilization_records`, `utilization_document_versions`, `utilization_stage_reviews`, `utilization_review_history`
 
-## Workflow Automation and Escalation
+## Environment Variables
 
-Workflow automation is **partially implemented**. The code includes a persisted deadline configuration for Field, District, and State tasks; task assignment, due, and completion timestamps on applications; and a scheduled overdue scan (default fixed delay: 60 seconds, configurable through `grantora.workflow.scan-ms`). The Admin deadline endpoint validates stage deadlines from 1 to 365 days and the stored scan interval from 1 to 1440 minutes.
+Set via environment variables (do not commit credentials or production secrets):
 
-When a task with an assigned officer and an expired due date is scanned, the service creates an escalation record unless an unresolved record already exists for that application and stage. It marks the application escalated and creates deduplicated in-app notifications for Admin users. Escalation records can be listed and resolved through the workflow API. The current resolve operation records a fixed remark (“Reviewed by Admin”); it does not accept a caller-supplied resolution remark.
-
-Current limitations:
-
-- The overdue scheduler does not itself reassign a task or change its workflow stage.
-- Applications with no assigned officer are not included in overdue detection, and there is no implemented Admin notification for the no-assignee case.
-- In-app notifications are persistent and can be marked read, but automatic notifications are currently created for overdue events only; the full list of assignment, decision, correction, deadline, and disbursement notification events is not wired.
-- Officer escalation visibility is limited to records assigned to that officer, not all records in their jurisdiction.
-- The frontend has an Admin deadline settings form and a dashboard notification preview. A full escalation-management screen and comprehensive role-specific automation dashboards are not implemented.
-- The scan cadence is controlled by the Spring property. The persisted `scanMinutes` setting is validated and stored, but does not dynamically configure the scheduler.
-
-These features support monitoring; they do not automatically approve, reject, or skip a review stage.
-
-## Grant Disbursement
-
-The implemented endpoint `/api/applications/disbursement/eligible` provides Admins with a paginated list of applications whose status is `APPROVED`. This is an eligibility queue for downstream disbursement work. The repository contains no payment execution integration or disbursement record model for bank references, payment statuses, or beneficiary payment tracking. No real bank payment should be inferred from an `APPROVED` status.
-
-## Database Design
-
-JPA entities are mapped to MySQL tables; schema updates are configured with `spring.jpa.hibernate.ddl-auto=update`. Key entities and relationships include:
-
-| Entity / table | Purpose and relationships |
-|---|---|
-| `User` / `users` | Login identity, role, active flag, and optional officer level and jurisdiction. |
-| `Beneficiary` / `beneficiaries` | Profile associated with a user. |
-| `Scheme` / `schemes` | Grant scheme rules, amount limits, eligible categories, threshold, and eligibility questions. |
-| `SchemeEligibilityQuestion` / `scheme_eligibility_questions` | Scheme-owned custom question and answer option configuration. |
-| `GrantApplication` / `grant_applications` | Belongs to a beneficiary and scheme; stores answers, evaluation, status, workflow stage, assignee, and task timestamps. A beneficiary/scheme pair is unique. |
-| `ApplicationDocument` / `application_documents` | Uploaded document linked to an application and uploading user. |
-| `ApplicationVerification` / `application_verification_history` | Stage action, actor, assignee, remarks, checklist, and status/stage transitions. |
-| `GrantApplicationStatusHistory` / `grant_application_status_history` | Application status changes and their actor/reason. |
-| `VerificationRoutingRule` / `verification_routing_rules` | Score and amount bands, priority, and State-review setting. |
-| `WorkflowDeadlineConfig` / `workflow_deadline_config` | Persisted stage deadlines and scan interval setting. |
-| `WorkflowEscalation` / `workflow_escalations` | Application stage, assignee, reason, creation, and resolution data. |
-| `InAppNotification` / `in_app_notifications` | Per-user messages with read timestamp and unique event key per user. |
-
-Eligibility answers and evaluation details are persisted as serialized text fields on applications. No hand-authored database migration files are present. Back up the database and review Hibernate schema changes before deploying to an existing database.
-
-## API Documentation
-
-All backend routes use the `/api` base path. JWT authentication is required except for registration, login, and the health endpoint. The security configuration and controller methods enforce roles and ownership checks; this list is a route overview, not a replacement for those checks.
-
-### Authentication
-
-| Method | Endpoint | Purpose |
+| Variable | Purpose | Default / Notes |
 |---|---|---|
-| `POST` | `/api/auth/register` | Register a user. |
-| `POST` | `/api/auth/login` | Authenticate and obtain a JWT response. |
+| `SPRING_DATASOURCE_URL` | MySQL JDBC URL | `jdbc:mysql://localhost:3306/grantora_new?...` |
+| `SPRING_DATASOURCE_USERNAME` | MySQL username | Set locally |
+| `SPRING_DATASOURCE_PASSWORD` | MySQL password | Set locally |
+| `JWT_SECRET` | Base64 HMAC-SHA256 secret (min 256-bit) | Required outside `dev` profile |
+| `JWT_EXPIRATION` | Token TTL in ms | `86400000` (24h) |
+| `PORT` | Backend HTTP port | `8080` |
+| `GRANTORA_WORKFLOW_SCAN_MS` | Overdue scan interval (ms) | `60000` |
 
-### Beneficiaries and schemes
+## Installation & Running Locally
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/api/beneficiaries` | Admin: list beneficiaries. |
-| `GET` | `/api/beneficiaries/me` | View current beneficiary profile. |
-| `POST` | `/api/beneficiaries` | Create current beneficiary profile. |
-| `PUT` | `/api/beneficiaries/me` | Update current beneficiary profile. |
-| `GET` | `/api/beneficiaries/{id}` | Admin: view a beneficiary. |
-| `DELETE` | `/api/beneficiaries/{id}` | Admin: delete a beneficiary. |
-| `GET` | `/api/schemes`, `/api/schemes/{id}` | List or view schemes (authenticated). |
-| `POST` | `/api/schemes` | Create a scheme (Admin). |
-| `PUT` | `/api/schemes/{id}` | Update a scheme (Admin). |
-| `DELETE` | `/api/schemes/{id}` | Delete a scheme (Admin). |
-
-### Applications and verification
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/api/applications` | Admin/officer application list. |
-| `GET` | `/api/applications/admin` | Admin paginated application list, optionally filtered by status. |
-| `GET` | `/api/applications/me` | Beneficiary's applications. |
-| `POST` | `/api/applications` | Create an application draft. |
-| `GET` | `/api/applications/{id}` | View an application when authorized. |
-| `PUT` | `/api/applications/{id}` | Update an owned draft or correction response. |
-| `POST` | `/api/applications/{id}/submit` | Submit an eligible draft or corrected application. |
-| `POST` | `/api/applications/{id}/withdraw` | Withdraw an application when allowed. |
-| `DELETE` | `/api/applications/{id}` | Delete a draft. |
-| `PATCH` | `/api/applications/{id}/status` | Admin status endpoint; workflow rules restrict invalid changes. |
-| `GET` | `/api/applications/verification/assigned` | Assigned verification queue. |
-| `GET` | `/api/applications/verification/history` | Verification history visible to the caller. |
-| `POST` | `/api/applications/{id}/decision` | Record an authorized verification decision. |
-| `POST` | `/api/applications/{id}/assignment` | Admin: assign/reassign to an eligible officer. |
-| `POST` | `/api/applications/{id}/escalate` | Escalate/reassign within the current stage when permitted. |
-| `POST` | `/api/applications/{id}/documents` | Upload an application document (multipart). |
-| `GET` | `/api/applications/{id}/documents/{documentId}` | Download a document when authorized. |
-| `GET` | `/api/applications/disbursement/eligible` | Admin: paginated approved application queue. |
-
-### Users, routing, and workflow automation
-
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET`, `POST` | `/api/users` | Admin: list/create users. |
-| `GET`, `PUT`, `DELETE` | `/api/users/{id}` | Admin: read/update/delete a user. |
-| `GET`, `POST` | `/api/verification/routing-rules` | Admin: list/create routing rules. |
-| `PUT`, `DELETE` | `/api/verification/routing-rules/{id}` | Admin: update/delete a routing rule. |
-| `GET` | `/api/workflow/deadlines` | Read deadline configuration (Admin/officer). |
-| `PUT` | `/api/workflow/deadlines` | Admin: update deadline configuration. |
-| `GET` | `/api/workflow/escalations` | Admin or officer: list permitted escalation records. |
-| `POST` | `/api/workflow/escalations/{id}/resolve` | Admin: resolve an open escalation. |
-| `GET` | `/api/workflow/notifications` | Retrieve caller's notifications and unread count. |
-| `POST` | `/api/workflow/notifications/{id}/read` | Mark caller-owned notification as read. |
-| `GET` | `/` | Health response. |
-
-## Installation and Setup
-
-### Prerequisites
-
-- Git
-- Java 17 or higher (tested with Java 21 LTS)
-- MySQL 8.0 or higher
-- Node.js LTS (version 18, 20, or 22) and npm (v9+)
-
-### Clone the repository
-
-```bash
-git clone https://github.com/ApoorvaPoojary8/Grantora.git
-cd Grantora
-```
-
-### Environment Variables
-
-The backend reads configuration from environment variables with safe development defaults defined in `backend/src/main/resources/application.properties`. Never commit actual secrets or production passwords.
-
-| Variable | Description | Development Default | Required in Production |
-|---|---|---|---|
-| `SPRING_DATASOURCE_URL` | MySQL JDBC connection string | `jdbc:mysql://localhost:3306/grantora_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC` | Yes |
-| `SPRING_DATASOURCE_USERNAME` | MySQL database username | `root` | Yes |
-| `SPRING_DATASOURCE_PASSWORD` | MySQL database password | *(empty)* | Yes |
-| `JWT_SECRET` | Base64-encoded HMAC-SHA256 signing secret (min 256-bit) | Development fallback (256-bit) | Yes (strictly required) |
-| `JWT_EXPIRATION` | JWT token lifespan in milliseconds | `86400000` (24 hours) | Optional |
-| `GRANTORA_WORKFLOW_SCAN_MS` | Auto-reassignment scheduler scan interval (ms) | `60000` (1 minute) | Optional |
-| `PORT` | Backend server port | `8080` | Optional |
-
-Example for setting environment variables in PowerShell:
-
-```powershell
-$env:SPRING_DATASOURCE_URL = "jdbc:mysql://localhost:3306/grantora_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
-$env:SPRING_DATASOURCE_USERNAME = "root"
-$env:SPRING_DATASOURCE_PASSWORD = "your_mysql_password"
-$env:JWT_SECRET = "replace_with_a_secure_base64_encoded_256bit_secret"
-```
-
-Example for Linux / macOS (`bash` or `zsh`):
-
-```bash
-export SPRING_DATASOURCE_URL="jdbc:mysql://localhost:3306/grantora_db?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC"
-export SPRING_DATASOURCE_USERNAME="root"
-export SPRING_DATASOURCE_PASSWORD="your_mysql_password"
-export JWT_SECRET="replace_with_a_secure_base64_encoded_256bit_secret"
-```
-
-> [!WARNING]
-> The development JWT fallback key is provided solely for convenient local offline testing. Never use fallback credentials or commit production keys.
-
-### Prepare MySQL
-
-Create the local database before running integration tests or starting the backend:
-
+### 1. Database
 ```sql
-CREATE DATABASE grantora_db;
+CREATE DATABASE grantora_new;
 ```
 
-Hibernate DDL auto is configured to `update` in development, creating or updating missing tables on startup. Review and back up any existing database before running.
-
-## Running the Application
-
-### 1. Run the Backend
-
-From the repository root:
-
-```bash
-cd backend
-./mvnw spring-boot:run
-```
-
-On Windows (Command Prompt or PowerShell):
-
+### 2. Backend
 ```powershell
 cd backend
 .\mvnw.cmd spring-boot:run
 ```
+Runs on `http://localhost:8080`.
 
-The Spring Boot backend will start and listen on `http://localhost:8080`.
-
-### 2. Run the Frontend
-
-In a separate terminal:
-
-```bash
+### 3. Frontend
+```powershell
 cd frontend
 npm install
 npm run dev
 ```
+Runs on `http://localhost:5173` (proxying `/api` to `http://localhost:8080`).
 
-Vite serves the single-page application at `http://localhost:5173`. The frontend development server proxies `/api` calls to `http://localhost:8080/api`, and backend CORS is configured to allow `http://localhost:5173`.
+## API Endpoint Overview
 
-## Testing and Building
+- **Auth:** `POST /api/auth/register`, `POST /api/auth/login`
+- **Schemes & Eligibility:** `GET/POST/PUT/DELETE /api/schemes/**`, `POST /api/schemes/{id}/evaluate-eligibility`
+- **Applications & Verification:** `GET/POST/PUT/DELETE /api/applications/**`, `POST /api/applications/{id}/submit`, `POST /api/applications/{id}/decision`, `POST /api/applications/{id}/assignment`, `POST /api/applications/{id}/escalate`
+- **Compliance (Canonical Path A):** `GET/POST /api/compliance/requirements`, `PATCH /api/compliance/requirements/{id}/deactivate`, `GET /api/compliance/mine`, `POST /api/compliance/submissions/{id}`, `GET /api/compliance/review-queue`, `PATCH /api/compliance/submissions/{id}/review`, `PATCH /api/compliance/submissions/{id}/waive`, `PATCH /api/compliance/submissions/{id}/reopen`, `GET /api/compliance/submissions/{id}/document?version={n}`
+- **Disbursements:** `POST /api/disbursements/plans`, `PATCH /api/disbursements/plans/{id}/deactivate`, `GET /api/disbursements/plans/**`, `GET /api/disbursements/eligible-applications`, `POST /api/disbursements/installments/{id}/disburse`, `GET /api/disbursements/fund-utilization`, `GET /api/disbursements/regional-analytics`
+- **Expenditure / Utilization:** `GET /api/utilization/mine`, `POST /api/utilization`, `POST /api/utilization/submit-with-document`, `PUT /api/utilization/{id}`, `PUT /api/utilization/{id}/resubmit-with-document`, `GET /api/utilization/review-queue`, `PATCH /api/utilization/{id}/review`, `GET /api/utilization/{id}/document?version={n}`
+- **Analytics, Reports, Workflow & Audit:** `/api/fund-analytics/**`, `/api/reports/milestone-3/**`, `/api/milestone-3/**`, `/api/workflow/**`, `/api/audit/**`
 
-### Backend Tests
+## Testing & Production Build
 
-To run all backend automated tests (unit and integration tests):
+- **Backend Unit & Security Tests:**
+  ```powershell
+  cd backend
+  mvn test
+  ```
+- **Frontend Production Build:**
+  ```powershell
+  cd frontend
+  npm run build
+  ```
 
-```bash
-cd backend
-./mvnw test
-```
+## Deployment & Migration Notes
 
-On Windows:
-
-```powershell
-cd backend
-.\mvnw.cmd test
-```
-
-*Note on integration tests:* Integration tests that load the full application context (such as `DemoApplicationTests.contextLoads`) connect to MySQL. Ensure MySQL is running and `$env:SPRING_DATASOURCE_PASSWORD` is set if your MySQL `root` account requires a password.
-
-To run only unit tests without requiring a live database connection:
-
-```powershell
-cd backend
-.\mvnw.cmd test -Dtest="com.grantora.**.*Test"
-```
-
-### Frontend Production Build
-
-To verify dependencies and compile the production build of the frontend:
-
-```bash
-cd frontend
-npm install
-npm run build
-```
-
-This compiles TypeScript/JSX and bundles assets into the `frontend/dist/` directory using Vite.
-
-## Development Status
-
-| Area | Status in source |
-|---|---|
-| Registration/login and role-aware access | Implemented with JWT authentication and route rules. |
-| Scheme and beneficiary management | Implemented through REST services and frontend pages. |
-| Eligibility assessment | Implemented with mandatory checks, scheme questions, threshold scoring, and incomplete outcomes. |
-| Multi-stage verification | Implemented with Field and District required, State conditional on routing rules, and persisted histories. |
-| Documents | Upload/download routes and application-level authorization are implemented. |
-| Workflow deadlines and overdue escalation | Partially implemented; see [Workflow Automation and Escalation](#workflow-automation-and-escalation). |
-| Notifications | Persisted per-user notification APIs are implemented; automatic event coverage is partial. |
-| Disbursement | Approved application queue exists; payment processing does not. |
-
-## Future Enhancements
-
-- Complete notification generation for assignments, decisions, correction requests, and deadlines.
-- Add a full escalation-management view and jurisdiction-wide officer visibility rules.
-- Notify administrators when tasks have no eligible assignee and provide a dedicated recovery queue.
-- Apply the persisted scan interval setting to scheduler cadence.
-- Add disbursement records and integrate a payment provider only after defining the required controls and audit model.
-- Add API-level and frontend automated tests for workflow and access behavior.
-
-## License
-
-The existing project description identifies Grantora as an educational and academic project. No separate `LICENSE` file or standard reuse license is present in the repository; usage and redistribution terms should be clarified by the project owner.
+- Back up the MySQL database before deploying schema updates (`ddl-auto=update`).
+- Ensure no duplicate non-null `payment_reference` values exist in `disbursement_installments` before applying the unique index `uk_installment_payment_ref`.
+- Pre-existing in-flight `SUBMITTED` / `UNDER_REVIEW` rows in `milestone_compliances` or `grant_utilization_records` should be backfilled to `FIELD_PENDING` (`current_review_cycle = 1`, `current_review_stage = 'FIELD'`).
+- Pre-existing unpaid `APPROVED` / `VERIFIED` rows in `milestone_compliances` will not bypass the 3-stage workflow and must be explicitly reopened by Admin (`PATCH /api/compliance/submissions/{id}/reopen`) or waived with justification (`PATCH /api/compliance/submissions/{id}/waive`).

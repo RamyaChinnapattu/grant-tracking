@@ -29,6 +29,8 @@ class GrantUtilizationServiceTest {
 
     private User beneficiaryUser;
     private User officerUser;
+    private User districtOfficerUser;
+    private User financeOfficerUser;
     private GrantApplication application;
     private DisbursementInstallment installment;
     private MilestoneCompliance complianceDoc;
@@ -54,7 +56,30 @@ class GrantUtilizationServiceTest {
         officerUser.setId(20L);
         officerUser.setEmail("officer@example.com");
         officerUser.setRole(Role.OFFICER);
+        officerUser.setOfficerLevel("FIELD");
+        officerUser.setJurisdictionState("Karnataka");
+        officerUser.setJurisdictionDistrict("Mysuru");
+        officerUser.setActive(true);
         officerUser.setFullName("Test Officer");
+
+        districtOfficerUser = new User();
+        districtOfficerUser.setId(21L);
+        districtOfficerUser.setEmail("district@example.com");
+        districtOfficerUser.setRole(Role.OFFICER);
+        districtOfficerUser.setOfficerLevel("DISTRICT");
+        districtOfficerUser.setJurisdictionState("Karnataka");
+        districtOfficerUser.setJurisdictionDistrict("Mysuru");
+        districtOfficerUser.setActive(true);
+        districtOfficerUser.setFullName("District Officer");
+
+        financeOfficerUser = new User();
+        financeOfficerUser.setId(22L);
+        financeOfficerUser.setEmail("finance@example.com");
+        financeOfficerUser.setRole(Role.OFFICER);
+        financeOfficerUser.setOfficerLevel("FINANCE");
+        financeOfficerUser.setJurisdictionState("Karnataka");
+        financeOfficerUser.setActive(true);
+        financeOfficerUser.setFullName("Finance Officer");
 
         Scheme scheme = new Scheme();
         scheme.setId(1L);
@@ -63,6 +88,8 @@ class GrantUtilizationServiceTest {
         Beneficiary beneficiary = new Beneficiary();
         beneficiary.setId(100L);
         beneficiary.setUser(beneficiaryUser);
+        beneficiary.setState("Karnataka");
+        beneficiary.setDistrict("Mysuru");
 
         application = new GrantApplication();
         ReflectionTestUtils.setField(application, "id", 1000L);
@@ -109,6 +136,8 @@ class GrantUtilizationServiceTest {
             return r;
         });
 
+        when(users.findAll()).thenReturn(List.of(officerUser, districtOfficerUser, financeOfficerUser));
+
         GrantUtilizationRequest req = new GrantUtilizationRequest(
                 1000L, 3000L, BigDecimal.valueOf(40000), "Equipment", "Tractor invoice", List.of(5000L)
         );
@@ -117,7 +146,7 @@ class GrantUtilizationServiceTest {
 
         assertNotNull(res);
         assertEquals(7000L, res.id());
-        assertEquals(GrantUtilizationStatus.SUBMITTED, res.status());
+        assertEquals(GrantUtilizationStatus.FIELD_PENDING, res.status());
         assertEquals(BigDecimal.valueOf(40000), res.reportedAmount());
         assertEquals(1, res.supportingComplianceIds().size());
         verify(notifications).notify(eq(officerUser), anyString(), anyString(), eq(1000L));
@@ -135,7 +164,7 @@ class GrantUtilizationServiceTest {
 
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
                 () -> service.submit(reqNoEvidence, "beneficiary@example.com"));
-        assertTrue(ex.getReason().contains("Attach at least one existing compliance document reference"));
+        assertTrue(ex.getReason().contains("Attach a supporting document or select at least one existing compliance document reference"));
     }
 
     @Test
@@ -188,7 +217,7 @@ class GrantUtilizationServiceTest {
         GrantUtilizationResponse res = service.replace(9000L, correctedReq, "beneficiary@example.com");
 
         assertNotNull(res);
-        assertEquals(GrantUtilizationStatus.SUBMITTED, res.status());
+        assertEquals(GrantUtilizationStatus.FIELD_PENDING, res.status());
         assertEquals(BigDecimal.valueOf(60000), res.reportedAmount());
         assertEquals("Machinery", res.category());
     }
@@ -217,5 +246,54 @@ class GrantUtilizationServiceTest {
         assertEquals(11000L, mine.get(0).id());
         assertEquals(1, mine.get(0).supportingDocumentNames().size());
         assertEquals("invoice.pdf", mine.get(0).supportingDocumentNames().get(0));
+    }
+
+    @Test
+    void sequentialFieldDistrictFinanceReviewAndDocumentVersions() throws Exception {
+        when(users.findByEmail("beneficiary@example.com")).thenReturn(Optional.of(beneficiaryUser));
+        when(users.findByEmail("officer@example.com")).thenReturn(Optional.of(officerUser));
+        when(users.findByEmail("district@example.com")).thenReturn(Optional.of(districtOfficerUser));
+        when(users.findByEmail("finance@example.com")).thenReturn(Optional.of(financeOfficerUser));
+        when(users.findAll()).thenReturn(List.of(officerUser, districtOfficerUser, financeOfficerUser));
+        when(applications.findById(1000L)).thenReturn(Optional.of(application));
+        when(installments.findById(3000L)).thenReturn(Optional.of(installment));
+        when(records.findAllByOrderBySubmittedAtDesc()).thenReturn(Collections.emptyList());
+
+        GrantUtilizationRecord[] holder = new GrantUtilizationRecord[1];
+        when(records.save(any(GrantUtilizationRecord.class))).thenAnswer(inv -> {
+            GrantUtilizationRecord r = inv.getArgument(0);
+            if (r.getId() == null) ReflectionTestUtils.setField(r, "id", 7500L);
+            holder[0] = r;
+            return r;
+        });
+        when(records.findById(7500L)).thenAnswer(inv -> Optional.ofNullable(holder[0]));
+
+        org.springframework.web.multipart.MultipartFile file = mock(org.springframework.web.multipart.MultipartFile.class);
+        when(file.isEmpty()).thenReturn(false);
+        when(file.getOriginalFilename()).thenReturn("bill-v1.pdf");
+        when(file.getContentType()).thenReturn("application/pdf");
+        when(file.getSize()).thenReturn(16L);
+        when(file.getBytes()).thenReturn("%PDF-1.7 bill-v1".getBytes());
+
+        GrantUtilizationRequest req = new GrantUtilizationRequest(1000L, 3000L, BigDecimal.valueOf(25000), "Seeds", "Seed bill", List.of());
+        var submitted = service.submitWithDocument(req, file, "beneficiary@example.com");
+        assertEquals(GrantUtilizationStatus.FIELD_PENDING, submitted.status());
+        assertEquals(1, submitted.documentVersions().size());
+
+        // District officer cannot review FIELD_PENDING
+        assertThrows(ResponseStatusException.class, () -> service.review(7500L, new com.grantora.dto.GrantUtilizationReviewRequest("APPROVED", "Skip"), "district@example.com"));
+
+        // Field approves -> DISTRICT_PENDING
+        var afterField = service.review(7500L, new com.grantora.dto.GrantUtilizationReviewRequest("APPROVED", "Evidence verified"), "officer@example.com");
+        assertEquals(GrantUtilizationStatus.DISTRICT_PENDING, afterField.status());
+
+        // District approves -> FINANCE_PENDING
+        var afterDistrict = service.review(7500L, new com.grantora.dto.GrantUtilizationReviewRequest("APPROVED", "District verified"), "district@example.com");
+        assertEquals(GrantUtilizationStatus.FINANCE_PENDING, afterDistrict.status());
+
+        // Finance approves -> VERIFIED
+        var afterFinance = service.review(7500L, new com.grantora.dto.GrantUtilizationReviewRequest("APPROVED", "Amounts validated"), "finance@example.com");
+        assertEquals(GrantUtilizationStatus.VERIFIED, afterFinance.status());
+        assertEquals(3, afterFinance.stageReviews().size());
     }
 }

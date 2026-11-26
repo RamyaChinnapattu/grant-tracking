@@ -35,6 +35,12 @@ public class DisbursementService {
     private final SchemeRepository schemeRepository;
     private final UserRepository userRepository;
     private final WorkflowAutomationService workflowAutomationService;
+    private GrantUtilizationRepository utilizationRepository;
+
+    @Autowired(required = false)
+    public void setUtilizationRepository(GrantUtilizationRepository utilizationRepository) {
+        this.utilizationRepository = utilizationRepository;
+    }
 
     public DisbursementService(
             DisbursementPlanRepository planRepository,
@@ -845,6 +851,28 @@ public class DisbursementService {
                 throw new ResponseStatusException(HttpStatus.CONFLICT,
                         "Previous installments must be disbursed before releasing installment #"
                                 + installment.getInstallmentNumber());
+            }
+            if (utilizationRepository != null) {
+                for (DisbursementInstallment prior : plan.getInstallments()) {
+                    if (prior.getInstallmentNumber() != null
+                            && prior.getInstallmentNumber() < installment.getInstallmentNumber()
+                            && prior.getStatus() == InstallmentStatus.DISBURSED) {
+                        boolean reportRequired = prior.isExpenditureReportRequired()
+                                || utilizationRepository.existsByInstallment_Id(prior.getId());
+                        if (reportRequired) {
+                            List<GrantUtilizationRecord> reports = utilizationRepository.findByInstallment_Id(prior.getId());
+                            boolean hasVerified = reports.stream().anyMatch(r -> r.getStatus() == GrantUtilizationStatus.VERIFIED);
+                            boolean hasOpenOrCorrection = reports.stream().anyMatch(r ->
+                                    r.getStatus() != GrantUtilizationStatus.VERIFIED && r.getStatus() != GrantUtilizationStatus.REJECTED);
+                            if (!hasVerified || hasOpenOrCorrection) {
+                                throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                                        "Cannot release installment #" + installment.getInstallmentNumber()
+                                                + ": prior released Stage " + prior.getInstallmentNumber()
+                                                + " requires an approved expenditure report first.");
+                            }
+                        }
+                    }
+                }
             }
         }
 

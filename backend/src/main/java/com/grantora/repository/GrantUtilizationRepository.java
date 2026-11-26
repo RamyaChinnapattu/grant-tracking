@@ -5,4 +5,6 @@ import java.util.List;
 public interface GrantUtilizationRepository extends JpaRepository<GrantUtilizationRecord,Long> {
     List<GrantUtilizationRecord> findByApplication_Beneficiary_User_IdOrderBySubmittedAtDesc(Long userId);
     List<GrantUtilizationRecord> findAllByOrderBySubmittedAtDesc();
+    List<GrantUtilizationRecord> findByInstallment_Id(Long installmentId);
+    boolean existsByInstallment_Id(Long installmentId);
 }

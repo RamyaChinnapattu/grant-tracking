@@ -483,7 +483,7 @@ function AdminDashboardHome() {
       )}
 
       {/* Analytics Row: Interactive Application Donut + Scheme Utilization Bar Chart */}
-      <div className="dash-split-section">
+      <div className="admin-dash__analytics-row">
         <section className="saas-panel saas-panel--tinted-lavender">
           <div className="saas-panel__header">
             <div>
@@ -601,7 +601,7 @@ function AdminDashboardHome() {
 
       {/* Recent Applications & Activity in Contrasting Secondary Band */}
       <div className="saas-section-band">
-        <div className="dash-split-section">
+        <div className="admin-dash__bottom-row">
           <section className="saas-panel">
             <div className="saas-panel__header">
               <div>
