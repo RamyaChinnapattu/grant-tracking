@@ -51,6 +51,7 @@ public class VerificationWorkflowService {
     private final VerificationRoutingRuleRepository routingRuleRepository;
     private WorkflowDeadlineConfigRepository deadlineConfigs;
     private WorkflowAutomationService automationService;
+    private BeneficiaryEmailService beneficiaryEmailService;
 
     public VerificationWorkflowService(
             GrantApplicationRepository applicationRepository,
@@ -82,6 +83,11 @@ public class VerificationWorkflowService {
     @Autowired(required = false)
     public void setWorkflowAutomationService(WorkflowAutomationService automationService) {
         this.automationService = automationService;
+    }
+
+    @Autowired(required = false)
+    public void setBeneficiaryEmailService(BeneficiaryEmailService beneficiaryEmailService) {
+        this.beneficiaryEmailService = beneficiaryEmailService;
     }
 
     private void notifyBeneficiary(GrantApplication application, String keySuffix, String message) {
@@ -423,26 +429,43 @@ public class VerificationWorkflowService {
                     saved,
                     "correction:" + System.currentTimeMillis(),
                     "Action Required: Corrections requested on application #" + saved.getId() + ". Remarks: " + request.remarks());
+            if (beneficiaryEmailService != null) {
+                beneficiaryEmailService.sendCorrectionRequiredEmail(saved, request.remarks());
+            }
         } else if (decision == VerificationDecision.REJECTED) {
             notifyBeneficiary(
                     saved,
                     "rejected:" + System.currentTimeMillis(),
                     "Your grant application #" + saved.getId() + " was not approved. Remarks: " + request.remarks());
+            if (beneficiaryEmailService != null) {
+                beneficiaryEmailService.sendFinalDecisionEmail(saved, false, null, request.remarks());
+            }
         } else if (stage == VerificationStage.FIELD) {
             notifyBeneficiary(
                     saved,
                     "field_verified:" + System.currentTimeMillis(),
                     "Field verification completed for application #" + saved.getId() + ". It has advanced to District Review.");
+            if (beneficiaryEmailService != null) {
+                beneficiaryEmailService.sendStatusUpdateEmail(saved, VerificationStage.FIELD,
+                        "Field verification completed for application #" + saved.getId() + ". It has advanced to District Review.");
+            }
         } else if (stage == VerificationStage.DISTRICT) {
             notifyBeneficiary(
                     saved,
                     "district_verified:" + System.currentTimeMillis(),
                     "District review completed for application #" + saved.getId() + ". It has advanced to Finance Approval.");
+            if (beneficiaryEmailService != null) {
+                beneficiaryEmailService.sendStatusUpdateEmail(saved, VerificationStage.DISTRICT,
+                        "District review completed for application #" + saved.getId() + ". It has advanced to Finance Approval.");
+            }
         } else if (stage == VerificationStage.FINANCE) {
             notifyBeneficiary(
                     saved,
                     "approved:" + System.currentTimeMillis(),
                     "Congratulations! Your grant application #" + saved.getId() + " has received final Finance Approval and is queued for disbursement.");
+            if (beneficiaryEmailService != null) {
+                beneficiaryEmailService.sendFinalDecisionEmail(saved, true, saved.getRequestedAmount(), request.remarks());
+            }
         }
 
         return saved;

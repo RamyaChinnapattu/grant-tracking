@@ -64,6 +64,7 @@ public class GrantApplicationService {
         private final ApplicationVerificationRepository verificationRepository;
         private final ApplicationDocumentRepository documentRepository;
         private final UserRepository userRepository;
+        private final BeneficiaryEmailService beneficiaryEmailService;
         private DisbursementPlanRepository disbursementPlanRepository;
 
         private static final long MAX_DOCUMENT_SIZE = 10L * 1024 * 1024;
@@ -79,6 +80,23 @@ public class GrantApplicationService {
                         ApplicationVerificationRepository verificationRepository,
                         ApplicationDocumentRepository documentRepository,
                         UserRepository userRepository) {
+                this(applicationRepository, statusHistoryRepository, beneficiaryRepository, schemeRepository,
+                                eligibilityScoringService, verificationWorkflowService, verificationRepository,
+                                documentRepository, userRepository, null);
+        }
+
+        @Autowired
+        public GrantApplicationService(
+                        GrantApplicationRepository applicationRepository,
+                        GrantApplicationStatusHistoryRepository statusHistoryRepository,
+                        BeneficiaryRepository beneficiaryRepository,
+                        SchemeRepository schemeRepository,
+                        EligibilityScoringService eligibilityScoringService,
+                        VerificationWorkflowService verificationWorkflowService,
+                        ApplicationVerificationRepository verificationRepository,
+                        ApplicationDocumentRepository documentRepository,
+                        UserRepository userRepository,
+                        @Autowired(required = false) BeneficiaryEmailService beneficiaryEmailService) {
                 this.applicationRepository = applicationRepository;
                 this.statusHistoryRepository = statusHistoryRepository;
                 this.beneficiaryRepository = beneficiaryRepository;
@@ -88,6 +106,7 @@ public class GrantApplicationService {
                 this.verificationRepository = verificationRepository;
                 this.documentRepository = documentRepository;
                 this.userRepository = userRepository;
+                this.beneficiaryEmailService = beneficiaryEmailService;
         }
 
         @Autowired(required = false)
@@ -257,6 +276,9 @@ public class GrantApplicationService {
                                 action, getUser(email), action.equals("RESUBMITTED")
                                                 ? "Beneficiary resubmitted the corrected application."
                                                 : "Beneficiary submitted the application.");
+                if (beneficiaryEmailService != null) {
+                        beneficiaryEmailService.sendApplicationSubmittedEmail(submitted);
+                }
                 return toResponse(submitted);
         }
 

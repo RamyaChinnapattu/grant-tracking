@@ -3,6 +3,7 @@ package com.grantora.service;
 import com.grantora.dto.*;
 import com.grantora.entity.*;
 import com.grantora.repository.*;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -29,6 +30,12 @@ public class ComplianceOperationsService {
     private final UserRepository users;
     private final WorkflowAutomationService notifications;
     private final DisbursementReminderConfigRepository reminderConfig;
+    private BeneficiaryEmailService beneficiaryEmailService;
+
+    @Autowired(required = false)
+    public void setBeneficiaryEmailService(BeneficiaryEmailService beneficiaryEmailService) {
+        this.beneficiaryEmailService = beneficiaryEmailService;
+    }
 
     public ComplianceOperationsService(ComplianceRequirementRepository requirements,
             MilestoneComplianceRepository compliances,
@@ -473,6 +480,9 @@ public class ComplianceOperationsService {
                     "compliance_review:" + id + ":" + currentStage.name() + ":c" + cycle + ":" + decision,
                     notifMsg,
                     app.getId());
+            if (beneficiaryEmailService != null && ("CORRECTION_REQUIRED".equalsIgnoreCase(decision) || "REJECTED".equalsIgnoreCase(decision))) {
+                beneficiaryEmailService.sendComplianceActionRequiredEmail(saved, decision, req.remarks());
+            }
         }
         return toItem(saved);
     }
@@ -646,9 +656,13 @@ public class ComplianceOperationsService {
                     String message = event.equals("OVERDUE")
                             ? "Mandatory compliance is overdue: " + c.getRequirementTitle() + "."
                             : "Reminder: " + c.getRequirementTitle() + " is due on " + c.getSubmissionDeadline() + ".";
-                    if (app.getBeneficiary() != null && app.getBeneficiary().getUser() != null)
+                    if (app.getBeneficiary() != null && app.getBeneficiary().getUser() != null) {
                         notifications.notify(app.getBeneficiary().getUser(),
                                 "compliance_reminder:" + c.getId() + ":" + event + ":" + today, message, app.getId());
+                        if (beneficiaryEmailService != null) {
+                            beneficiaryEmailService.sendComplianceReminderEmail(c, event);
+                        }
+                    }
                     if (app.getAssignedOfficer() != null)
                         notifications.notify(app.getAssignedOfficer(),
                                 "compliance_reminder:" + c.getId() + ":" + event + ":" + today + ":officer",
