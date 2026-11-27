@@ -36,10 +36,16 @@ public class DisbursementService {
     private final UserRepository userRepository;
     private final WorkflowAutomationService workflowAutomationService;
     private GrantUtilizationRepository utilizationRepository;
+    private BeneficiaryEmailService beneficiaryEmailService;
 
     @Autowired(required = false)
     public void setUtilizationRepository(GrantUtilizationRepository utilizationRepository) {
         this.utilizationRepository = utilizationRepository;
+    }
+
+    @Autowired(required = false)
+    public void setBeneficiaryEmailService(BeneficiaryEmailService beneficiaryEmailService) {
+        this.beneficiaryEmailService = beneficiaryEmailService;
     }
 
     public DisbursementService(
@@ -976,6 +982,13 @@ public class DisbursementService {
                         if (nextInst.getStatus() == InstallmentStatus.PLANNED) {
                             nextInst.setStatus(InstallmentStatus.READY_FOR_DISBURSEMENT);
                             installmentRepository.save(nextInst);
+                            if (beneficiaryEmailService != null) {
+                                beneficiaryEmailService.sendInstallmentStatusUpdateEmail(
+                                        nextInst,
+                                        InstallmentStatus.PLANNED,
+                                        InstallmentStatus.READY_FOR_DISBURSEMENT,
+                                        "Prior installment disbursed. Stage #" + nextInst.getInstallmentNumber() + " is now ready for disbursement.");
+                            }
                         }
                     });
         }
@@ -992,6 +1005,9 @@ public class DisbursementService {
                             saved.getAmount().toPlainString(), saved.getInstallmentNumber(),
                             saved.getPaymentReference()),
                     app.getId());
+            if (beneficiaryEmailService != null) {
+                beneficiaryEmailService.sendDisbursementReleasedEmail(saved);
+            }
         }
 
         return toInstallmentResponse(saved);
